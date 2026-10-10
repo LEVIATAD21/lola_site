@@ -6,6 +6,7 @@ export interface CheckoutAddressData {
   phone: string;
   cep: string;
   street: string;
+  number: string;
   complement: string;
   neighborhood: string;
   city: string;
@@ -21,6 +22,7 @@ interface CheckoutAddressFormProps {
   notice?: string | null;
   onChange: (data: CheckoutAddressData) => void;
   onCepSearch: (cep: string) => void;
+  isCepSearching?: boolean;
 }
 
 const fieldClass = (hasError?: boolean) =>
@@ -34,6 +36,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
   notice = null,
   onChange,
   onCepSearch,
+  isCepSearching = false,
 }) => {
   const brazilianStates = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -139,6 +142,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 maxLength={9}
                 onChange={handleCepChange}
                 inputMode="numeric"
+                autoComplete="postal-code"
                 aria-invalid={!!errors.cep}
                 className={`${fieldClass(!!errors.cep)} pr-9`}
               />
@@ -146,8 +150,9 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 type="button"
                 onClick={() => onCepSearch(data.cep.replace(/\D/g, ''))}
                 className="absolute right-3 top-3 text-[#766D64] hover:text-[#2A211B] cursor-pointer"
-                title="Consulta de CEP indisponível nesta demonstração"
-                aria-label="Consulta de CEP indisponível nesta demonstração"
+                disabled={isCepSearching}
+                title={isCepSearching ? 'Consultando CEP...' : 'Buscar endereço pelo CEP'}
+                aria-label={isCepSearching ? 'Consultando CEP' : 'Buscar endereço pelo CEP'}
               >
                 <Search className="w-4 h-4" />
               </button>
@@ -162,12 +167,13 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
 
           <div className="sm:col-span-8 space-y-1.5">
             <label className="font-semibold text-[#241F1B] block">
-              Endereço <span className="text-[#C49A5A]">*</span>
+              Logradouro <span className="text-[#C49A5A]">*</span>
             </label>
             <input
               type="text"
-              placeholder="Rua, Avenida, Número"
+              placeholder="Rua ou avenida (preenchido pelo CEP)"
               value={data.street}
+              autoComplete="address-line1"
               onChange={(e) => updateField('street', e.target.value)}
               aria-invalid={!!errors.street}
               className={fieldClass(!!errors.street)}
@@ -178,15 +184,32 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
           </div>
         </div>
 
-        {/* Row 3: Complemento & Bairro */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Row 3: Número, Complemento & Bairro */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <label className="font-semibold text-[#241F1B] block">
-              Complemento
+              Número <span className="text-[#C49A5A]">*</span>
             </label>
             <input
               type="text"
+              placeholder="Nº da casa"
+              autoComplete="address-line2"
+              value={data.number}
+              onChange={(e) => updateField('number', e.target.value)}
+              aria-invalid={!!errors.number}
+              className={fieldClass(!!errors.number)}
+            />
+            {errors.number && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.number}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="font-semibold text-[#241F1B] block">Complemento</label>
+            <input
+              type="text"
               placeholder="Apto, bloco, casa, etc."
+              autoComplete="address-line3"
               value={data.complement}
               onChange={(e) => updateField('complement', e.target.value)}
               className={fieldClass()}
@@ -200,6 +223,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
             <input
               type="text"
               placeholder="Bairro"
+              autoComplete="address-level3"
               value={data.neighborhood}
               onChange={(e) => updateField('neighborhood', e.target.value)}
               aria-invalid={!!errors.neighborhood}
@@ -221,6 +245,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               type="text"
               placeholder="Digite a cidade"
               value={data.city}
+              autoComplete="address-level2"
               onChange={(e) => updateField('city', e.target.value)}
               aria-invalid={!!errors.city}
               className={fieldClass(!!errors.city)}
@@ -236,6 +261,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
             </label>
             <select
               value={data.state}
+              autoComplete="address-level1"
               onChange={(e) => updateField('state', e.target.value)}
               aria-label="Estado federativo"
               aria-invalid={!!errors.state}
