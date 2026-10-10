@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { InventoryStore } from './src/server/inventory';
 import { CATALOG_INFO } from './src/server/catalog';
+import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './src/server/orders';
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ for (const product of CATALOG_INFO) {
 
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
+const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -71,13 +73,14 @@ async function startServer() {
 
   const aiRateBuckets = new Map<string, { count: number; resetAt: number }>();
   app.use((req, res, next) => {
-    if (req.method !== 'POST' || req.path !== '/api/ai/consulta') return next();
+    if (req.method !== 'POST' || (req.path !== '/api/ai/consulta' && req.path !== '/api/pedidos/rascunho')) return next();
     const now = Date.now();
-    const key = req.socket.remoteAddress || 'unknown';
+    const routeLimit = req.path === '/api/pedidos/rascunho' ? 10 : 20;
+    const key = (req.socket.remoteAddress || 'unknown') + ':' + req.path;
     const bucket = aiRateBuckets.get(key);
     if (!bucket || bucket.resetAt <= now) {
       aiRateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
-    } else if (bucket.count >= 20) {
+    } else if (bucket.count >= routeLimit) {
       return res.status(429).json({ error: 'Limite temporário de consultas atingido. Tente novamente em um minuto.' });
     } else {
       bucket.count += 1;
@@ -114,7 +117,16 @@ async function startServer() {
     });
   });
 
-  // 3. GET /api/produtos (busca ou lista por categoria)
+  // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar ou reservar estoque.
+  app.post('/api/pedidos/rascunho', (req, res) => {
+    if (!orders.ready) return res.status(503).json({ error: orders.unavailableReason || 'Armazenamento seguro de pré-pedidos indisponível.' });
+    const result = buildOrderDraft(req.body, CATALOG_INFO, inventory);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    if (!orders.save(result.order)) return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
+    return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
+  });
+
+  // 4. GET /api/produtos (busca ou lista por categoria)
   app.get('/api/produtos', (req, res) => {
     const { categoria, query } = req.query;
     let list = CATALOG_INFO.map((item) => ({
@@ -139,7 +151,7 @@ async function startServer() {
     res.json(list);
   });
 
-  // 4. GET /api/produto/:productId
+  // 5. GET /api/produto/:productId
   app.get('/api/produto/:productId', (req, res) => {
     const { productId } = req.params;
     const item = CATALOG_INFO.find((p) => p.id === productId);
@@ -150,7 +162,7 @@ async function startServer() {
     res.json({ ...item, disponivel: stock });
   });
 
-  // 5. POST /api/ai/consulta (Assistente Virtual Lola)
+  // 6. POST /api/ai/consulta (Assistente Virtual Lola)
   app.post('/api/ai/consulta', async (req, res) => {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const pergunta = typeof body.pergunta === 'string' ? body.pergunta.trim() : '';
@@ -241,7 +253,7 @@ Pergunta da cliente: "${pergunta}"
           referencias.push({
             tipo: 'politica',
             id: 'garantia',
-            titulo: 'Garantia de 1 Ano Lola',
+            titulo: 'Confirmar política de garantia',
             link: '#garantia',
           });
         }
@@ -250,7 +262,7 @@ Pergunta da cliente: "${pergunta}"
           referencias.push({
             tipo: 'politica',
             id: 'frete',
-            titulo: 'Frete Grátis acima de R$ 150',
+            titulo: 'Consultar frete e entrega',
             link: '#frete',
           });
         }
@@ -282,10 +294,10 @@ Pergunta da cliente: "${pergunta}"
       }
     } else if (pLow.includes('escurece') || pLow.includes('molhar') || pLow.includes('alergia') || pLow.includes('banho') || pLow.includes('agua')) {
       fallbackAnswer = 'Para te orientar com segurança, preciso confirmar as características, os cuidados e a garantia desta peça com a loja. Posso informar o material que está declarado no catálogo.';
-      fallbackRefs.push({ tipo: 'politica', id: 'garantia', titulo: '1 Ano de Garantia Lola', link: '#garantia' });
+      fallbackRefs.push({ tipo: 'politica', id: 'garantia', titulo: 'Confirmar política de garantia', link: '#garantia' });
     } else if (pLow.includes('frete') || pLow.includes('entrega') || pLow.includes('prazo')) {
       fallbackAnswer = 'O cálculo do frete e o prazo de entrega ainda não estão conectados a uma transportadora nesta versão. Confirme o valor e o prazo no atendimento antes de concluir a compra.';
-      fallbackRefs.push({ tipo: 'politica', id: 'frete', titulo: 'Frete para todo o Brasil', link: '#frete' });
+      fallbackRefs.push({ tipo: 'politica', id: 'frete', titulo: 'Consultar frete e entrega', link: '#frete' });
     } else if (pLow.includes('recomenda') || pLow.includes('brinco') || pLow.includes('presente') || pLow.includes('dica')) {
       fallbackAnswer = 'Recomendo o clássico Brinco Argola Lisa (R$ 49,90) ou a delicada Argola Torcida (R$ 59,90). São nossas peças mais versáteis e campeãs de elogios!';
       fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' });

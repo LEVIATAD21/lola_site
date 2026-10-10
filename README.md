@@ -179,3 +179,12 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - Antes do uso comercial, substitua as quantidades de demonstração já existentes pelas quantidades físicas reais. Novos produtos começam com estoque zero até que ele seja configurado. Mantenha `total = reservado + vendido + disponivel` e use inteiros não negativos.
 - Baixas inválidas, IDs desconhecidos e quantidades acima da disponibilidade são recusados. A gravação em JSON é para uma única instância Node; várias instâncias exigem banco transacional.
 - Checkout, cálculo logístico e cobranças continuam demonstrativos até que integrações comerciais reais sejam configuradas.
+
+
+## Pré-pedido e proteção de dados
+
+- `POST /api/pedidos/rascunho` valida endereço, termos, itens, estoque, cupom e modalidade de frete, usando preços do catálogo no servidor. Preços enviados pelo cliente são ignorados.
+- A solicitação fica com status `awaiting_payment_setup` e pagamento `not_configured`: não há cobrança real, Pix/boletos emitidos, reserva de estoque ou confirmação final de venda nesta versão.
+- Número do cartão, CVV e validade não são enviados à API nem persistidos. Nome, telefone, endereço e itens são gravados cifrados com AES-256-GCM em `.data/orders.enc.json`.
+- Em desenvolvimento, a chave é criada em `.data/orders.key` com permissões restritas. Em produção, configure `LOLA_ORDERS_ENCRYPTION_KEY` como segredo (64 caracteres hexadecimais; `openssl rand -hex 32`). Sem a chave, o backend recusa registrar dados pessoais.
+- O armazenamento JSON serve a uma única instância. Para produção comercial/múltiplas instâncias, use banco transacional, backup protegido, controle de acesso e integrações reais de pagamento e logística.
