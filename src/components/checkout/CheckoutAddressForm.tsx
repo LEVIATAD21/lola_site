@@ -13,14 +13,23 @@ export interface CheckoutAddressData {
   saveAddress: boolean;
 }
 
+export type CheckoutAddressErrors = Partial<Record<keyof CheckoutAddressData, string>>;
+
 interface CheckoutAddressFormProps {
   data: CheckoutAddressData;
+  errors?: CheckoutAddressErrors;
   onChange: (data: CheckoutAddressData) => void;
   onCepSearch: (cep: string) => void;
 }
 
+const fieldClass = (hasError?: boolean) =>
+  `w-full h-11 px-3.5 rounded-xl border text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none ${
+    hasError ? 'border-red-400 focus:border-red-500' : 'border-[#E7DED3] focus:border-[#C49A5A]'
+  }`;
+
 export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
   data,
+  errors = {},
   onChange,
   onCepSearch,
 }) => {
@@ -34,8 +43,21 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
     onChange({ ...data, [field]: val });
   };
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 11);
+    let formatted = raw;
+    if (raw.length > 2 && raw.length <= 6) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2)}`;
+    } else if (raw.length > 6 && raw.length <= 10) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2, 6)}-${raw.slice(6)}`;
+    } else if (raw.length > 10) {
+      formatted = `(${raw.slice(0, 2)}) ${raw.slice(2, 7)}-${raw.slice(7)}`;
+    }
+    updateField('phone', formatted);
+  };
+
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, '');
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
     const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5, 8)}` : raw;
     updateField('cep', formatted);
 
@@ -46,7 +68,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
 
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E7DED3] shadow-xs text-left space-y-6">
-      
+
       {/* Title */}
       <div className="space-y-1 pb-2 border-b border-[#E7DED3]">
         <div className="flex items-center gap-2.5">
@@ -62,7 +84,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
 
       {/* Form Fields */}
       <div className="space-y-4 text-xs">
-        
+
         {/* Row 1: Nome completo & Telefone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -74,8 +96,12 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               placeholder="Digite seu nome completo"
               value={data.fullName}
               onChange={(e) => updateField('fullName', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              aria-invalid={!!errors.fullName}
+              className={fieldClass(!!errors.fullName)}
             />
+            {errors.fullName && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.fullName}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -86,9 +112,14 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               type="text"
               placeholder="(00) 00000-0000"
               value={data.phone}
-              onChange={(e) => updateField('phone', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              onChange={handlePhoneChange}
+              inputMode="tel"
+              aria-invalid={!!errors.phone}
+              className={fieldClass(!!errors.phone)}
             />
+            {errors.phone && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.phone}</p>
+            )}
           </div>
         </div>
 
@@ -105,7 +136,9 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 value={data.cep}
                 maxLength={9}
                 onChange={handleCepChange}
-                className="w-full h-11 px-3.5 pr-9 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+                inputMode="numeric"
+                aria-invalid={!!errors.cep}
+                className={`${fieldClass(!!errors.cep)} pr-9`}
               />
               <button
                 type="button"
@@ -116,6 +149,9 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 <Search className="w-4 h-4" />
               </button>
             </div>
+            {errors.cep && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.cep}</p>
+            )}
           </div>
 
           <div className="sm:col-span-8 space-y-1.5">
@@ -127,8 +163,12 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               placeholder="Rua, Avenida, Número"
               value={data.street}
               onChange={(e) => updateField('street', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              aria-invalid={!!errors.street}
+              className={fieldClass(!!errors.street)}
             />
+            {errors.street && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.street}</p>
+            )}
           </div>
         </div>
 
@@ -143,7 +183,7 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               placeholder="Apto, bloco, casa, etc."
               value={data.complement}
               onChange={(e) => updateField('complement', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              className={fieldClass()}
             />
           </div>
 
@@ -156,8 +196,12 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               placeholder="Bairro"
               value={data.neighborhood}
               onChange={(e) => updateField('neighborhood', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              aria-invalid={!!errors.neighborhood}
+              className={fieldClass(!!errors.neighborhood)}
             />
+            {errors.neighborhood && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.neighborhood}</p>
+            )}
           </div>
         </div>
 
@@ -172,8 +216,12 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               placeholder="Digite a cidade"
               value={data.city}
               onChange={(e) => updateField('city', e.target.value)}
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] placeholder-[#766D64]/60 focus:outline-none focus:border-[#C49A5A]"
+              aria-invalid={!!errors.city}
+              className={fieldClass(!!errors.city)}
             />
+            {errors.city && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.city}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -184,7 +232,12 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
               value={data.state}
               onChange={(e) => updateField('state', e.target.value)}
               aria-label="Estado federativo"
-              className="w-full h-11 px-3.5 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] bg-white focus:outline-none focus:border-[#C49A5A] cursor-pointer"
+              aria-invalid={!!errors.state}
+              className={`w-full h-11 px-3.5 rounded-xl border text-sm text-[#241F1B] bg-white focus:outline-none cursor-pointer ${
+                errors.state
+                  ? 'border-red-400 focus:border-red-500'
+                  : 'border-[#E7DED3] focus:border-[#C49A5A]'
+              }`}
             >
               <option value="">Selecione o estado</option>
               {brazilianStates.map((st) => (
@@ -193,6 +246,9 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 </option>
               ))}
             </select>
+            {errors.state && (
+              <p className="text-[11px] text-red-600 font-medium">{errors.state}</p>
+            )}
           </div>
         </div>
 

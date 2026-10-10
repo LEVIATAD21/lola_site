@@ -204,7 +204,7 @@ export const SiteHeader: React.FC<SiteHeaderProps> = ({
               onClick={() =>
                 onOpenInfo(
                   'Fale com a LOLA',
-                  'Nosso atendimento é dedicado a tirar todas as suas dúvidas sobre peças, combinações e entregas.\n\n• WhatsApp: (11) 98765-4321 (Demonstrativo)\n• E-mail: contato@lolaacessorios.com.br (Demonstrativo)\n• Horário: Segunda a Sexta, das 9h às 18h'
+                  'Nosso atendimento é dedicado a tirar todas as suas dúvidas sobre peças, combinações e entregas.\n\n• WhatsApp e e-mail oficiais serão divulgados no lançamento da loja.\n• Horário previsto de suporte: Segunda a Sexta, das 9h às 18h.'
                 )
               }
               className="text-[#241F1B] hover:text-[#C49A5A] transition-colors py-1 cursor-pointer"
@@ -417,7 +417,7 @@ export const SiteHeader: React.FC<SiteHeaderProps> = ({
                 setIsMobileMenuOpen(false);
                 onOpenInfo(
                   'Fale Conosco',
-                  'Atendimento de Segunda a Sexta, das 9h às 18h.\nWhatsApp: (11) 98765-4321 (Demonstrativo)\nE-mail: contato@lolaacessorios.com.br'
+                  'Horário previsto de atendimento: Segunda a Sexta, das 9h às 18h.\n\nWhatsApp e e-mail oficiais serão divulgados no lançamento da loja.'
                 );
               }}
               className="block w-full text-left py-2 font-medium text-[#241F1B]"

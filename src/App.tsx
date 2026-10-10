@@ -24,12 +24,18 @@ import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
 
 export default function App() {
+  const findProductById = (id: string): Product | undefined =>
+    [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((p) => p.id === id);
+
   // Inicialização segura de rota a partir de window.location.pathname
   const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' => {
     if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname.toLowerCase();
     if (path === '/categoria/brincos') return 'category-earrings';
-    if (path.startsWith('/produto/')) return 'product-detail';
+    if (path.startsWith('/produto/')) {
+      const id = path.replace('/produto/', '').trim();
+      return findProductById(id) ? 'product-detail' : 'home';
+    }
     if (path === '/carrinho') return 'cart';
     if (path === '/checkout') return 'checkout';
     return 'home';
@@ -39,9 +45,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
       if (path.startsWith('/produto/')) {
-        const id = path.replace('/produto/', '').trim();
-        const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
-        const found = all.find((p) => p.id === id);
+        const found = findProductById(path.replace('/produto/', '').trim());
         if (found) return found;
       }
     }
@@ -80,7 +84,23 @@ export default function App() {
             parsed.some((i) => i.id === 'cart-3' && i.productId === 'prod-pulseira-1');
 
           if (!isExactOldDemoSeed) {
-            return parsed;
+            // Valida a forma de cada item para evitar dados corrompidos na UI
+            return parsed.filter(
+              (i: any) =>
+                i &&
+                typeof i.id === 'string' &&
+                typeof i.productId === 'string' &&
+                typeof i.name === 'string' &&
+                typeof i.price === 'number' &&
+                Number.isFinite(i.price) &&
+                i.price >= 0 &&
+                typeof i.image === 'string' &&
+                typeof i.category === 'string' &&
+                typeof i.quantity === 'number' &&
+                Number.isInteger(i.quantity) &&
+                i.quantity > 0 &&
+                i.quantity <= 99
+            ) as CartItem[];
           }
         }
       }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckoutStepper } from './CheckoutStepper';
-import { CheckoutAddressForm, CheckoutAddressData } from './CheckoutAddressForm';
+import { CheckoutAddressForm, CheckoutAddressData, CheckoutAddressErrors } from './CheckoutAddressForm';
 import { CheckoutPaymentMethod, PaymentData } from './CheckoutPaymentMethod';
 import { CheckoutOrderSummary } from './CheckoutOrderSummary';
 import { OrderSuccessModal } from './OrderSuccessModal';
@@ -44,6 +44,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [hasGiftWrap, setHasGiftWrap] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [termsError, setTermsError] = useState(false);
+  const [addressErrors, setAddressErrors] = useState<CheckoutAddressErrors>({});
 
   // Address form state starts empty
   const [addressData, setAddressData] = useState<CheckoutAddressData>({
@@ -96,9 +97,48 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return true;
   };
 
+  const validateAddress = (): CheckoutAddressErrors => {
+    const errs: CheckoutAddressErrors = {};
+    const digits = addressData.phone.replace(/\D/g, '');
+    const cepDigits = addressData.cep.replace(/\D/g, '');
+
+    if (addressData.fullName.trim().length < 3) {
+      errs.fullName = 'Informe seu nome completo.';
+    }
+    if (digits.length < 10 || digits.length > 11) {
+      errs.phone = 'Informe um telefone válido com DDD.';
+    }
+    if (cepDigits.length !== 8) {
+      errs.cep = 'Informe um CEP com 8 dígitos.';
+    }
+    if (addressData.street.trim().length < 5) {
+      errs.street = 'Informe rua e número.';
+    }
+    if (!addressData.neighborhood.trim()) {
+      errs.neighborhood = 'Informe o bairro.';
+    }
+    if (!addressData.city.trim()) {
+      errs.city = 'Informe a cidade.';
+    }
+    if (!addressData.state) {
+      errs.state = 'Selecione o estado.';
+    }
+    return errs;
+  };
+
   const handleSubmitOrder = () => {
+    const errs = validateAddress();
+    setAddressErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setTermsError(false);
+      setCurrentStep(2);
+      const form = document.querySelector('section, div.bg-white');
+      form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (!paymentData.acceptedTerms) {
       setTermsError(true);
+      setCurrentStep(3);
       return;
     }
     setTermsError(false);
@@ -160,7 +200,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
             {/* Step 1: Address Form */}
             <CheckoutAddressForm
               data={addressData}
-              onChange={setAddressData}
+              errors={addressErrors}
+              onChange={(data) => {
+                setAddressData(data);
+                if (Object.keys(addressErrors).length > 0) setAddressErrors({});
+              }}
               onCepSearch={handleCepSearch}
             />
 

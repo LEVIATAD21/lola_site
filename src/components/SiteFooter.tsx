@@ -72,7 +72,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Trabalhe Conosco',
-                      'Quer fazer parte da equipe Lola? Envie seu currículo e portfólio para talentos@lolaacessorios.com.br (Canal demonstrativo).'
+                      'Quer fazer parte da equipe Lola? Deixe seu contato pelo atendimento da loja — o canal oficial de recrutamento será divulgado no lançamento.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -222,7 +222,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
         {/* Legal Bottom Bar */}
         <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-[#766D64]">
           <p>
-            © 2025 Lola Aço Inox & Acessórios. Todos os direitos reservados.
+            © 2026 Lola Aço Inox & Acessórios. Todos os direitos reservados.
           </p>
           
           {/* Cursive signoff matching Design 02 */}

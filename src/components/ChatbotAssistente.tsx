@@ -71,6 +71,20 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
     if (!customText) setInputMessage('');
     setIsLoading(true);
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'assistant',
+          text: 'Você está sem conexão no momento. Não foi possível consultar a disponibilidade — verifique sua internet e tente novamente.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await consultAI(textToSend.trim(), {
         produtoId: currentProduct?.id,
@@ -90,7 +104,7 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: 'Desculpe, tive uma instabilidade momentânea para consultar o sistema. Por favor, tente novamente mais tarde.',
+        text: 'Não foi possível verificar a disponibilidade no momento. Tente novamente em alguns minutos.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
