@@ -11,6 +11,7 @@ import { Product, CART_RECOMMENDED_PRODUCTS } from '../../data/mockData';
 import { getCouponDiscount, getCouponPercentage } from '../../data/coupons';
 import { ShippingOption, quoteShipping } from '../cart/ShippingCalculatorModal';
 import { validateAddress } from '../../utils/checkoutValidation';
+import { createOrderDraft, type DraftOrderConfirmation } from '../../services/api';
 import { ChevronLeft, ChevronRight, Heart, ArrowRight } from 'lucide-react';
 
 interface CheckoutPageProps {
@@ -55,6 +56,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [termsError, setTermsError] = useState(false);
   const [addressErrors, setAddressErrors] = useState<CheckoutAddressErrors>({});
   const [cepNotice, setCepNotice] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [createdOrder, setCreatedOrder] = useState<DraftOrderConfirmation | null>(null);
 
   // Address form state starts empty
   const [addressData, setAddressData] = useState<CheckoutAddressData>({
@@ -113,7 +117,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return true;
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
+    if (isSubmitting) return;
+    if (!items.length) {
+      setOrderError('Sua sacola está vazia. Adicione produtos antes de continuar.');
+      return;
+    }
     const errs = validateAddress(addressData);
     setAddressErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -128,10 +137,60 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       setCurrentStep(3);
       return;
     }
+
     setTermsError(false);
-    setCurrentStep(4);
-    setIsSuccessModalOpen(true);
-    // Não chama onOrderCompleted nem simula pedido real
+    setOrderError(null);
+    setIsSubmitting(true);
+    try {
+      const result = await createOrderDraft({
+        customer: {
+          fullName: addressData.fullName,
+          phone: addressData.phone,
+          cep: addressData.cep,
+          street: addressData.street,
+          complement: addressData.complement,
+          neighborhood: addressData.neighborhood,
+          city: addressData.city,
+          state: addressData.state,
+        },
+        items: items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          ...(item.variant ? { variant: item.variant } : {}),
+        })),
+        paymentMethod: paymentData.method,
+        ...(coupon?.code ? { couponCode: coupon.code } : {}),
+        shippingOptionId: shipping?.id ?? 'pac',
+        giftWrap: hasGiftWrap,
+        termsAccepted: paymentData.acceptedTerms,
+      });
+
+      if (!result.ok) {
+        setOrderError(result.error);
+        onOpenInfo?.('Pré-pedido não registrado', result.error);
+        return;
+      }
+
+      setCreatedOrder(result.order);
+      setCurrentStep(4);
+      setIsSuccessModalOpen(true);
+      setPaymentData((current) => ({
+        ...current,
+        cardNumber: '',
+        cardName: '',
+        cardExpiry: '',
+        cardCvv: '',
+        acceptedTerms: false,
+      }));
+      onOrderCompleted?.(result.order);
+      onClearCart();
+    } catch {
+      const message = 'Não foi possível registrar a solicitação. Nenhum pagamento foi feito; tente novamente.';
+      setOrderError(message);
+      onOpenInfo?.('Pré-pedido não registrado', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -207,8 +266,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               onBackToCart={onBackToCart}
               onSubmitOrder={handleSubmitOrder}
               termsError={termsError}
+              isSubmitting={isSubmitting}
               onOpenInfo={onOpenInfo}
             />
+            {orderError && (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+                {orderError}
+              </p>
+            )}
 
           </div>
 
@@ -349,8 +414,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       {/* Modals */}
       <OrderSuccessModal
         isOpen={isSuccessModalOpen}
-        totalAmount={totalAmount}
-        paymentMethod={paymentData.method}
+        orderNumber={createdOrder?.orderNumber}
+        totalAmount={createdOrder?.total ?? totalAmount}
+        paymentMethod={createdOrder?.paymentMethod ?? paymentData.method}
         onGoToAccount={() => {
           setIsSuccessModalOpen(false);
           onGoToAccount();

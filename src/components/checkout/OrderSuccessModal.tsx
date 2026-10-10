@@ -14,6 +14,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   isOpen,
   totalAmount,
   paymentMethod,
+  orderNumber,
   onGoToAccount,
   onContinueShopping,
 }) => {
@@ -33,20 +34,20 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 
             <div className="space-y-1">
               <span className="text-[11px] font-semibold text-[#C49A5A] uppercase tracking-widest">
-                FLUXO DEMONSTRATIVO CONCLUÍDO
+                PRÉ-PEDIDO REGISTRADO
               </span>
               <h3 className="font-serif-brand text-2xl sm:text-3xl font-semibold text-[#241F1B]">
-                Simulação de Checkout Finalizada
+                Solicitação registrada
               </h3>
               <p className="text-xs sm:text-sm text-[#766D64] max-w-sm">
-                Esta é uma prévia do front-end da LOLA. Nenhum valor foi cobrado e nenhum pedido real foi gerado.
+                Código {orderNumber || 'indisponível'}. Nenhum pagamento foi processado; esta solicitação não confirma a venda nem reserva as unidades.
               </p>
             </div>
           </div>
 
           <div className="p-4 bg-[#F8F4ED] rounded-2xl border border-[#E7DED3] space-y-2 text-xs text-[#241F1B]">
             <div className="flex justify-between">
-              <span className="text-[#766D64]">Valor estimado simulado:</span>
+              <span className="text-[#766D64]">Total estimado da solicitação:</span>
               <span className="font-bold text-sm">R$ {totalAmount.toFixed(2).replace('.', ',')}</span>
             </div>
             <div className="flex justify-between">
@@ -55,7 +56,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             </div>
             <div className="flex items-start gap-1.5 pt-1 text-[11px] text-[#766D64] border-t border-[#E7DED3]/60">
               <Info className="w-3.5 h-3.5 text-[#C49A5A] shrink-0 mt-0.5" />
-              <span>O gateway de pagamentos e a emissão oficial de pedidos serão conectados no backend pelo proprietário.</span>
+              <span>A solicitação está guardada de forma cifrada, mas continua pendente: o gateway de pagamento, o frete real e a confirmação final do estoque ainda precisam ser integrados.</span>
             </div>
           </div>
 

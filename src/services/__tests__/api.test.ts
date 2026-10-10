@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAIResponse, parseStockPayload } from '../api';
+import { parseAIResponse, parseDraftOrderConfirmation, parseStockPayload } from '../api';
 
 const validPayload = {
   productId: 'brinco-1',
@@ -79,5 +79,42 @@ describe('parseAIResponse', () => {
     })?.referencias).toEqual([
       { tipo: 'produto', id: 'ok', titulo: 'Interno', link: '/produto/ok' },
     ]);
+  });
+});
+
+
+describe('parseDraftOrderConfirmation', () => {
+  const valid = {
+    success: true,
+    order: {
+      orderNumber: 'LOLA-20261010-ABCDEF12',
+      createdAt: '2026-10-10T12:00:00.000Z',
+      status: 'awaiting_payment_setup',
+      paymentStatus: 'not_configured',
+      paymentMethod: 'pix',
+      shippingOptionId: 'pac',
+      itemCount: 2,
+      subtotal: 99.8,
+      discount: 9.98,
+      shipping: 19.9,
+      giftWrap: 9.9,
+      total: 119.62,
+    },
+  };
+
+  it('aceita pré-pedido sem declarar pagamento aprovado', () => {
+    expect(parseDraftOrderConfirmation(valid)).toMatchObject({
+      orderNumber: 'LOLA-20261010-ABCDEF12',
+      status: 'awaiting_payment_setup',
+      paymentStatus: 'not_configured',
+      total: 119.62,
+    });
+  });
+
+  it('rejeita respostas malformadas, totais negativos e status pago não autorizado', () => {
+    expect(parseDraftOrderConfirmation(null)).toBeNull();
+    expect(parseDraftOrderConfirmation({ ...valid, success: false })).toBeNull();
+    expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, total: -1 } })).toBeNull();
+    expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, paymentStatus: 'paid' } })).toBeNull();
   });
 });

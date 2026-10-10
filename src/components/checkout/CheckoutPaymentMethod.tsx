@@ -115,7 +115,8 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
 
           {/* Expanded Credit Card Fields */}
           {paymentData.method === 'credit_card' && (
-            <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3.5 animate-in fade-in text-xs">
+            <p className="mb-3 rounded-xl border border-[#E7DED3] bg-[#F8F4ED] p-3 text-[11px] leading-relaxed text-[#766D64]">Modo de demonstração: não informe dados reais do cartão. Os campos abaixo não são enviados ao servidor e nenhuma cobrança será realizada.</p>
+              <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3.5 animate-in fade-in text-xs">
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
                 Demonstração: informe apenas dados de teste. Esta tela não envia informações a nenhum processador de pagamento.
               </div>
@@ -313,7 +314,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
               onClick={() =>
                 openPolicy(
                   'Política de privacidade',
-                  'Nesta demonstração, os dados informados no checkout permanecem apenas no seu navegador (armazenamento local) e não são enviados a servidores. Na versão comercial, o tratamento seguirá a LGPD e a política oficial será divulgada antes do lançamento.'
+                  'Nome, telefone e endereço são enviados ao backend para registrar a solicitação de pré-pedido e ficam cifrados no armazenamento do servidor. Nenhum número de cartão, CVV ou validade é enviado ou guardado. Esta versão não processa pagamento nem reserva estoque; a política completa de privacidade deve ser publicada antes do lançamento.'
                 )
               }
               className="text-[#241F1B] underline font-semibold hover:text-[#C49A5A] cursor-pointer"

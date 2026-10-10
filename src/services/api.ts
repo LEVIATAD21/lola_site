@@ -125,3 +125,95 @@ export async function consultAI(
     referencias: [],
   };
 }
+
+
+export type CheckoutPaymentMethod = 'credit_card' | 'pix' | 'boleto';
+export interface DraftOrderRequest {
+  customer: {
+    fullName: string; phone: string; cep: string; street: string;
+    complement: string; neighborhood: string; city: string; state: string;
+  };
+  items: Array<{ productId: string; quantity: number; variant?: string }>;
+  paymentMethod: CheckoutPaymentMethod;
+  couponCode?: string;
+  shippingOptionId: 'pac' | 'sedex' | 'transportadora';
+  giftWrap: boolean;
+  termsAccepted: boolean;
+}
+export interface DraftOrderConfirmation {
+  orderNumber: string;
+  createdAt: string;
+  status: 'awaiting_payment_setup';
+  paymentStatus: 'not_configured';
+  paymentMethod: CheckoutPaymentMethod;
+  shippingOptionId: 'pac' | 'sedex' | 'transportadora';
+  itemCount: number;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  giftWrap: number;
+  total: number;
+}
+
+/** Validate the public response before presenting an order reference or totals. */
+export function parseDraftOrderConfirmation(json: unknown): DraftOrderConfirmation | null {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const root = json as Record<string, unknown>;
+  if (root.success !== true || !root.order || typeof root.order !== 'object' || Array.isArray(root.order)) return null;
+  const order = root.order as Record<string, unknown>;
+  if (typeof order.orderNumber !== 'string' || !/^LOLA-\d{8}-[A-F0-9]{8}$/.test(order.orderNumber)) return null;
+  if (typeof order.createdAt !== 'string' || !Number.isFinite(Date.parse(order.createdAt))) return null;
+  if (order.status !== 'awaiting_payment_setup' || order.paymentStatus !== 'not_configured') return null;
+  if (order.paymentMethod !== 'credit_card' && order.paymentMethod !== 'pix' && order.paymentMethod !== 'boleto') return null;
+  if (order.shippingOptionId !== 'pac' && order.shippingOptionId !== 'sedex' && order.shippingOptionId !== 'transportadora') return null;
+  if (!Number.isSafeInteger(order.itemCount) || (order.itemCount as number) < 1) return null;
+  for (const field of ['subtotal', 'discount', 'shipping', 'giftWrap', 'total'] as const) {
+    if (typeof order[field] !== 'number' || !Number.isFinite(order[field]) || (order[field] as number) < 0) return null;
+  }
+  return {
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    status: 'awaiting_payment_setup',
+    paymentStatus: 'not_configured',
+    paymentMethod: order.paymentMethod,
+    shippingOptionId: order.shippingOptionId,
+    itemCount: order.itemCount as number,
+    subtotal: order.subtotal as number,
+    discount: order.discount as number,
+    shipping: order.shipping as number,
+    giftWrap: order.giftWrap as number,
+    total: order.total as number,
+  };
+}
+
+/**
+ * Registers an encrypted pre-order request. Card number, CVV and expiry are
+ * intentionally absent from this payload and are never transmitted.
+ */
+export async function createOrderDraft(
+  request: DraftOrderRequest,
+): Promise<{ ok: true; order: DraftOrderConfirmation } | { ok: false; error: string }> {
+  try {
+    const response = await fetch('/api/pedidos/rascunho', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    let payload: unknown = null;
+    try { payload = await response.json(); } catch { /* handled as invalid response */ }
+    if (!response.ok) {
+      const value = payload as { error?: unknown } | null;
+      return {
+        ok: false,
+        error: value && typeof value.error === 'string'
+          ? value.error
+          : 'Não foi possível registrar a solicitação. Tente novamente.',
+      };
+    }
+    const order = parseDraftOrderConfirmation(payload);
+    if (!order) return { ok: false, error: 'O servidor retornou uma confirmação inválida.' };
+    return { ok: true, order };
+  } catch {
+    return { ok: false, error: 'Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.' };
+  }
+}
