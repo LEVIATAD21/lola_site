@@ -18,6 +18,25 @@ export interface AIResponse {
   referencias: AIRef[];
 }
 
+/** Accept only a well-formed assistant response with safe internal reference links. */
+export function parseAIResponse(json: unknown): AIResponse | null {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const value = json as Record<string, unknown>;
+  if (typeof value.resposta !== 'string' || !value.resposta.trim() || value.resposta.length > 10000) return null;
+  if (!Array.isArray(value.referencias)) return null;
+  const referencias: AIRef[] = [];
+  for (const candidate of value.referencias.slice(0, 20)) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const ref = candidate as Record<string, unknown>;
+    if (ref.tipo !== 'produto' && ref.tipo !== 'FAQ' && ref.tipo !== 'politica') continue;
+    if (typeof ref.id !== 'string' || typeof ref.titulo !== 'string' || typeof ref.link !== 'string') continue;
+    if (ref.id.length > 120 || ref.titulo.length > 200 || ref.link.length > 300) continue;
+    if (!(ref.link.startsWith('/') && !ref.link.startsWith('//')) && !ref.link.startsWith('#')) continue;
+    referencias.push({ tipo: ref.tipo, id: ref.id, titulo: ref.titulo, link: ref.link });
+  }
+  return { resposta: value.resposta, referencias };
+}
+
 /**
  * Valida estritamente o payload de estoque vindo do servidor.
  * Rejeita corpos ausentes, malformados ou com tipos inválidos — nunca infere disponibilidade.
@@ -49,7 +68,7 @@ export function parseStockPayload(json: unknown, expectedId?: string): StockResp
  */
 export async function getProductStock(productId: string): Promise<StockResponse | null> {
   try {
-    const res = await fetch(`/api/estoque/${productId}`);
+    const res = await fetch(`/api/estoque/${encodeURIComponent(productId)}`);
     if (res.ok) {
       const payload = await res.json();
       return parseStockPayload(payload, productId);
@@ -94,7 +113,8 @@ export async function consultAI(
     });
 
     if (res.ok) {
-      return await res.json();
+      const parsed = parseAIResponse(await res.json());
+      if (parsed) return parsed;
     }
   } catch {
     // Erro de rede capturado

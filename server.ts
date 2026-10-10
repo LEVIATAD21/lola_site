@@ -50,13 +50,13 @@ const CATALOG_INFO = [
 
 const STORE_FAQS = `
 SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
-- Especialidade: Semijoias e acessórios em aço inoxidável 316L e aço cirúrgico.
-- Propriedades do Aço Inox: Hipoalergênico (não causa alergia), à prova d'água (pode tomar banho, ir à praia ou piscina), não escurece, não enferruja e não perde o brilho.
-- Garantia: 1 ano de garantia contra defeitos de fabricação e desbotamento do acabamento em todas as peças.
-- Frete: Enviamos para todo o Brasil via Correios (PAC e Sedex) e transportadoras parceiras. Frete grátis em compras acima de R$ 150,00.
-- Trocas e Devoluções: Prazo de 7 dias após o recebimento para troca ou devolução sem custo adicional.
-- Pagamento: Cartão de crédito em até 12x (em até 3x sem juros), Pix com confirmação imediata e Boleto bancário.
-- Atendimento via WhatsApp: Suporte humanizado e compras pelo WhatsApp oficial (11) 99999-9999.
+- Catálogo: use os nomes, descrições, materiais e preços fornecidos pelo catálogo vigente.
+- Materiais e cuidados: informe apenas o material declarado para cada produto. Não presuma propriedades antialérgicas, resistência à água ou durabilidade.
+- Garantia: prazo e condições precisam ser confirmados pela loja; não prometa cobertura sem uma política oficial.
+- Frete e entrega: valor e prazo reais dependem de cotação logística; não prometa frete grátis ou prazo sem confirmação.
+- Trocas e devoluções: não prometa condições comerciais não configuradas. Oriente a cliente a confirmar as regras com a loja.
+- Pagamentos: este backend ainda não gera cobranças, Pix, boletos ou autorização de cartão.
+- Atendimento: não invente números de telefone, perfis sociais ou canais de contato.
 `;
 
 async function startServer() {
@@ -70,6 +70,27 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+  });
+
+  const aiRateBuckets = new Map<string, { count: number; resetAt: number }>();
+  app.use((req, res, next) => {
+    if (req.method !== 'POST' || req.path !== '/api/ai/consulta') return next();
+    const now = Date.now();
+    const key = req.socket.remoteAddress || 'unknown';
+    const bucket = aiRateBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      aiRateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+    } else if (bucket.count >= 20) {
+      return res.status(429).json({ error: 'Limite temporário de consultas atingido. Tente novamente em um minuto.' });
+    } else {
+      bucket.count += 1;
+    }
+    if (aiRateBuckets.size > 1000) {
+      for (const [address, item] of aiRateBuckets) {
+        if (item.resetAt <= now) aiRateBuckets.delete(address);
+      }
+    }
     next();
   });
 
@@ -135,10 +156,15 @@ async function startServer() {
 
   // 5. POST /api/ai/consulta (Assistente Virtual Lola)
   app.post('/api/ai/consulta', async (req, res) => {
-    const { pergunta, contexto } = req.body;
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const pergunta = typeof body.pergunta === 'string' ? body.pergunta.trim() : '';
+    const contexto = body.contexto && typeof body.contexto === 'object' ? body.contexto : undefined;
 
-    if (!pergunta || typeof pergunta !== 'string') {
+    if (!pergunta) {
       return res.status(400).json({ error: 'Campo "pergunta" é obrigatório.' });
+    }
+    if (pergunta.length > 1200) {
+      return res.status(413).json({ error: 'A pergunta deve ter no máximo 1200 caracteres.' });
     }
 
     // Prepare real-time inventory snapshot
@@ -173,7 +199,7 @@ REGRAS CRÍTICAS (ANTI-ALUCINAÇÃO):
 2. NUNCA invente produtos, coleções, preços, cupons ou estoques que não estejam listados aqui.
 3. Se o cliente perguntar por estoque, informe exatamente o valor de "estoqueDisponivel" oficial. Se estiver baixo (<= 3), avise delicadamente que restam poucas unidades.
 4. Se o cliente perguntar por algo que não vendemos ou que não está no catálogo, responda com sinceridade e gentileza: "No momento não temos essa peça específica em nosso catálogo, mas recomendo dar uma olhada em..."
-5. Se o cliente perguntar se a peça escurece ou se pode molhar: explique que o aço inoxidável 316L da Lola é à prova d'água, hipoalergênico e mantém o brilho dourado, com 1 ano de garantia.
+5. Não prometa resistência à água, propriedades antialérgicas, garantia ou durabilidade sem confirmação nos dados oficiais específicos do produto.
 6. Quando citar produtos específicos do catálogo, mencione o nome exato da peça para que o sistema possa criar links para a cliente.
 7. Mantenha as respostas concisas, elegantes (2 a 4 frases por resposta).
 
@@ -249,24 +275,24 @@ Pergunta da cliente: "${pergunta}"
 
     if (pLow.includes('estoque') || pLow.includes('tem') || pLow.includes('disponivel')) {
       if (activeProduct) {
-        fallbackAnswer = `Temos sim! O ${activeProduct.nome} possui atualmente ${activeProduct.estoqueDisponivel} unidades disponíveis em nosso estoque com envio imediato.`;
+        fallbackAnswer = `O catálogo registra ${activeProduct.estoqueDisponivel} unidades disponíveis de ${activeProduct.nome}. O prazo de envio ainda precisa ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: activeProduct.id, titulo: activeProduct.nome, link: `/produto/${activeProduct.id}` });
       } else {
         fallbackAnswer = `Nossas peças mais procuradas, como o Brinco Argola Lisa (${liveCatalog[0].estoqueDisponivel} un.) e o Colar Coração (${liveCatalog[6].estoqueDisponivel} un.), estão com estoque pronto para envio!`;
         fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' });
       }
     } else if (pLow.includes('escurece') || pLow.includes('molhar') || pLow.includes('alergia') || pLow.includes('banho') || pLow.includes('agua')) {
-      fallbackAnswer = 'As semijoias da Lola são produzidas em aço inoxidável 316L legítimo: são hipoalergênicas, 100% resistentes à água (pode molhar, tomar banho e ir ao mar) e não escurecem, acompanhadas de 1 ano de garantia.';
+      fallbackAnswer = 'Para te orientar com segurança, preciso confirmar as características, os cuidados e a garantia desta peça com a loja. Posso informar o material que está declarado no catálogo.';
       fallbackRefs.push({ tipo: 'politica', id: 'garantia', titulo: '1 Ano de Garantia Lola', link: '#garantia' });
     } else if (pLow.includes('frete') || pLow.includes('entrega') || pLow.includes('prazo')) {
-      fallbackAnswer = 'Enviamos para todo o Brasil com rastreamento seguro. Em compras acima de R$ 150,00 o frete é totalmente gratuito para você!';
+      fallbackAnswer = 'O cálculo do frete e o prazo de entrega ainda não estão conectados a uma transportadora nesta versão. Confirme o valor e o prazo no atendimento antes de concluir a compra.';
       fallbackRefs.push({ tipo: 'politica', id: 'frete', titulo: 'Frete para todo o Brasil', link: '#frete' });
     } else if (pLow.includes('recomenda') || pLow.includes('brinco') || pLow.includes('presente') || pLow.includes('dica')) {
       fallbackAnswer = 'Recomendo o clássico Brinco Argola Lisa (R$ 49,90) ou a delicada Argola Torcida (R$ 59,90). São nossas peças mais versáteis e campeãs de elogios!';
       fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' });
       fallbackRefs.push({ tipo: 'produto', id: 'brinco-3', titulo: 'Brinco Argola Torcida', link: '/produto/brinco-3' });
     } else {
-      fallbackAnswer = 'Olá! Sou a assistente da Lola Aço Inox. Nossas peças são hipoalergênicas, à prova d’água e com garantia de 1 ano. Em que posso te ajudar hoje?';
+      fallbackAnswer = 'Olá! Sou a assistente virtual da Lola Aço Inox & Acessórios. Posso ajudar com informações do catálogo e orientar você sobre detalhes que precisam ser confirmados com a loja.';
     }
 
     return res.json({

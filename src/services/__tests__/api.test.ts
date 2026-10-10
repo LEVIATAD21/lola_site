@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseStockPayload } from '../api';
+import { parseAIResponse, parseStockPayload } from '../api';
 
 const validPayload = {
   productId: 'brinco-1',
@@ -45,5 +45,39 @@ describe('parseStockPayload', () => {
   it('rejeita campos obrigatórios ausentes no corpo', () => {
     const { reservado: _omitted, ...missing } = validPayload;
     expect(parseStockPayload(missing)).toBeNull();
+  });
+});
+
+
+describe('parseAIResponse', () => {
+  it('aceita resposta válida com referência interna', () => {
+    expect(parseAIResponse({
+      resposta: 'Confira este produto.',
+      referencias: [{ tipo: 'produto', id: 'brinco-1', titulo: 'Argola Lisa', link: '/produto/brinco-1' }],
+    })).toEqual({
+      resposta: 'Confira este produto.',
+      referencias: [{ tipo: 'produto', id: 'brinco-1', titulo: 'Argola Lisa', link: '/produto/brinco-1' }],
+    });
+  });
+
+  it('rejeita estruturas vazias, inválidas ou respostas enormes', () => {
+    expect(parseAIResponse(null)).toBeNull();
+    expect(parseAIResponse({ resposta: '', referencias: [] })).toBeNull();
+    expect(parseAIResponse({ resposta: 'ok', referencias: 'inválido' })).toBeNull();
+    expect(parseAIResponse({ resposta: 'x'.repeat(10001), referencias: [] })).toBeNull();
+  });
+
+  it('descarta links externos e referências malformadas', () => {
+    expect(parseAIResponse({
+      resposta: 'Resposta',
+      referencias: [
+        { tipo: 'produto', id: 'x', titulo: 'Externo', link: 'javascript:alert(1)' },
+        { tipo: 'produto', id: 'x', titulo: 'Externo', link: '//evil.example' },
+        { tipo: 'produto', id: 'ok', titulo: 'Interno', link: '/produto/ok' },
+        { tipo: 'desconhecido', id: 'x', titulo: 'X', link: '/x' },
+      ],
+    })?.referencias).toEqual([
+      { tipo: 'produto', id: 'ok', titulo: 'Interno', link: '/produto/ok' },
+    ]);
   });
 });
