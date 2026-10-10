@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Heart, Star, ShoppingBag } from 'lucide-react';
 import { Product } from '../../data/mockData';
 import { BadgeEstoque } from '../BadgeEstoque';
+import { getProductStock } from '../../services/api';
 
 interface EarringProductCardProps {
   product: Product;
@@ -10,6 +11,7 @@ interface EarringProductCardProps {
   onAddToCart: (product: Product) => void;
   onSelectProduct: (product: Product) => void;
   viewMode?: 'grid' | 'list';
+  availableUnits?: number | null;
 }
 
 export const EarringProductCard: React.FC<EarringProductCardProps> = ({
@@ -19,7 +21,35 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
   onAddToCart,
   onSelectProduct,
   viewMode = 'grid',
+  availableUnits: propAvailableUnits,
 }) => {
+  const [stockUnits, setStockUnits] = useState<number | null | undefined>(propAvailableUnits);
+
+  useEffect(() => {
+    if (propAvailableUnits !== undefined) {
+      setStockUnits(propAvailableUnits);
+      return;
+    }
+    let isMounted = true;
+    getProductStock(product.id).then((res) => {
+      if (isMounted) {
+        setStockUnits(res ? res.disponivel : null);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [product.id, propAvailableUnits]);
+
+  const hasConfirmedStock = typeof stockUnits === 'number';
+  const isOutOfStock = hasConfirmedStock && stockUnits <= 0;
+  const isStockUnknown = !hasConfirmedStock;
+  const canPurchase = hasConfirmedStock && stockUnits > 0;
+
+  const handleAdd = () => {
+    if (!canPurchase) return;
+    onAddToCart(product);
+  };
   if (viewMode === 'list') {
     return (
       <div className="bg-white rounded-2xl overflow-hidden border border-[#E7DED3] hover:border-[#C49A5A]/50 shadow-xs hover:shadow-md transition-all duration-300 p-4 flex flex-col sm:flex-row gap-5 items-center group">
@@ -76,24 +106,47 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
             {product.description}
           </p>
 
-          <div className="flex items-baseline gap-2 pt-1">
+          <div className="flex items-baseline justify-between pt-1">
             <span className="font-semibold text-lg text-[#241F1B] tabular-nums">
               R$ {product.price.toFixed(2).replace('.', ',')}
             </span>
-            <span className="text-[11px] text-[#766D64]">
-              {product.color} • {product.material}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-[#766D64]">
+                {product.color} • {product.material}
+              </span>
+              <BadgeEstoque availableUnits={stockUnits} showDetailed={false} />
+            </div>
           </div>
         </div>
 
         {/* CTA */}
         <div className="w-full sm:w-auto shrink-0 pt-2 sm:pt-0">
           <button
-            onClick={() => onAddToCart(product)}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#2A211B] hover:bg-[#C49A5A] text-white text-xs font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            onClick={handleAdd}
+            disabled={!canPurchase}
+            className={`w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
+              !canPurchase
+                ? 'bg-stone-200 text-stone-500 cursor-not-allowed border border-stone-300 shadow-none'
+                : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white cursor-pointer shadow-sm'
+            }`}
+            title={
+              !canPurchase
+                ? isOutOfStock
+                  ? 'Produto esgotado'
+                  : 'Disponibilidade sob consulta — estoque não confirmado'
+                : undefined
+            }
           >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Adicionar à sacola</span>
+            {isOutOfStock ? (
+              <span>Esgotado</span>
+            ) : isStockUnknown ? (
+              <span>Consulte disponibilidade</span>
+            ) : (
+              <>
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Adicionar à sacola</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -172,17 +225,37 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
             <p className="font-semibold text-sm sm:text-base text-[#241F1B] tabular-nums">
               R$ {product.price.toFixed(2).replace('.', ',')}
             </p>
-            <BadgeEstoque availableUnits={undefined} showDetailed={false} />
+            <BadgeEstoque availableUnits={stockUnits} showDetailed={false} />
           </div>
         </div>
 
         {/* Button: Adicionar à sacola (matching Design 02 dark button) */}
         <button
-          onClick={() => onAddToCart(product)}
-          className="w-full py-2.5 px-3 rounded-xl bg-[#2A211B] hover:bg-[#C49A5A] text-white text-xs font-semibold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
+          onClick={handleAdd}
+          disabled={!canPurchase}
+          className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-1.5 ${
+            !canPurchase
+              ? 'bg-stone-200 text-stone-500 cursor-not-allowed border border-stone-300 shadow-none'
+              : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white cursor-pointer shadow-xs active:scale-[0.98]'
+          }`}
+          title={
+            !canPurchase
+              ? isOutOfStock
+                ? 'Produto esgotado'
+                : 'Disponibilidade sob consulta — estoque não confirmado'
+              : undefined
+          }
         >
-          <ShoppingBag className="w-3.5 h-3.5" />
-          <span>Adicionar à sacola</span>
+          {isOutOfStock ? (
+            <span>Esgotado</span>
+          ) : isStockUnknown ? (
+            <span>Consulte disponibilidade</span>
+          ) : (
+            <>
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Adicionar à sacola</span>
+            </>
+          )}
         </button>
 
       </div>

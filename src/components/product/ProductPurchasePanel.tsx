@@ -31,11 +31,15 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
     { label: 'G (2,5 cm)', value: 'G (2,5 cm)' },
   ];
 
-  const maxQuantity = availableUnits !== null && availableUnits !== undefined ? availableUnits : 99;
-  const isOutOfStock = availableUnits !== null && availableUnits !== undefined && availableUnits <= 0;
+  const hasConfirmedStock = typeof availableUnits === 'number';
+  const isOutOfStock = hasConfirmedStock && availableUnits <= 0;
+  const isStockUnknown = !hasConfirmedStock;
+  const canPurchase = hasConfirmedStock && availableUnits > 0;
+  const maxQuantity = canPurchase ? availableUnits : 0;
 
   const handleAdd = () => {
-    if (isOutOfStock) return;
+    if (!canPurchase) return;
+    if (quantity <= 0 || quantity > (availableUnits ?? 0)) return;
     onAddToCart(product, quantity, selectedSize);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -116,27 +120,31 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
           <label className="block text-xs font-semibold text-[#241F1B]">
             Quantidade
           </label>
-          {availableUnits !== null && availableUnits !== undefined && (
+          {hasConfirmedStock ? (
             <span className="text-[11px] text-[#766D64]">
-              Disponível: {availableUnits} un.
+              {availableUnits > 0 ? `Disponível: ${availableUnits} un.` : 'Sem estoque'}
+            </span>
+          ) : (
+            <span className="text-[11px] text-[#766D64]">
+              Disponibilidade sob consulta
             </span>
           )}
         </div>
         <div className="flex items-center w-36 border border-[#E7DED3] rounded-xl bg-white overflow-hidden">
           <button
             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-            disabled={quantity <= 1 || isOutOfStock}
+            disabled={!canPurchase || quantity <= 1}
             aria-label="Diminuir quantidade"
             className="w-11 h-10 flex items-center justify-center text-sm font-semibold text-[#766D64] hover:text-[#2A211B] hover:bg-[#F8F4ED] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
             −
           </button>
-          <span className="flex-1 text-center text-xs font-bold tabular-nums text-[#241F1B]">
-            {quantity}
+          <span className={`flex-1 text-center text-xs font-bold tabular-nums ${canPurchase ? 'text-[#241F1B]' : 'text-stone-400'}`}>
+            {canPurchase ? quantity : 0}
           </span>
           <button
             onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
-            disabled={quantity >= maxQuantity || isOutOfStock}
+            disabled={!canPurchase || quantity >= maxQuantity}
             aria-label="Aumentar quantidade"
             className="w-11 h-10 flex items-center justify-center text-sm font-semibold text-[#766D64] hover:text-[#2A211B] hover:bg-[#F8F4ED] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
@@ -151,17 +159,26 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
         {/* Primary CTA: Adicionar à sacola */}
         <button
           onClick={handleAdd}
-          disabled={isOutOfStock}
+          disabled={!canPurchase}
           className={`w-full py-4 px-6 rounded-2xl font-semibold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 shadow-md active:scale-[0.99] ${
-            isOutOfStock
-              ? 'bg-stone-300 text-stone-500 cursor-not-allowed'
+            !canPurchase
+              ? 'bg-stone-200 text-stone-500 cursor-not-allowed border border-stone-300 shadow-none'
               : isAdded
               ? 'bg-emerald-700 text-white cursor-pointer'
               : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white cursor-pointer'
           }`}
+          title={
+            !canPurchase
+              ? isOutOfStock
+                ? 'Produto esgotado'
+                : 'Disponibilidade sob consulta — estoque não confirmado'
+              : undefined
+          }
         >
           {isOutOfStock ? (
             <span>Produto Indisponível</span>
+          ) : isStockUnknown ? (
+            <span>Consulte disponibilidade</span>
           ) : isAdded ? (
             <>
               <Check className="w-4 h-4" />
@@ -175,13 +192,13 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
           )}
         </button>
 
-        {/* Secondary CTA: Comprar pelo WhatsApp */}
+        {/* Secondary CTA: WhatsApp */}
         <button
           onClick={() => onOpenWhatsApp(product, selectedSize)}
           className="w-full py-3.5 px-6 rounded-2xl bg-white hover:bg-[#F1E8DC]/80 text-[#241F1B] border border-[#2A211B] font-semibold text-xs sm:text-sm tracking-wide transition-colors flex items-center justify-center gap-2.5 cursor-pointer"
         >
           <MessageCircle className="w-4 h-4 text-emerald-600" />
-          <span>Comprar pelo WhatsApp</span>
+          <span>{canPurchase ? 'Comprar pelo WhatsApp' : 'Consultar pelo WhatsApp'}</span>
         </button>
 
       </div>

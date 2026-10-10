@@ -143,11 +143,10 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({
                     </div>
 
                     <button
-                      onClick={() => onAddToCart(product)}
-                      className="w-full py-2 px-2.5 rounded-xl bg-[#2A211B] hover:bg-[#C49A5A] text-white text-[11px] font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      onClick={() => onSelectProduct(product)}
+                      className="w-full py-2 px-2.5 rounded-xl bg-[#F8F4ED] hover:bg-[#F1E8DC] text-[#241F1B] text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-[#E7DED3]"
                     >
-                      <ShoppingBag className="w-3 h-3" />
-                      <span>Adicionar à sacola</span>
+                      <span>Ver produto</span>
                     </button>
                   </div>
                 </div>

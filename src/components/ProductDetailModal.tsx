@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Heart, ShoppingBag, ShieldCheck, Sparkles, Check } from 'lucide-react';
 import { Product } from '../data/mockData';
 import { BadgeEstoque } from './BadgeEstoque';
+import { getProductStock } from '../services/api';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -22,10 +23,29 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
+  const [stockUnits, setStockUnits] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!product) return;
+    let isMounted = true;
+    getProductStock(product.id).then((res) => {
+      if (isMounted) setStockUnits(res ? res.disponivel : null);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [product]);
 
   if (!isOpen || !product) return null;
 
+  const hasConfirmedStock = typeof stockUnits === 'number';
+  const isOutOfStock = hasConfirmedStock && stockUnits <= 0;
+  const isStockUnknown = !hasConfirmedStock;
+  const canPurchase = hasConfirmedStock && stockUnits > 0;
+  const maxQuantity = canPurchase ? stockUnits : 0;
+
   const handleAdd = () => {
+    if (!canPurchase || quantity <= 0 || quantity > (stockUnits ?? 0)) return;
     onAddToCart(product, quantity);
     setAddedSuccess(true);
     setTimeout(() => setAddedSuccess(false), 2000);
@@ -93,7 +113,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       ou 3x de R$ {(product.price / 3).toFixed(2).replace('.', ',')} sem juros
                     </span>
                   </div>
-                  <BadgeEstoque availableUnits={8} />
+                  <BadgeEstoque availableUnits={stockUnits} />
                 </div>
 
                 <p className="text-xs sm:text-sm text-[#766D64] leading-relaxed pt-2">
@@ -119,16 +139,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div className="flex items-center border border-[#E7DED3] rounded-lg">
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-3 py-2 text-sm text-[#766D64] hover:text-[#2A211B] cursor-pointer"
+                      disabled={!canPurchase || quantity <= 1}
+                      className="px-3 py-2 text-sm text-[#766D64] hover:text-[#2A211B] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       -
                     </button>
-                    <span className="px-2 text-sm font-semibold tabular-nums text-[#241F1B]">
-                      {quantity}
+                    <span className={`px-2 text-sm font-semibold tabular-nums ${canPurchase ? 'text-[#241F1B]' : 'text-stone-400'}`}>
+                      {canPurchase ? quantity : 0}
                     </span>
                     <button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-3 py-2 text-sm text-[#766D64] hover:text-[#2A211B] cursor-pointer"
+                      onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+                      disabled={!canPurchase || quantity >= maxQuantity}
+                      className="px-3 py-2 text-sm text-[#766D64] hover:text-[#2A211B] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       +
                     </button>
@@ -136,13 +158,27 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                   <button
                     onClick={handleAdd}
-                    className={`flex-1 py-3 px-4 rounded-lg font-semibold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                      addedSuccess
-                        ? 'bg-emerald-700 text-white'
-                        : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white'
+                    disabled={!canPurchase}
+                    className={`flex-1 py-3 px-4 rounded-lg font-semibold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 ${
+                      !canPurchase
+                        ? 'bg-stone-200 text-stone-500 cursor-not-allowed border border-stone-300'
+                        : addedSuccess
+                        ? 'bg-emerald-700 text-white cursor-pointer shadow-md'
+                        : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white cursor-pointer shadow-md'
                     }`}
+                    title={
+                      !canPurchase
+                        ? isOutOfStock
+                          ? 'Produto esgotado'
+                          : 'Disponibilidade sob consulta — estoque não confirmado'
+                        : undefined
+                    }
                   >
-                    {addedSuccess ? (
+                    {isOutOfStock ? (
+                      <span>Produto Indisponível</span>
+                    ) : isStockUnknown ? (
+                      <span>Consulte disponibilidade</span>
+                    ) : addedSuccess ? (
                       <>
                         <Check className="w-4 h-4" />
                         <span>Adicionado!</span>

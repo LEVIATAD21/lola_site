@@ -232,6 +232,7 @@ export default function App() {
 
   // Add item to cart
   const handleAddToCart = (product: Product, quantity = 1, size?: string) => {
+    if (!product || quantity <= 0) return;
     const itemKey = size ? `${product.id}-${size}` : product.id;
     const variantLabel = size || 'Único';
 
