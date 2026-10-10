@@ -55,7 +55,11 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
     </div>
   );
 
-  const selectMethod = (method: PaymentType) => update('method', method);
+  const selectMethod = (method: PaymentType) => {
+    // Não permitir selecionar cartão até existir autorização real via gateway.
+    if (method === 'credit_card') return;
+    update('method', method);
+  };
 
   const methodKeyDown = (method: PaymentType) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -80,140 +84,34 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
           </h2>
         </div>
         <p className="text-xs text-[#766D64]">
-          Escolha a forma de pagamento que preferir.
+          Esta versão registra apenas um pré-pedido. Nenhuma forma de pagamento gera cobrança nesta etapa.
         </p>
       </div>
 
       {/* Payment Options List */}
       <div role="radiogroup" aria-label="Forma de pagamento" className="space-y-3">
 
-        {/* 1. Cartão de Crédito */}
+        {/* Cartão indisponível até integração com um provedor de pagamentos */}
         <div
           role="radio"
-          aria-checked={paymentData.method === 'credit_card'}
-          tabIndex={0}
-          onClick={() => selectMethod('credit_card')}
-          onKeyDown={methodKeyDown('credit_card')}
-          className={optionClass('credit_card')}
+          aria-checked={false}
+          aria-disabled="true"
+          tabIndex={-1}
+          className="p-4 rounded-2xl border border-[#E7DED3] bg-[#F8F4ED]/60 opacity-70 cursor-not-allowed"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {radioIndicator('credit_card')}
-              <CreditCard className="w-5 h-5 text-[#2A211B]" />
+              <CreditCard className="w-5 h-5 text-[#766D64]" />
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-[#241F1B]">Cartão de crédito</p>
-                <p className="text-[11px] text-[#766D64]">Parcelamento definido pelo provedor de pagamento</p>
+                <p className="text-[11px] text-[#766D64]">Indisponível até a integração segura do pagamento</p>
               </div>
             </div>
-
-            {/* Badges Visa / Master */}
-            <div className="hidden sm:flex items-center gap-1.5 opacity-80">
-              <span className="text-[10px] font-black italic text-[#1A1F71] bg-white px-1.5 py-0.5 rounded border border-[#E7DED3]">VISA</span>
-              <span className="text-[10px] font-bold text-[#EB001B] bg-white px-1.5 py-0.5 rounded border border-[#E7DED3]">MC</span>
-            </div>
+            <span className="shrink-0 text-[10px] font-bold text-[#766D64] bg-white px-2 py-1 rounded-full border border-[#E7DED3]">
+              Em breve
+            </span>
           </div>
-
-          {/* Expanded Credit Card Fields */}
-          {paymentData.method === 'credit_card' && (
-              <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3.5 animate-in fade-in text-xs">
-                <p className="mb-3 rounded-xl border border-[#E7DED3] bg-[#F8F4ED] p-3 text-[11px] leading-relaxed text-[#766D64]">Modo de demonstração: não informe dados reais do cartão. Os campos abaixo não são enviados ao servidor e nenhuma cobrança será realizada.</p>
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
-                Demonstração: informe apenas dados de teste. Esta tela não envia informações a nenhum processador de pagamento.
-              </div>
-
-              <div>
-                <label className="font-semibold text-[#241F1B] block mb-1">
-                  Número do cartão
-                </label>
-                <input
-                  type="text"
-                  placeholder="0000 0000 0000 0000"
-                  maxLength={19}
-                  autoComplete="off"
-                  value={paymentData.cardNumber}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim();
-                    update('cardNumber', v);
-                  }}
-                  className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] focus:outline-none focus:border-[#C49A5A]"
-                />
-              </div>
-
-              <div>
-                <label className="font-semibold text-[#241F1B] block mb-1">
-                  Nome impresso no cartão
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nome como está no cartão"
-                  autoComplete="off"
-                  value={paymentData.cardName}
-                  onChange={(e) => update('cardName', e.target.value.toUpperCase())}
-                  className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] uppercase focus:outline-none focus:border-[#C49A5A]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-[#241F1B] block mb-1">
-                    Validade (MM/AA)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="MM/AA"
-                    maxLength={5}
-                    autoComplete="off"
-                    value={paymentData.cardExpiry}
-                    onChange={(e) => {
-                      let v = e.target.value.replace(/\D/g, '');
-                      if (v.length > 2) v = `${v.slice(0, 2)}/${v.slice(2, 4)}`;
-                      update('cardExpiry', v);
-                    }}
-                    className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] focus:outline-none focus:border-[#C49A5A]"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-semibold text-[#241F1B] block mb-1">
-                    CVV
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="123"
-                    maxLength={4}
-                    autoComplete="off"
-                    value={paymentData.cardCvv}
-                    onChange={(e) => update('cardCvv', e.target.value.replace(/\D/g, ''))}
-                    className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] focus:outline-none focus:border-[#C49A5A]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-[#241F1B] block mb-1">
-                  Opções de parcelamento
-                </label>
-                <select
-                  value={paymentData.installments}
-                  onChange={(e) => update('installments', Number(e.target.value))}
-                  aria-label="Número de parcelas"
-                  className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-xs text-[#241F1B] bg-white focus:outline-none focus:border-[#C49A5A] cursor-pointer"
-                >
-                  {[1, 2, 3, 4, 5, 6, 10, 12].map((parc) => {
-                    const parcVal = (totalAmount / parc).toFixed(2).replace('.', ',');
-                    return (
-                      <option key={parc} value={parc}>
-                        {parc}x de R$ {parcVal} (estimativa — sem juros nesta simulação)
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-[10px] text-[#766D64] mt-1">
-                  Condições reais de parcelamento e juros serão exibidas pelo provedor de pagamento na integração.
-                </p>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* 2. PIX */}
@@ -231,7 +129,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
               <QrCode className="w-5 h-5 text-[#32BCAD]" />
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-[#241F1B]">PIX</p>
-                <p className="text-[11px] text-[#766D64]">Pagamento online</p>
+                <p className="text-[11px] text-[#766D64]">Opção de pré-pedido (sem cobrança)</p>
               </div>
             </div>
 
