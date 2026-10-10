@@ -82,3 +82,24 @@ describe('createAdminKeyMiddleware', () => {
     expect(endpoint.mutations()).toBe(0);
   });
 });
+
+
+describe('limite de tentativas administrativas', () => {
+  it('locks out repeated incorrect key guesses from the same IP', async () => {
+    const endpoint = await startProtectedEndpoint(() => expectedKey);
+    for (let index = 0; index < 10; index += 1) {
+      const response = await fetch(endpoint.url, {
+        method: 'POST',
+        headers: { 'x-admin-key': `wrong-key-${index}` },
+      });
+      expect(response.status).toBe(401);
+    }
+    const blocked = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: { 'x-admin-key': expectedKey },
+    });
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBeTruthy();
+    expect(endpoint.mutations()).toBe(0);
+  });
+});

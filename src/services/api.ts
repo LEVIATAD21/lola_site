@@ -1,8 +1,5 @@
 export interface StockResponse {
   productId: string;
-  total: number;
-  reservado: number;
-  vendido: number;
   disponivel: number;
 }
 
@@ -48,16 +45,11 @@ export function parseStockPayload(json: unknown, expectedId?: string): StockResp
   if (typeof o.productId !== 'string' || !o.productId) return null;
   if (expectedId && o.productId !== expectedId) return null;
 
-  for (const key of ['total', 'reservado', 'vendido', 'disponivel'] as const) {
-    const value = o[key];
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
-  }
+  // Only public availability belongs in the storefront response. Administrative counters are intentionally omitted.
+  if (!Number.isSafeInteger(o.disponivel) || (o.disponivel as number) < 0) return null;
 
   return {
     productId: o.productId,
-    total: o.total as number,
-    reservado: o.reservado as number,
-    vendido: o.vendido as number,
     disponivel: o.disponivel as number,
   };
 }
@@ -77,24 +69,6 @@ export async function getProductStock(productId: string): Promise<StockResponse 
     // Falha de rede tratada pelo cliente
   }
   return null;
-}
-
-/**
- * Solicita a atualização/baixa de estoque no servidor.
- * Retorna false em caso de falha — nunca simula sucesso nem decrementa localmente sem backend.
- */
-export async function deductStock(productId: string, quantity: number): Promise<boolean> {
-  try {
-    const res = await fetch('/api/estoque/atualizar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId, quantidade: quantity }),
-    });
-    if (res.ok) return true;
-  } catch {
-    // Falha de rede tratada pelo cliente
-  }
-  return false;
 }
 
 /**

@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { parseAIResponse, parseDraftOrderConfirmation, parseStockPayload } from '../api';
 
-const validPayload = {
-  productId: 'brinco-1',
-  total: 10,
-  reservado: 1,
-  vendido: 1,
-  disponivel: 8,
-};
+const validPayload = { productId: 'brinco-1', disponivel: 8 };
 
 describe('parseStockPayload', () => {
-  it('aceita um payload válido', () => {
+  it('aceita apenas a disponibilidade pública do produto', () => {
     expect(parseStockPayload(validPayload, 'brinco-1')).toEqual(validPayload);
   });
 
@@ -35,16 +29,18 @@ describe('parseStockPayload', () => {
     expect(parseStockPayload(validPayload, 'brinco-2')).toBeNull();
   });
 
-  it('rejeita quantidades negativas ou não numéricas', () => {
+  it('rejeita disponibilidade negativa, fracionada ou não numérica', () => {
     expect(parseStockPayload({ ...validPayload, disponivel: -1 })).toBeNull();
-    expect(parseStockPayload({ ...validPayload, total: '10' })).toBeNull();
+    expect(parseStockPayload({ ...validPayload, disponivel: '8' })).toBeNull();
+    expect(parseStockPayload({ ...validPayload, disponivel: 1.5 })).toBeNull();
     expect(parseStockPayload({ ...validPayload, disponivel: NaN })).toBeNull();
-    expect(parseStockPayload({ ...validPayload, reservado: Infinity })).toBeNull();
   });
 
-  it('rejeita campos obrigatórios ausentes no corpo', () => {
-    const { reservado: _omitted, ...missing } = validPayload;
-    expect(parseStockPayload(missing)).toBeNull();
+  it('não precisa nem expõe contadores internos de estoque', () => {
+    expect(parseStockPayload({
+      productId: 'brinco-1', disponivel: 8,
+      total: 10, reservado: 1, vendido: 1,
+    })).toEqual(validPayload);
   });
 });
 
@@ -87,7 +83,7 @@ describe('parseDraftOrderConfirmation', () => {
   const valid = {
     success: true,
     order: {
-      orderNumber: 'LOLA-20261010-ABCDEF12',
+      orderNumber: 'LOLA-20261010-ABCDEF123456',
       createdAt: '2026-10-10T12:00:00.000Z',
       status: 'awaiting_payment_setup',
       paymentStatus: 'not_configured',
@@ -104,7 +100,7 @@ describe('parseDraftOrderConfirmation', () => {
 
   it('aceita pré-pedido sem declarar pagamento aprovado', () => {
     expect(parseDraftOrderConfirmation(valid)).toMatchObject({
-      orderNumber: 'LOLA-20261010-ABCDEF12',
+      orderNumber: 'LOLA-20261010-ABCDEF123456',
       status: 'awaiting_payment_setup',
       paymentStatus: 'not_configured',
       total: 119.62,

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
+import { createRateLimitMiddleware } from './rateLimit';
 
 export type AdminKeyProvider = () => string | undefined;
 
@@ -10,7 +11,16 @@ export type AdminKeyProvider = () => string | undefined;
 export function createAdminKeyMiddleware(
   getExpectedKey: AdminKeyProvider = () => process.env.LOLA_ADMIN_API_KEY,
 ): RequestHandler {
-  return (req, res, next) => {
+  // Brute-force friction shared across all administrative routes for each remote IP.
+  const limitAttempts = createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: 10,
+    maxBuckets: 10_000,
+    keyGenerator: (req) => req.socket.remoteAddress || 'unknown',
+    message: 'Muitas tentativas administrativas. Aguarde um minuto e tente novamente.',
+  });
+
+  return (req, res, next) => limitAttempts(req, res, () => {
     res.setHeader('Cache-Control', 'no-store');
     const expected = getExpectedKey();
 
@@ -28,5 +38,5 @@ export function createAdminKeyMiddleware(
     }
 
     return next();
-  };
+  });
 }
