@@ -18,7 +18,7 @@ function validInput(overrides: Record<string, unknown> = {}) {
   return {
     customer: {
       fullName: 'Maria da Silva', phone: '(21) 98765-4321', cep: '26300-000',
-      street: 'Rua das Flores, 123', complement: 'Casa 2', neighborhood: 'Centro',
+      street: 'Rua das Flores', number: '123', complement: 'Casa 2', neighborhood: 'Centro',
       city: 'Queimados', state: 'RJ',
     },
     items: [{ productId: 'brinco-1', quantity: 2 }],
@@ -68,6 +68,7 @@ describe('buildOrderDraft', () => {
     expect(buildOrderDraft(validInput({ customer: { ...validInput().customer, fullName: 'A' } }), catalog, inventory()).ok).toBe(false);
     expect(buildOrderDraft(validInput({ customer: { ...validInput().customer, phone: '123' } }), catalog, inventory()).ok).toBe(false);
     expect(buildOrderDraft(validInput({ customer: { ...validInput().customer, cep: '1234' } }), catalog, inventory()).ok).toBe(false);
+    expect(buildOrderDraft(validInput({ customer: { ...validInput().customer, number: '' } }), catalog, inventory()).ok).toBe(false);
     expect(buildOrderDraft(validInput({ customer: { ...validInput().customer, state: 'XX' } }), catalog, inventory()).ok).toBe(false);
   });
   it('rejeita produto desconhecido, produto sem estoque e quantidade fracionada', () => {
@@ -84,6 +85,7 @@ describe('buildOrderDraft', () => {
     expect(buildOrderDraft(validInput({ couponCode: 'FAKE100' }), catalog, inventory()).ok).toBe(false);
     expect(buildOrderDraft(validInput({ shippingOptionId: 'instantaneo' }), catalog, inventory()).ok).toBe(false);
     expect(buildOrderDraft(validInput({ paymentMethod: 'wire_transfer' }), catalog, inventory()).ok).toBe(false);
+    expect(buildOrderDraft(validInput({ paymentMethod: 'credit_card' }), catalog, inventory())).toMatchObject({ ok: false, status: 400, error: expect.stringContaining('Pagamento por cartão indisponível') });
   });
   it('agrega linhas repetidas do mesmo produto na validação de estoque', () => {
     expect(buildOrderDraft(validInput({ items: [{ productId: 'brinco-1', quantity: 5 }, { productId: 'brinco-1', quantity: 4 }] }), catalog, inventory())).toMatchObject({ ok: false, status: 409 });
