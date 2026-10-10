@@ -1,0 +1,8 @@
+{
+  "name": "LOLA Aço Inox & Acessórios",
+  "description": "Loja online de semijoias e acessórios em aço inoxidável com design elegante, contemporâneo e acabamento refinado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
