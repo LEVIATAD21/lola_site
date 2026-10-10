@@ -6,17 +6,11 @@ import { GoogleGenAI } from '@google/genai';
 import { InventoryStore } from './src/server/inventory';
 import { CATALOG_INFO } from './src/server/catalog';
 import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } from './src/server/orders';
-import { timingSafeEqual } from 'node:crypto';
+import { createAdminKeyMiddleware } from './src/server/adminAuth';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function hasValidAdminKey(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided, 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 // In-memory stock store initialized from catalog
 interface StockItem {
@@ -78,6 +72,8 @@ async function startServer() {
     next();
   });
 
+  const requireAdminKey = createAdminKeyMiddleware();
+
   const aiRateBuckets = new Map<string, { count: number; resetAt: number }>();
   app.use((req, res, next) => {
     if (req.method !== 'POST' || (req.path !== '/api/ai/consulta' && req.path !== '/api/pedidos/rascunho')) return next();
@@ -112,7 +108,7 @@ async function startServer() {
   });
 
   // 2. POST /api/estoque/atualizar (baixa estrita e persistente)
-  app.post('/api/estoque/atualizar', (req, res) => {
+  app.post('/api/estoque/atualizar', requireAdminKey, (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const result = inventory.deduct(body.productId, body.quantidade);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
@@ -134,31 +130,15 @@ async function startServer() {
   });
 
   // Protected admin endpoints for a future dashboard. Never return PII without server-side authentication.
-  const requireAdminKey = (req: express.Request, res: express.Response): boolean => {
-    res.setHeader('Cache-Control', 'no-store');
-    const expected = process.env.LOLA_ADMIN_API_KEY;
-    if (!expected || expected.length < 32) {
-      res.status(503).json({ error: 'Gestão de pedidos desativada. Configure LOLA_ADMIN_API_KEY com pelo menos 32 caracteres.' });
-      return false;
-    }
-    if (!hasValidAdminKey(req.get('x-admin-key') || '', expected)) {
-      res.status(401).json({ error: 'Chave administrativa inválida.' });
-      return false;
-    }
-    return true;
-  };
-
   // GET /api/admin/pre-pedidos?limit=50 — requires x-admin-key.
-  app.get('/api/admin/pre-pedidos', (req, res) => {
-    if (!requireAdminKey(req, res)) return;
+  app.get('/api/admin/pre-pedidos', requireAdminKey, (req, res) => {
     const requestedLimit = Number(req.query.limit ?? 50);
     const limit = Number.isSafeInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
     return res.json({ orders: orders.listRecent(limit).map(toAdminOrder) });
   });
 
   // GET /api/admin/pre-pedidos/:orderNumber — requires x-admin-key.
-  app.get('/api/admin/pre-pedidos/:orderNumber', (req, res) => {
-    if (!requireAdminKey(req, res)) return;
+  app.get('/api/admin/pre-pedidos/:orderNumber', requireAdminKey, (req, res) => {
     if (!/^LOLA-\d{8}-[A-F0-9]{8}$/.test(req.params.orderNumber)) {
       return res.status(400).json({ error: 'Código de pré-pedido inválido.' });
     }

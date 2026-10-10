@@ -24,7 +24,7 @@
 A interface foi construída em torno de uma paleta de **creme, bege, dourado suave e marrom escuro**, com tipografia elegante, fotografias de produto e componentes responsivos. O objetivo é oferecer uma navegação acolhedora, do primeiro contato com a coleção até a revisão da sacola e a demonstração do checkout.
 
 > [!IMPORTANT]
-> **Este repositório ainda está em desenvolvimento.** O checkout atual é demonstrativo: não cria um pedido comercial nem realiza cobranças. Os valores de frete e os cupons são exemplos de interface; o estoque existente no servidor ainda usa dados em memória. Não use dados reais de cartão neste protótipo.
+> **Este repositório ainda está em desenvolvimento.** O checkout registra um pré-pedido pendente e cifrado, mas não cobra, não gera Pix/boleto, não reserva estoque e não confirma uma venda. Frete e cupons ainda são demonstrativos; as quantidades iniciais do estoque também são dados de exemplo. Não use dados reais de cartão neste protótipo.
 
 ## 💎 Experiência da loja
 
@@ -177,7 +177,7 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - O catálogo da API usa a mesma fonte `src/data/mockData.ts` que alimenta as telas; IDs, nomes, descrições, imagens e preços não são duplicados no backend.
 - O estoque fica em `.data/inventory.json` (ou no caminho definido por `LOLA_DATA_DIR`). O arquivo é criado no primeiro início do servidor; mantenha o diretório em um volume persistente nos deploys.
 - Antes do uso comercial, substitua as quantidades de demonstração já existentes pelas quantidades físicas reais. Novos produtos começam com estoque zero até que ele seja configurado. Mantenha `total = reservado + vendido + disponivel` e use inteiros não negativos.
-- Baixas inválidas, IDs desconhecidos e quantidades acima da disponibilidade são recusados. A gravação em JSON é para uma única instância Node; várias instâncias exigem banco transacional.
+- `POST /api/estoque/atualizar` só aceita baixa de estoque com o cabeçalho `x-admin-key` válido. Sem `LOLA_ADMIN_API_KEY` configurada com pelo menos 32 caracteres, a operação fica desativada. Baixas inválidas, IDs desconhecidos e quantidades acima da disponibilidade são recusados. A gravação em JSON atende uma única instância Node; várias instâncias exigem banco transacional.
 - Checkout, cálculo logístico e cobranças continuam demonstrativos até que integrações comerciais reais sejam configuradas.
 
 
@@ -193,5 +193,7 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 ## API administrativa protegida
 
 - `GET /api/admin/pre-pedidos?limit=50` lista no máximo 100 solicitações recentes; `GET /api/admin/pre-pedidos/:orderNumber` retorna um pré-pedido específico.
-- Os dois endpoints exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável, a API administrativa permanece desativada.
-- Não coloque a chave em código do frontend, variáveis `VITE_*`, URLs ou no repositório. A resposta contém dados pessoais e deve ser acessada somente por administração autenticada usando HTTPS.
+- `POST /api/estoque/atualizar` também é uma operação administrativa: não permite que visitantes diminuam artificialmente o estoque.
+- Todas essas rotas exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável (ou com valor curto), as operações privilegiadas ficam desativadas.
+- Não coloque a chave no frontend, em variáveis `VITE_*`, em URLs ou no repositório. Use HTTPS em produção.
+- A chave é uma proteção técnica básica para a API; o projeto ainda não tem painel administrativo, contas de funcionários, perfis por função, sessões com MFA ou auditoria administrativa.
