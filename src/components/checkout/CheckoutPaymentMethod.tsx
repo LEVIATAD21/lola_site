@@ -115,8 +115,8 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
 
           {/* Expanded Credit Card Fields */}
           {paymentData.method === 'credit_card' && (
-            <p className="mb-3 rounded-xl border border-[#E7DED3] bg-[#F8F4ED] p-3 text-[11px] leading-relaxed text-[#766D64]">Modo de demonstração: não informe dados reais do cartão. Os campos abaixo não são enviados ao servidor e nenhuma cobrança será realizada.</p>
               <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3.5 animate-in fade-in text-xs">
+                <p className="mb-3 rounded-xl border border-[#E7DED3] bg-[#F8F4ED] p-3 text-[11px] leading-relaxed text-[#766D64]">Modo de demonstração: não informe dados reais do cartão. Os campos abaixo não são enviados ao servidor e nenhuma cobrança será realizada.</p>
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
                 Demonstração: informe apenas dados de teste. Esta tela não envia informações a nenhum processador de pagamento.
               </div>
