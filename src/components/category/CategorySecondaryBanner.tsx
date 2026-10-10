@@ -30,7 +30,7 @@ export const CategorySecondaryBanner: React.FC<CategorySecondaryBannerProps> = (
           <div className="lg:col-span-3 flex justify-center">
             <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden border-2 border-[#C49A5A]/50 shadow-lg">
               <img
-                src="/src/assets/images/hero_lola_model_1791578690867.jpg"
+                src="/images/hero_lola_model_1791578690867.jpg"
                 alt="Detalhe de brinco em aço inox"
                 className="w-full h-full object-cover object-[62%_30%]"
               />

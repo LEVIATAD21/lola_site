@@ -414,7 +414,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <div className="p-3.5 rounded-2xl bg-[#F8F4ED] border border-[#E7DED3] flex items-start gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2A211B]">Assistente Virtual 24/7</p>
+                      <p className="font-bold text-[#2A211B]">Assistente Virtual</p>
                       <p className="text-[11px] text-[#766D64] mt-0.5">
                         Widget acessível em todas as telas com sugestão de perguntas e card interativo de produto.
                       </p>

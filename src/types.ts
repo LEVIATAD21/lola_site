@@ -5,6 +5,12 @@ export interface ToastMessage {
   description?: string;
 }
 
+// Cupom aplicado no fluxo de compra — compartilhado entre carrinho e checkout
+export interface AppliedCoupon {
+  code: string;
+  percentage: number;
+}
+
 export interface CartItem {
   id: string;
   productId: string;

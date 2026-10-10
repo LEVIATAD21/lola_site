@@ -6,9 +6,11 @@ import { CheckoutOrderSummary } from './CheckoutOrderSummary';
 import { OrderSuccessModal } from './OrderSuccessModal';
 import { WhatsAppModal } from '../product/WhatsAppModal';
 import { ProductEditorialBanner } from '../product/ProductEditorialBanner';
-import { CartItem } from '../../types';
+import { CartItem, AppliedCoupon } from '../../types';
 import { Product, CART_RECOMMENDED_PRODUCTS } from '../../data/mockData';
 import { getCouponDiscount, getCouponPercentage } from '../../data/coupons';
+import { ShippingOption, quoteShipping } from '../cart/ShippingCalculatorModal';
+import { validateAddress } from '../../utils/checkoutValidation';
 import { ChevronLeft, ChevronRight, Heart, ArrowRight } from 'lucide-react';
 
 interface CheckoutPageProps {
@@ -23,6 +25,10 @@ interface CheckoutPageProps {
   onToggleFavorite: (product: Product) => void;
   onAddToCart: (product: Product, quantity: number, size?: string) => void;
   onOrderCompleted?: (orderData: any) => void;
+  coupon: AppliedCoupon | null;
+  onApplyCoupon: (code: string, percentage: number) => void;
+  shipping: ShippingOption | null;
+  onOpenInfo?: (title: string, content: string) => void;
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({
@@ -37,14 +43,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   onToggleFavorite,
   onAddToCart,
   onOrderCompleted,
+  coupon,
+  onApplyCoupon,
+  shipping,
+  onOpenInfo,
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [hasGiftWrap, setHasGiftWrap] = useState(false);
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [termsError, setTermsError] = useState(false);
   const [addressErrors, setAddressErrors] = useState<CheckoutAddressErrors>({});
+  const [cepNotice, setCepNotice] = useState<string | null>(null);
 
   // Address form state starts empty
   const [addressData, setAddressData] = useState<CheckoutAddressData>({
@@ -71,9 +81,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   });
 
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const discountAmount = getCouponDiscount(appliedCoupon, subtotal);
-  // Frete e embalagem: valores demonstrativos de protótipo (sem cotação oficial de transportadora)
-  const shippingPrice = subtotal >= 150 ? 0 : 19.90;
+  const discountAmount = getCouponDiscount(coupon?.code, subtotal);
+  // Frete escolhido no carrinho é reaproveitado e recalculado para o subtotal atual;
+  // sem escolha prévia, usa a estimativa demonstrativa padrão.
+  const shippingPrice = shipping ? quoteShipping(shipping.id, subtotal) : subtotal >= 150 ? 0 : 19.90;
   const giftWrapPrice = hasGiftWrap ? 9.90 : 0;
   const totalAmount = Math.max(0, subtotal + shippingPrice + giftWrapPrice - discountAmount);
 
@@ -87,47 +98,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   };
 
   const handleCepSearch = (_cleanCep: string) => {
-    // Integração oficial de CEP será conectada no backend pelo proprietário
+    // Nenhuma consulta é realizada nesta demonstração — o feedback abaixo evita
+    // que a ação pareça ter concluído uma busca que não existe.
+    setCepNotice(
+      'Consulta automática de CEP indisponível nesta demonstração. Preencha o endereço manualmente.'
+    );
   };
 
   const handleApplyCoupon = (code: string): boolean => {
     const clean = code.trim().toUpperCase();
-    if (!getCouponPercentage(clean)) return false;
-    setAppliedCoupon(clean);
+    const pct = getCouponPercentage(clean);
+    if (!pct) return false;
+    onApplyCoupon(clean, pct);
     return true;
   };
 
-  const validateAddress = (): CheckoutAddressErrors => {
-    const errs: CheckoutAddressErrors = {};
-    const digits = addressData.phone.replace(/\D/g, '');
-    const cepDigits = addressData.cep.replace(/\D/g, '');
-
-    if (addressData.fullName.trim().length < 3) {
-      errs.fullName = 'Informe seu nome completo.';
-    }
-    if (digits.length < 10 || digits.length > 11) {
-      errs.phone = 'Informe um telefone válido com DDD.';
-    }
-    if (cepDigits.length !== 8) {
-      errs.cep = 'Informe um CEP com 8 dígitos.';
-    }
-    if (addressData.street.trim().length < 5) {
-      errs.street = 'Informe rua e número.';
-    }
-    if (!addressData.neighborhood.trim()) {
-      errs.neighborhood = 'Informe o bairro.';
-    }
-    if (!addressData.city.trim()) {
-      errs.city = 'Informe a cidade.';
-    }
-    if (!addressData.state) {
-      errs.state = 'Selecione o estado.';
-    }
-    return errs;
-  };
-
   const handleSubmitOrder = () => {
-    const errs = validateAddress();
+    const errs = validateAddress(addressData);
     setAddressErrors(errs);
     if (Object.keys(errs).length > 0) {
       setTermsError(false);
@@ -154,7 +141,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       <section className="relative w-full overflow-hidden bg-[#2A211B] min-h-[220px] sm:min-h-[260px] flex items-center">
         <div className="absolute inset-0 z-0">
           <img
-            src="/src/assets/images/cart_banner_jewelry_1791585126765.jpg"
+            src="/images/cart_banner_jewelry_1791585126765.jpg"
             alt="Joias Lola Checkout"
             className="w-full h-full object-cover object-[center_35%]"
           />
@@ -201,6 +188,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
             <CheckoutAddressForm
               data={addressData}
               errors={addressErrors}
+              notice={cepNotice}
               onChange={(data) => {
                 setAddressData(data);
                 if (Object.keys(addressErrors).length > 0) setAddressErrors({});
@@ -219,6 +207,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               onBackToCart={onBackToCart}
               onSubmitOrder={handleSubmitOrder}
               termsError={termsError}
+              onOpenInfo={onOpenInfo}
             />
 
           </div>
@@ -229,8 +218,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               items={items}
               subtotal={subtotal}
               shippingPrice={shippingPrice}
+              shippingLabel={shipping?.name}
               discountAmount={discountAmount}
-              appliedCoupon={appliedCoupon}
+              appliedCoupon={coupon?.code ?? null}
               onApplyCoupon={handleApplyCoupon}
               onRemoveItem={onRemoveItem}
               onFinalizeOrder={handleSubmitOrder}
@@ -379,7 +369,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           name: `Pedido Checkout Lola (${items.length} itens)`,
           category: 'Brincos',
           price: totalAmount,
-          image: items[0]?.image || '/src/assets/images/product_earrings_1791578709776.jpg',
+          image: items[0]?.image || '/images/product_earrings_1791578709776.jpg',
           description: '',
           isFeatured: false,
         }}

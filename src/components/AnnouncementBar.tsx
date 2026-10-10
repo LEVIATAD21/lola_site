@@ -34,26 +34,34 @@ export const AnnouncementBar: React.FC<AnnouncementBarProps> = ({ onOpenInfo }) 
             <span>Ambiente seguro</span>
           </button>
 
-          {/* Social shortcuts */}
+          {/* Social shortcuts — perfis oficiais ainda não publicados */}
           <div className="hidden sm:flex items-center gap-2.5 text-[#E7DED3]/80 border-l border-white/20 pl-3">
-            <a
-              href="https://instagram.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram da Lola Aço Inox"
-              className="hover:text-[#C49A5A] transition-colors"
+            <button
+              type="button"
+              onClick={() =>
+                onOpenInfo(
+                  'Instagram da LOLA',
+                  'Os perfis oficiais da LOLA Aço Inox & Acessórios serão divulgados no lançamento da loja. Até lá, siga o atendimento pelos canais oficiais informados no rodapé.'
+                )
+              }
+              aria-label="Instagram da LOLA Aço Inox — perfil em breve"
+              className="hover:text-[#C49A5A] transition-colors cursor-pointer"
             >
               <Instagram className="w-3.5 h-3.5" />
-            </a>
-            <a
-              href="https://tiktok.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="TikTok da Lola Aço Inox"
-              className="hover:text-[#C49A5A] transition-colors text-[10px] font-bold"
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onOpenInfo(
+                  'TikTok da LOLA',
+                  'Os perfis oficiais da LOLA Aço Inox & Acessórios serão divulgados no lançamento da loja. Até lá, siga o atendimento pelos canais oficiais informados no rodapé.'
+                )
+              }
+              aria-label="TikTok da LOLA Aço Inox — perfil em breve"
+              className="hover:text-[#C49A5A] transition-colors cursor-pointer text-[10px] font-bold"
             >
               TikTok
-            </a>
+            </button>
           </div>
         </div>
       </div>

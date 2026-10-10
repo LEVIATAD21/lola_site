@@ -5,11 +5,11 @@ import { CartItemCard } from './CartItemCard';
 import { CartSummaryCard } from './CartSummaryCard';
 import { EmptyCartView } from './EmptyCartView';
 import { ClearCartModal } from './ClearCartModal';
-import { ShippingCalculatorModal, ShippingOption } from './ShippingCalculatorModal';
+import { ShippingCalculatorModal, ShippingOption, quoteShipping } from './ShippingCalculatorModal';
 import { CouponModal } from './CouponModal';
 import { WhatsAppModal } from '../product/WhatsAppModal';
-import { CartItem } from '../../types';
-import { Product, CART_RECOMMENDED_PRODUCTS } from '../../data/mockData';
+import { CartItem, AppliedCoupon } from '../../types';
+import { Product, CART_RECOMMENDED_PRODUCTS, ALL_PRODUCTS } from '../../data/mockData';
 
 interface CartPageProps {
   items: CartItem[];
@@ -23,6 +23,10 @@ interface CartPageProps {
   onAddToCart: (product: Product, quantity: number, size?: string) => void;
   onCheckout: () => void;
   onOpenInfo: (title: string, content: string) => void;
+  coupon: AppliedCoupon | null;
+  onApplyCoupon: (code: string, percentage: number) => void;
+  shipping: ShippingOption | null;
+  onSelectShipping: (option: ShippingOption) => void;
 }
 
 export const CartPage: React.FC<CartPageProps> = ({
@@ -37,23 +41,21 @@ export const CartPage: React.FC<CartPageProps> = ({
   onAddToCart,
   onCheckout,
   onOpenInfo,
+  coupon,
+  onApplyCoupon,
+  shipping,
+  onSelectShipping,
 }) => {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
 
-  // Shipping & Coupon state
-  const [appliedShipping, setAppliedShipping] = useState<ShippingOption | null>(null);
-  const [appliedCoupon, setAppliedCoupon] = useState<{
-    code: string;
-    percentage: number;
-  } | null>(null);
-
   const totalItemsCount = items.reduce((acc, i) => acc + i.quantity, 0);
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.percentage) / 100 : 0;
-  const shippingPrice = appliedShipping ? appliedShipping.price : null;
+  const discountAmount = coupon ? (subtotal * coupon.percentage) / 100 : 0;
+  // Frete escolhido é recalculado para o subtotal atual — mesmo valor exibido no checkout
+  const shippingPrice = shipping ? quoteShipping(shipping.id, subtotal) : null;
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -100,7 +102,7 @@ export const CartPage: React.FC<CartPageProps> = ({
                       onUpdateQuantity={onUpdateQuantity}
                       onRemoveItem={onRemoveItem}
                       onSelectProduct={(productId) => {
-                        const found = CART_RECOMMENDED_PRODUCTS.find((p) => p.id === productId);
+                        const found = ALL_PRODUCTS.find((p) => p.id === productId);
                         if (found) onSelectProduct(found);
                       }}
                     />
@@ -134,9 +136,9 @@ export const CartPage: React.FC<CartPageProps> = ({
                   totalItemsCount={totalItemsCount}
                   subtotal={subtotal}
                   shippingPrice={shippingPrice}
-                  shippingLabel={appliedShipping?.name}
+                  shippingLabel={shipping?.name}
                   discountAmount={discountAmount}
-                  couponCode={appliedCoupon?.code}
+                  couponCode={coupon?.code}
                   onOpenShippingModal={() => setIsShippingModalOpen(true)}
                   onOpenCouponModal={() => setIsCouponModalOpen(true)}
                   onCheckout={onCheckout}
@@ -273,15 +275,15 @@ export const CartPage: React.FC<CartPageProps> = ({
         isOpen={isShippingModalOpen}
         onClose={() => setIsShippingModalOpen(false)}
         subtotal={subtotal}
-        onSelectShipping={(opt) => setAppliedShipping(opt)}
-        currentShipping={appliedShipping}
+        onSelectShipping={onSelectShipping}
+        currentShipping={shipping}
       />
 
       <CouponModal
         isOpen={isCouponModalOpen}
         onClose={() => setIsCouponModalOpen(false)}
-        onApplyCoupon={(code, pct) => setAppliedCoupon({ code, percentage: pct })}
-        appliedCoupon={appliedCoupon?.code}
+        onApplyCoupon={onApplyCoupon}
+        appliedCoupon={coupon?.code}
       />
 
       <WhatsAppModal

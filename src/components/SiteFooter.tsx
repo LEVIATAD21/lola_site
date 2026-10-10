@@ -94,7 +94,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Perguntas Frequentes (FAQ)',
-                      '1. O aço inox escurece?\nNão! O aço inoxidável 316L cirúrgico não oxida, não descasca e possui altíssima resistência à água e suor.\n\n2. As peças causam alergia?\nSão hipoalergênicas, livres de níquel tóxico.\n\n3. Como cuidar das minhas peças?\nBasta limpar com flanela macia e guardar em local seco.'
+                      '1. Os produtos escurecem?\nAs informações de material de cada peça constam na ficha do produto e podem ser confirmadas com o atendimento antes da compra.\n\n2. As peças causam alergia?\nA composição declarada aparece em cada anúncio. Em caso de sensibilidade, consulte o atendimento.\n\n3. Como cuidar das minhas peças?\nEvite o contato com produtos químicos e guarde em local seco. Em caso de dúvida, fale com a loja.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -120,7 +120,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Trocas e Devoluções',
-                      'Garantimos a primeira troca grátis em até 7 dias corridos após o recebimento, conforme o Código de Defesa do Consumidor. A peça deve estar na embalagem original e sem sinais de uso.'
+                      'Você tem 7 dias corridos a partir do recebimento para exercer o direito de arrependimento, conforme o Código de Defesa do Consumidor. Condições de troca e garantia serão confirmadas pela loja no atendimento antes da compra.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -142,7 +142,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Privacidade',
-                      'Na Lola Aço Inox, respeitamos sua privacidade e protegemos seus dados pessoais de acordo com a LGPD (Lei Geral de Proteção de Dados). Nunca compartilhamos dados cadastrais com terceiros.'
+                      'Nesta demonstração, os dados informados no checkout permanecem apenas no seu navegador (armazenamento local) e não são enviados a servidores. Na versão comercial, o tratamento de dados seguirá a LGPD e a política oficial será divulgada antes do lançamento.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -168,7 +168,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Cookies',
-                      'Utilizamos cookies necessários para manter o seu carrinho de compras funcional e aprimorar a sua navegação.'
+                      'Utilizamos armazenamento local (localStorage) para manter o seu carrinho de compras e seus favoritos neste navegador. Não utilizamos cookies de rastreamento ou de terceiros nesta demonstração.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"

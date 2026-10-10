@@ -30,17 +30,19 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
           <div className="lg:col-span-4 space-y-3">
             <div className="grid grid-cols-2 gap-2.5">
               {miniGalleryImages.map((img, idx) => (
-                <div
+                <button
                   key={idx}
+                  type="button"
                   onClick={onOpenAllPhotos}
-                  className="aspect-square rounded-2xl overflow-hidden bg-[#F1E8DC] border border-[#E7DED3] group cursor-pointer"
+                  aria-label={`Abrir foto ${idx + 1} em tela cheia`}
+                  className="aspect-square rounded-2xl overflow-hidden bg-[#F1E8DC] border border-[#E7DED3] group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C49A5A]"
                 >
                   <img
                     src={img}
                     alt={`Foto detalhe ${idx + 1}`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
-                </div>
+                </button>
               ))}
             </div>
 
@@ -90,27 +92,27 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
                   {product.description}
                 </p>
 
-                {/* Benefícios gerais da marca (aplicam-se a todas as peças) */}
+                {/* Atributos confirmados na ficha do produto selecionado */}
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Hipoalergênica e à prova d'água</span>
+                    <span>Material declarado: {materialLabel}</span>
                   </div>
 
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Não escurece e mantém o brilho no dia a dia</span>
+                    <span>Cor declarada: {colorLabel}</span>
                   </div>
 
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Acompanha garantia contra defeitos de fabricação</span>
+                    <span>Composição, banho e garantia são confirmados com a loja antes da compra</span>
                   </div>
                 </div>
               </div>
@@ -172,7 +174,7 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
             <div className="p-3.5 bg-white/80 rounded-2xl border border-[#E7DED3] flex items-start gap-2.5 text-[11px] text-[#766D64] leading-relaxed">
               <Info className="w-4 h-4 text-[#2A211B] shrink-0 mt-0.5" />
               <p>
-                Todas as nossas peças são produzidas com materiais de alta qualidade, garantindo beleza, resistência e longa durabilidade.
+                As especificações exibidas são as informadas para esta peça. Confirme qualquer detalhe adicional com o atendimento da loja antes de comprar.
               </p>
             </div>
 

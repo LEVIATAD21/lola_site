@@ -8,6 +8,24 @@ export interface ShippingOption {
   price: number;
 }
 
+/**
+ * Recalcula o preço da modalidade escolhida para o subtotal atual.
+ * Mesma regra demonstrativa usada pelo modal — mantém carrinho e checkout coerentes.
+ */
+export function quoteShipping(optionId: string, subtotal: number): number {
+  const isFreeShipping = subtotal >= 150.0;
+  switch (optionId) {
+    case 'pac':
+      return isFreeShipping ? 0 : 19.9;
+    case 'sedex':
+      return isFreeShipping ? 12.9 : 28.9;
+    case 'transportadora':
+      return isFreeShipping ? 0 : 22.5;
+    default:
+      return isFreeShipping ? 0 : 19.9;
+  }
+}
+
 interface ShippingCalculatorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,26 +47,24 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
 
   if (!isOpen) return null;
 
-  const isFreeShipping = subtotal >= 150.0;
-
   const options: ShippingOption[] = [
     {
       id: 'pac',
       name: 'PAC Correios',
       time: '4 a 7 dias úteis',
-      price: isFreeShipping ? 0 : 19.9,
+      price: quoteShipping('pac', subtotal),
     },
     {
       id: 'sedex',
       name: 'SEDEX Expresso',
       time: '1 a 3 dias úteis',
-      price: isFreeShipping ? 12.9 : 28.9,
+      price: quoteShipping('sedex', subtotal),
     },
     {
       id: 'transportadora',
       name: 'Jadlog Transportadora',
       time: '2 a 5 dias úteis',
-      price: isFreeShipping ? 0 : 22.5,
+      price: quoteShipping('transportadora', subtotal),
     },
   ];
 
@@ -127,7 +143,11 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
 
           {/* Options Result */}
           {calculated && (
-            <div className="space-y-2.5 pt-2 border-t border-[#E7DED3] animate-in fade-in">
+            <div
+              role="radiogroup"
+              aria-label="Modalidade de frete"
+              className="space-y-2.5 pt-2 border-t border-[#E7DED3] animate-in fade-in"
+            >
               <span className="text-xs font-semibold text-[#241F1B] block">
                 Opções disponíveis para o CEP {cep}:
               </span>
@@ -138,8 +158,17 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
                 return (
                   <div
                     key={opt.id}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
                     onClick={() => setSelectedOptionId(opt.id)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedOptionId(opt.id);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C49A5A] ${
                       isSelected
                         ? 'border-[#2A211B] bg-[#F8F4ED] shadow-xs'
                         : 'border-[#E7DED3] hover:border-[#C49A5A]/50'

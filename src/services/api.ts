@@ -19,14 +19,40 @@ export interface AIResponse {
 }
 
 /**
+ * Valida estritamente o payload de estoque vindo do servidor.
+ * Rejeita corpos ausentes, malformados ou com tipos inválidos — nunca infere disponibilidade.
+ */
+export function parseStockPayload(json: unknown, expectedId?: string): StockResponse | null {
+  if (!json || typeof json !== 'object') return null;
+  const o = json as Record<string, unknown>;
+
+  if (typeof o.productId !== 'string' || !o.productId) return null;
+  if (expectedId && o.productId !== expectedId) return null;
+
+  for (const key of ['total', 'reservado', 'vendido', 'disponivel'] as const) {
+    const value = o[key];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  }
+
+  return {
+    productId: o.productId,
+    total: o.total as number,
+    reservado: o.reservado as number,
+    vendido: o.vendido as number,
+    disponivel: o.disponivel as number,
+  };
+}
+
+/**
  * Consulta o estoque real via API do servidor.
- * Retorna null em caso de falha de conexão ou erro HTTP — nunca inventa números.
+ * Retorna null em caso de falha de conexão, erro HTTP ou payload inválido — nunca inventa números.
  */
 export async function getProductStock(productId: string): Promise<StockResponse | null> {
   try {
     const res = await fetch(`/api/estoque/${productId}`);
     if (res.ok) {
-      return await res.json();
+      const payload = await res.json();
+      return parseStockPayload(payload, productId);
     }
   } catch {
     // Falha de rede tratada pelo cliente

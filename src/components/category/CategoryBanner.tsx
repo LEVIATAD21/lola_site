@@ -15,7 +15,7 @@ export const CategoryBanner: React.FC<CategoryBannerProps> = ({
       {/* Background image matching reference */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/src/assets/images/hero_lola_model_1791578690867.jpg"
+          src="/images/hero_lola_model_1791578690867.jpg"
           alt="Modelo usando brincos de argola em aço inox dourado"
           className="w-full h-full object-cover object-[center_25%]"
         />

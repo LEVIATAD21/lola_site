@@ -6,7 +6,7 @@ export const CartBanner: React.FC = () => {
       {/* Background jewelry photography matching Design 04 */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/src/assets/images/cart_banner_jewelry_1791585126765.jpg"
+          src="/images/cart_banner_jewelry_1791585126765.jpg"
           alt="Joias douradas delicadas sobre seda"
           className="w-full h-full object-cover object-[center_35%]"
         />

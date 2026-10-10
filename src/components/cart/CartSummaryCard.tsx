@@ -28,7 +28,6 @@ export const CartSummaryCard: React.FC<CartSummaryCardProps> = ({
 }) => {
   const currentShipping = shippingPrice !== null ? shippingPrice : 0;
   const finalTotal = Math.max(0, subtotal + currentShipping - discountAmount);
-  const installmentValue = (finalTotal / 3).toFixed(2).replace('.', ',');
 
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-7 border border-[#E7DED3] shadow-xs space-y-5 text-left sticky top-28">
@@ -115,7 +114,7 @@ export const CartSummaryCard: React.FC<CartSummaryCardProps> = ({
           </span>
         </div>
         <p className="text-[11px] text-[#766D64] text-right">
-          ou em até 3x de R$ {installmentValue} sem juros
+          Condições de parcelamento serão confirmadas pelo provedor de pagamento
         </p>
       </div>
 
@@ -146,7 +145,7 @@ export const CartSummaryCard: React.FC<CartSummaryCardProps> = ({
         <div className="text-[11px] leading-snug">
           <h4 className="font-semibold text-[#241F1B]">Compra segura</h4>
           <p className="text-[#766D64] mt-0.5">
-            Seus dados são protegidos e suas compras são 100% seguras.
+            Ambiente demonstrativo — nenhum dado é enviado e nenhuma cobrança é feita.
           </p>
         </div>
       </div>

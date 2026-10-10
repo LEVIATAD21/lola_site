@@ -63,7 +63,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                     <span className="font-semibold text-[#2A211B]">@lolaacessorios</span>
                     <span className="flex items-center gap-1 text-[#C49A5A]">
                       <Heart className="w-3.5 h-3.5 fill-[#C49A5A]" />
-                      {post.likes} curtidas
+                      Publicação de demonstração
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-[#241F1B] leading-relaxed">

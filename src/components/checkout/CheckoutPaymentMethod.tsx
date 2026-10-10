@@ -21,6 +21,7 @@ interface CheckoutPaymentMethodProps {
   onSubmitOrder: () => void;
   isSubmitting?: boolean;
   termsError?: boolean;
+  onOpenInfo?: (title: string, content: string) => void;
 }
 
 export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
@@ -31,9 +32,40 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
   onSubmitOrder,
   isSubmitting = false,
   termsError = false,
+  onOpenInfo,
 }) => {
   const update = (field: keyof PaymentData, val: any) => {
     onChange({ ...paymentData, [field]: val });
+  };
+
+  const optionClass = (method: PaymentType) =>
+    `p-4 rounded-2xl border transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C49A5A] ${
+      paymentData.method === method
+        ? 'border-[#2A211B] bg-[#F8F4ED]/50 ring-1 ring-[#2A211B]'
+        : 'border-[#E7DED3] hover:border-[#C49A5A]/50 bg-white'
+    }`;
+
+  const radioIndicator = (method: PaymentType) => (
+    <div
+      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+        paymentData.method === method ? 'border-[#2A211B] bg-[#2A211B]' : 'border-[#766D64]'
+      }`}
+    >
+      {paymentData.method === method && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+    </div>
+  );
+
+  const selectMethod = (method: PaymentType) => update('method', method);
+
+  const methodKeyDown = (method: PaymentType) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectMethod(method);
+    }
+  };
+
+  const openPolicy = (title: string, content: string) => {
+    if (onOpenInfo) onOpenInfo(title, content);
   };
 
   return (
@@ -53,30 +85,24 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
       </div>
 
       {/* Payment Options List */}
-      <div className="space-y-3">
-        
+      <div role="radiogroup" aria-label="Forma de pagamento" className="space-y-3">
+
         {/* 1. Cartão de Crédito */}
         <div
-          onClick={() => update('method', 'credit_card')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            paymentData.method === 'credit_card'
-              ? 'border-[#2A211B] bg-[#F8F4ED]/50 ring-1 ring-[#2A211B]'
-              : 'border-[#E7DED3] hover:border-[#C49A5A]/50 bg-white'
-          }`}
+          role="radio"
+          aria-checked={paymentData.method === 'credit_card'}
+          tabIndex={0}
+          onClick={() => selectMethod('credit_card')}
+          onKeyDown={methodKeyDown('credit_card')}
+          className={optionClass('credit_card')}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentData.method === 'credit_card' ? 'border-[#2A211B] bg-[#2A211B]' : 'border-[#766D64]'
-                }`}
-              >
-                {paymentData.method === 'credit_card' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-              </div>
+              {radioIndicator('credit_card')}
               <CreditCard className="w-5 h-5 text-[#2A211B]" />
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-[#241F1B]">Cartão de crédito</p>
-                <p className="text-[11px] text-[#766D64]">Parcele em até 12x (consulte condições)</p>
+                <p className="text-[11px] text-[#766D64]">Parcelamento definido pelo provedor de pagamento</p>
               </div>
             </div>
 
@@ -90,6 +116,10 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
           {/* Expanded Credit Card Fields */}
           {paymentData.method === 'credit_card' && (
             <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3.5 animate-in fade-in text-xs">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
+                Demonstração: informe apenas dados de teste. Esta tela não envia informações a nenhum processador de pagamento.
+              </div>
+
               <div>
                 <label className="font-semibold text-[#241F1B] block mb-1">
                   Número do cartão
@@ -98,6 +128,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
                   type="text"
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
+                  autoComplete="off"
                   value={paymentData.cardNumber}
                   onChange={(e) => {
                     const v = e.target.value.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim();
@@ -114,6 +145,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
                 <input
                   type="text"
                   placeholder="Nome como está no cartão"
+                  autoComplete="off"
                   value={paymentData.cardName}
                   onChange={(e) => update('cardName', e.target.value.toUpperCase())}
                   className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] uppercase focus:outline-none focus:border-[#C49A5A]"
@@ -129,6 +161,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
                     type="text"
                     placeholder="MM/AA"
                     maxLength={5}
+                    autoComplete="off"
                     value={paymentData.cardExpiry}
                     onChange={(e) => {
                       let v = e.target.value.replace(/\D/g, '');
@@ -147,6 +180,7 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
                     type="text"
                     placeholder="123"
                     maxLength={4}
+                    autoComplete="off"
                     value={paymentData.cardCvv}
                     onChange={(e) => update('cardCvv', e.target.value.replace(/\D/g, ''))}
                     className="w-full h-10 px-3 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] focus:outline-none focus:border-[#C49A5A]"
@@ -168,11 +202,14 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
                     const parcVal = (totalAmount / parc).toFixed(2).replace('.', ',');
                     return (
                       <option key={parc} value={parc}>
-                        {parc}x de R$ {parcVal} {parc <= 6 ? 'sem juros' : 'com pequeno acréscimo'}
+                        {parc}x de R$ {parcVal} (estimativa — sem juros nesta simulação)
                       </option>
                     );
                   })}
                 </select>
+                <p className="text-[10px] text-[#766D64] mt-1">
+                  Condições reais de parcelamento e juros serão exibidas pelo provedor de pagamento na integração.
+                </p>
               </div>
             </div>
           )}
@@ -180,38 +217,32 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
 
         {/* 2. PIX */}
         <div
-          onClick={() => update('method', 'pix')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            paymentData.method === 'pix'
-              ? 'border-[#2A211B] bg-[#F8F4ED]/50 ring-1 ring-[#2A211B]'
-              : 'border-[#E7DED3] hover:border-[#C49A5A]/50 bg-white'
-          }`}
+          role="radio"
+          aria-checked={paymentData.method === 'pix'}
+          tabIndex={0}
+          onClick={() => selectMethod('pix')}
+          onKeyDown={methodKeyDown('pix')}
+          className={optionClass('pix')}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentData.method === 'pix' ? 'border-[#2A211B] bg-[#2A211B]' : 'border-[#766D64]'
-                }`}
-              >
-                {paymentData.method === 'pix' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-              </div>
+              {radioIndicator('pix')}
               <QrCode className="w-5 h-5 text-[#32BCAD]" />
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-[#241F1B]">PIX</p>
-                <p className="text-[11px] text-[#766D64]">Aprovação imediata</p>
+                <p className="text-[11px] text-[#766D64]">Pagamento online</p>
               </div>
             </div>
 
-            <span className="text-[10px] font-bold text-[#32BCAD] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              5% OFF
+            <span className="text-[10px] font-bold text-[#766D64] bg-[#F8F4ED] px-2 py-0.5 rounded-full border border-[#E7DED3]">
+              Demonstração
             </span>
           </div>
 
           {paymentData.method === 'pix' && (
             <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3 animate-in fade-in text-xs text-[#766D64]">
               <p>
-                O código Pix oficial e o QR Code dinâmico serão gerados pela integração com a instituição financeira no backend.
+                Nenhum desconto adicional é aplicado automaticamente nesta demonstração. O código Pix oficial e o QR Code dinâmico serão gerados pela integração com a instituição financeira no backend.
               </p>
               <div className="p-3 bg-white rounded-xl border border-[#E7DED3] flex items-center justify-between text-[11px] text-[#766D64]">
                 <span>Ambiente de demonstração do front-end • Chave em configuração</span>
@@ -222,37 +253,31 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
 
         {/* 3. Boleto Bancário */}
         <div
-          onClick={() => update('method', 'boleto')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            paymentData.method === 'boleto'
-              ? 'border-[#2A211B] bg-[#F8F4ED]/50 ring-1 ring-[#2A211B]'
-              : 'border-[#E7DED3] hover:border-[#C49A5A]/50 bg-white'
-          }`}
+          role="radio"
+          aria-checked={paymentData.method === 'boleto'}
+          tabIndex={0}
+          onClick={() => selectMethod('boleto')}
+          onKeyDown={methodKeyDown('boleto')}
+          className={optionClass('boleto')}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  paymentData.method === 'boleto' ? 'border-[#2A211B] bg-[#2A211B]' : 'border-[#766D64]'
-                }`}
-              >
-                {paymentData.method === 'boleto' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-              </div>
+              {radioIndicator('boleto')}
               <Barcode className="w-5 h-5 text-[#2A211B]" />
               <div>
                 <p className="text-xs sm:text-sm font-semibold text-[#241F1B]">Boleto bancário</p>
-                <p className="text-[11px] text-[#766D64]">Pague em qualquer banco</p>
+                <p className="text-[11px] text-[#766D64]">Emissão na integração com o banco</p>
               </div>
             </div>
 
-            <span className="text-[10px] text-[#766D64] bg-[#F8F4ED] px-2 py-0.5 rounded-full">
-              Até 3 dias úteis
+            <span className="text-[10px] text-[#766D64] bg-[#F8F4ED] px-2 py-0.5 rounded-full border border-[#E7DED3]">
+              Demonstração
             </span>
           </div>
 
           {paymentData.method === 'boleto' && (
             <div className="mt-4 pt-4 border-t border-[#E7DED3] text-xs text-[#766D64] animate-in fade-in">
-              O boleto será gerado ao concluir o pedido com vencimento em até 3 dias úteis.
+              Nenhum boleto é gerado nesta demonstração. A emissão, o vencimento e as regras de compensação serão habilitados na integração com o backend.
             </div>
           )}
         </div>
@@ -270,9 +295,45 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
           />
           <span>
             Li e concordo com os{' '}
-            <strong className="text-[#241F1B] underline">termos de uso</strong>,{' '}
-            <strong className="text-[#241F1B] underline">políticas de privacidade</strong> e{' '}
-            <strong className="text-[#241F1B] underline">políticas de troca e devolução</strong>.
+            <button
+              type="button"
+              onClick={() =>
+                openPolicy(
+                  'Termos de uso',
+                  'O acesso e uso deste catálogo online pressupõem a aceitação dos termos de compra e política comercial da loja. Nesta demonstração, nenhum pedido ou cobrança é realizado. A versão final dos termos será divulgada antes do lançamento.'
+                )
+              }
+              className="text-[#241F1B] underline font-semibold hover:text-[#C49A5A] cursor-pointer"
+            >
+              termos de uso
+            </button>
+            ,{' '}
+            <button
+              type="button"
+              onClick={() =>
+                openPolicy(
+                  'Política de privacidade',
+                  'Nesta demonstração, os dados informados no checkout permanecem apenas no seu navegador (armazenamento local) e não são enviados a servidores. Na versão comercial, o tratamento seguirá a LGPD e a política oficial será divulgada antes do lançamento.'
+                )
+              }
+              className="text-[#241F1B] underline font-semibold hover:text-[#C49A5A] cursor-pointer"
+            >
+              políticas de privacidade
+            </button>{' '}
+            e{' '}
+            <button
+              type="button"
+              onClick={() =>
+                openPolicy(
+                  'Trocas e devoluções',
+                  'Você tem 7 dias corridos a partir do recebimento para exercer o direito de arrependimento, conforme o Código de Defesa do Consumidor. Condições de troca e garantia serão confirmadas pela loja no atendimento antes da compra.'
+                )
+              }
+              className="text-[#241F1B] underline font-semibold hover:text-[#C49A5A] cursor-pointer"
+            >
+              políticas de troca e devolução
+            </button>
+            .
           </span>
         </label>
         {termsError && (

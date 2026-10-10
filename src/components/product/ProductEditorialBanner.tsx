@@ -17,7 +17,7 @@ export const ProductEditorialBanner: React.FC<ProductEditorialBannerProps> = ({
           <div className="lg:col-span-6 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-[#C49A5A]/40 shrink-0 shadow-md">
               <img
-                src="/src/assets/images/hero_lola_model_1791578690867.jpg"
+                src="/images/hero_lola_model_1791578690867.jpg"
                 alt="Modelo usando brincos Lola"
                 className="w-full h-full object-cover object-[60%_30%]"
               />

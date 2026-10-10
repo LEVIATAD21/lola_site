@@ -52,11 +52,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
   // 5 Gallery images matching Design 03 reference
   const galleryImages = [
-    product.image || '/src/assets/images/product_earrings_1791578709776.jpg',
-    '/src/assets/images/hero_lola_model_1791578690867.jpg',
-    '/src/assets/images/hoop_angle_view_1791584253619.jpg',
-    '/src/assets/images/hero_lola_model_1791578690867.jpg',
-    '/src/assets/images/hoop_flatlay_linen_1791584262407.jpg',
+    product.image || '/images/product_earrings_1791578709776.jpg',
+    '/images/hero_lola_model_1791578690867.jpg',
+    '/images/hoop_angle_view_1791584253619.jpg',
+    '/images/hero_lola_model_1791578690867.jpg',
+    '/images/hoop_flatlay_linen_1791584262407.jpg',
   ];
 
   // Related Products for recommendations carousel respecting category
@@ -156,7 +156,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       </div>
 
       {/* 3. Operational Quality Bar (4 badges) */}
-      <ProductQualityBar />
+      <ProductQualityBar product={product} />
 
       {/* 4. Detailed Information Section (Mini Gallery + Tabs + Card) */}
       <ProductDetailsSection

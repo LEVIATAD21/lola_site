@@ -1,22 +1,30 @@
 import React from 'react';
-import { Gem, Droplets, ShieldCheck, Star } from 'lucide-react';
+import { Gem, Palette, ShieldCheck, Star } from 'lucide-react';
+import { Product } from '../../data/mockData';
 
-export const ProductQualityBar: React.FC = () => {
+interface ProductQualityBarProps {
+  product?: Product | null;
+}
+
+export const ProductQualityBar: React.FC<ProductQualityBarProps> = ({ product }) => {
+  const materialLabel = product?.material || 'Material informado na ficha';
+  const colorLabel = product?.color || 'Conforme ficha do produto';
+
   const qualityItems = [
     {
       icon: <Gem className="w-5 h-5 text-[#2A211B] stroke-[1.5]" />,
-      title: 'Aço inox de alta qualidade',
-      subtitle: 'Não escurece',
+      title: materialLabel,
+      subtitle: 'Material declarado na peça',
     },
     {
-      icon: <Droplets className="w-5 h-5 text-[#2A211B] stroke-[1.5]" />,
-      title: 'Hipoalergênico',
-      subtitle: 'Ideal para peles sensíveis',
+      icon: <Palette className="w-5 h-5 text-[#2A211B] stroke-[1.5]" />,
+      title: colorLabel,
+      subtitle: 'Cor declarada na ficha',
     },
     {
       icon: <ShieldCheck className="w-5 h-5 text-[#2A211B] stroke-[1.5]" />,
-      title: 'Resistente à água',
-      subtitle: 'Mais durabilidade',
+      title: 'Atendimento da loja',
+      subtitle: 'Dúvidas confirmadas antes da compra',
     },
     {
       icon: <Star className="w-5 h-5 text-[#2A211B] stroke-[1.5]" />,

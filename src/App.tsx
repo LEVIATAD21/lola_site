@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { SiteHeader } from './components/SiteHeader';
 import { HeroCarousel } from './components/HeroCarousel';
@@ -22,6 +22,8 @@ import { FileText } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
+import { parseStoredCart } from './utils/cartStorage';
+import { ShippingOption } from './components/cart/ShippingCalculatorModal';
 
 export default function App() {
   const findProductById = (id: string): Product | undefined =>
@@ -70,44 +72,39 @@ export default function App() {
   });
 
   // Cart State (stored in localStorage) - starts empty if none saved.
-  // Limpa apenas o trio fixo de demonstração de versões antigas sem apagar itens reais do usuário.
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('lola_cart');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const isExactOldDemoSeed =
-            parsed.length === 3 &&
-            parsed.some((i) => i.id === 'cart-1' && i.productId === 'brinco-1') &&
-            parsed.some((i) => i.id === 'cart-2' && i.productId === 'prod-colar-1') &&
-            parsed.some((i) => i.id === 'cart-3' && i.productId === 'prod-pulseira-1');
+  // Itens são validados por forma e o seed antigo de demonstração é descartado.
+  const [cartItems, setCartItems] = useState<CartItem[]>(() =>
+    parseStoredCart(localStorage.getItem('lola_cart'))
+  );
 
-          if (!isExactOldDemoSeed) {
-            // Valida a forma de cada item para evitar dados corrompidos na UI
-            return parsed.filter(
-              (i: any) =>
-                i &&
-                typeof i.id === 'string' &&
-                typeof i.productId === 'string' &&
-                typeof i.name === 'string' &&
-                typeof i.price === 'number' &&
-                Number.isFinite(i.price) &&
-                i.price >= 0 &&
-                typeof i.image === 'string' &&
-                typeof i.category === 'string' &&
-                typeof i.quantity === 'number' &&
-                Number.isInteger(i.quantity) &&
-                i.quantity > 0 &&
-                i.quantity <= 99
-            ) as CartItem[];
-          }
-        }
+  // Estado compartilhado do fluxo de compra: cupom e frete aplicados no carrinho
+  // permanecem coerentes ao seguir para o checkout (persistidos localmente).
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentage: number } | null>(() => {
+    try {
+      const raw = localStorage.getItem('lola_coupon');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.code === 'string' && typeof parsed.percentage === 'number' && parsed.percentage > 0) {
+        return parsed;
       }
     } catch {
-      // fallback
+      // fallback: sem cupom
     }
-    return [];
+    return null;
+  });
+
+  const [appliedShipping, setAppliedShipping] = useState<ShippingOption | null>(() => {
+    try {
+      const raw = localStorage.getItem('lola_shipping');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.id === 'string' && typeof parsed.name === 'string' && typeof parsed.price === 'number') {
+        return parsed;
+      }
+    } catch {
+      // fallback: sem frete escolhido
+    }
+    return null;
   });
 
   // Modal & Drawer visibility states
@@ -146,6 +143,25 @@ export default function App() {
       // Fallback for storage restrictions
     }
   }, [cartItems]);
+
+  // Sync shared coupon/shipping between cart and checkout
+  useEffect(() => {
+    try {
+      if (appliedCoupon) localStorage.setItem('lola_coupon', JSON.stringify(appliedCoupon));
+      else localStorage.removeItem('lola_coupon');
+    } catch {
+      // Fallback for storage restrictions
+    }
+  }, [appliedCoupon]);
+
+  useEffect(() => {
+    try {
+      if (appliedShipping) localStorage.setItem('lola_shipping', JSON.stringify(appliedShipping));
+      else localStorage.removeItem('lola_shipping');
+    } catch {
+      // Fallback for storage restrictions
+    }
+  }, [appliedShipping]);
 
   // Synchronize dynamic document.title, meta description and URL route
   useEffect(() => {
@@ -245,13 +261,26 @@ export default function App() {
     }
   };
 
+  // Serializa consultas de estoque para evitar corrida entre cliques rápidos
+  const stockCheckBusy = useRef(false);
+
   // Add item to cart — sempre revalida o estoque no servidor antes de registrar
   const handleAddToCart = async (product: Product, quantity = 1, size?: string) => {
     if (!product || quantity <= 0) return;
     const itemKey = size ? `${product.id}-${size}` : product.id;
     const variantLabel = size || 'Único';
 
-    const stock = await getProductStock(product.id);
+    if (stockCheckBusy.current) {
+      addToast('info', 'Aguarde um instante', 'Já há uma consulta de estoque em andamento. Tente novamente em seguida.');
+      return;
+    }
+    stockCheckBusy.current = true;
+    let stock;
+    try {
+      stock = await getProductStock(product.id);
+    } finally {
+      stockCheckBusy.current = false;
+    }
     if (!stock) {
       addToast(
         'error',
@@ -321,17 +350,62 @@ export default function App() {
     );
   };
 
-  const handleUpdateCartQuantity = (id: string, delta: number) => {
+  // Altera a quantidade consultando o estoque antes de aumentar — nunca ultrapassa a disponibilidade conhecida
+  const handleUpdateCartQuantity = async (id: string, delta: number) => {
+    if (delta === 0) return;
+    const item = cartItems.find((i) => i.id === id);
+    if (!item) return;
+
+    let effectiveDelta = delta;
+
+    if (delta > 0) {
+      if (stockCheckBusy.current) {
+        addToast('info', 'Aguarde um instante', 'Já há uma consulta de estoque em andamento. Tente novamente em seguida.');
+        return;
+      }
+      stockCheckBusy.current = true;
+      let stock;
+      try {
+        stock = await getProductStock(item.productId);
+      } finally {
+        stockCheckBusy.current = false;
+      }
+      if (!stock) {
+        addToast(
+          'error',
+          'Estoque não confirmado',
+          `Não foi possível confirmar a disponibilidade de ${item.name}.`
+        );
+        return;
+      }
+      if (item.quantity + delta > stock.disponivel) {
+        if (item.quantity >= stock.disponivel) {
+          addToast(
+            'error',
+            'Limite de estoque atingido',
+            `Só restam ${stock.disponivel} un. de ${item.name} e elas já estão na sua sacola.`
+          );
+          return;
+        }
+        effectiveDelta = stock.disponivel - item.quantity;
+        addToast(
+          'info',
+          'Quantidade ajustada ao estoque',
+          `A quantidade de ${item.name} foi limitada a ${stock.disponivel} un.`
+        );
+      }
+    }
+
     setCartItems((prev) =>
       prev
-        .map((item) => {
-          if (item.id === id) {
-            const newQ = item.quantity + delta;
-            return newQ > 0 ? { ...item, quantity: newQ } : null;
+        .map((cartItem) => {
+          if (cartItem.id === id) {
+            const newQ = cartItem.quantity + effectiveDelta;
+            return newQ > 0 ? { ...cartItem, quantity: newQ } : null;
           }
-          return item;
+          return cartItem;
         })
-        .filter((item): item is CartItem => item !== null)
+        .filter((cartItem): cartItem is CartItem => cartItem !== null)
     );
   };
 
@@ -609,6 +683,10 @@ export default function App() {
             onAddToCart={handleAddToCart}
             onCheckout={navigateToCheckout}
             onOpenInfo={handleOpenInfo}
+            coupon={appliedCoupon}
+            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+            shipping={appliedShipping}
+            onSelectShipping={setAppliedShipping}
           />
         </main>
       ) : (
@@ -625,6 +703,10 @@ export default function App() {
             favorites={favorites}
             onToggleFavorite={handleToggleFavorite}
             onAddToCart={handleAddToCart}
+            coupon={appliedCoupon}
+            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+            shipping={appliedShipping}
+            onOpenInfo={handleOpenInfo}
           />
         </main>
       )}

@@ -18,6 +18,7 @@ export type CheckoutAddressErrors = Partial<Record<keyof CheckoutAddressData, st
 interface CheckoutAddressFormProps {
   data: CheckoutAddressData;
   errors?: CheckoutAddressErrors;
+  notice?: string | null;
   onChange: (data: CheckoutAddressData) => void;
   onCepSearch: (cep: string) => void;
 }
@@ -30,6 +31,7 @@ const fieldClass = (hasError?: boolean) =>
 export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
   data,
   errors = {},
+  notice = null,
   onChange,
   onCepSearch,
 }) => {
@@ -144,13 +146,17 @@ export const CheckoutAddressForm: React.FC<CheckoutAddressFormProps> = ({
                 type="button"
                 onClick={() => onCepSearch(data.cep.replace(/\D/g, ''))}
                 className="absolute right-3 top-3 text-[#766D64] hover:text-[#2A211B] cursor-pointer"
-                title="Buscar CEP"
+                title="Consulta de CEP indisponível nesta demonstração"
+                aria-label="Consulta de CEP indisponível nesta demonstração"
               >
                 <Search className="w-4 h-4" />
               </button>
             </div>
             {errors.cep && (
               <p className="text-[11px] text-red-600 font-medium">{errors.cep}</p>
+            )}
+            {!errors.cep && notice && (
+              <p className="text-[11px] text-amber-700 font-medium">{notice}</p>
             )}
           </div>
 

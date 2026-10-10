@@ -6,6 +6,7 @@ interface CheckoutOrderSummaryProps {
   items: CartItem[];
   subtotal: number;
   shippingPrice: number | null;
+  shippingLabel?: string;
   discountAmount: number;
   appliedCoupon?: string | null;
   onApplyCoupon: (code: string) => boolean;
@@ -20,6 +21,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
   items,
   subtotal,
   shippingPrice,
+  shippingLabel,
   discountAmount,
   appliedCoupon,
   onApplyCoupon,
@@ -58,10 +60,13 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
       {/* 1. Main Order Summary Card */}
       <div className="bg-white rounded-3xl p-6 sm:p-7 border border-[#E7DED3] shadow-xs space-y-5">
         
-        {/* Header with items toggle */}
-        <div
+        {/* Header with items toggle — controle semântico com aria-expanded */}
+        <button
+          type="button"
           onClick={() => setIsItemsExpanded(!isItemsExpanded)}
-          className="flex items-center justify-between pb-3 border-b border-[#E7DED3] cursor-pointer select-none"
+          aria-expanded={isItemsExpanded}
+          aria-controls="checkout-order-items"
+          className="w-full flex items-center justify-between pb-3 border-b border-[#E7DED3] cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C49A5A] rounded"
         >
           <div className="flex items-center gap-2">
             <h3 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
@@ -72,17 +77,14 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            className="p-1 text-[#766D64] hover:text-[#2A211B] cursor-pointer"
-          >
+          <span className="p-1 text-[#766D64] hover:text-[#2A211B]">
             {isItemsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-        </div>
+          </span>
+        </button>
 
         {/* Collapsible Item List */}
         {isItemsExpanded && (
-          <div className="space-y-3.5 max-h-72 overflow-y-auto pr-1">
+          <div id="checkout-order-items" className="space-y-3.5 max-h-72 overflow-y-auto pr-1">
             {items.map((item) => (
               <div
                 key={item.id}
@@ -133,7 +135,9 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
           </div>
 
           <div className="flex justify-between">
-            <span className="text-[#766D64]">Frete (estimativa)</span>
+            <span className="text-[#766D64]">
+              {shippingLabel ? `Frete (${shippingLabel})` : 'Frete (estimativa)'}
+            </span>
             <span className="font-medium">
               {shippingPrice === null ? (
                 'A calcular'
@@ -175,7 +179,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-[#766D64] text-right">
-            ou em até 3x de R$ {(finalTotal / 3).toFixed(2).replace('.', ',')} sem juros
+            Condições de parcelamento serão confirmadas pelo provedor de pagamento
           </p>
         </div>
 
@@ -237,7 +241,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
         {/* Security Callout */}
         <div className="p-3 bg-[#F8F4ED] rounded-xl border border-[#E7DED3] flex items-center gap-2.5 text-[11px] text-[#766D64]">
           <ShieldCheck className="w-4 h-4 text-[#2A211B] shrink-0" />
-          <span>Compra segura • Seus dados são protegidos e suas compras são 100% seguras.</span>
+          <span>Ambiente demonstrativo • Nenhum dado de pagamento é enviado e nenhum cobrança é realizada.</span>
         </div>
 
       </div>
@@ -246,7 +250,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
       <div className="bg-[#FAF6F0] rounded-3xl p-5 border border-[#E7DED3] flex flex-col sm:flex-row items-center gap-4 text-left shadow-xs overflow-hidden">
         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 bg-white border border-[#E7DED3]">
           <img
-            src="/src/assets/images/lola_gift_box_1791590840477.jpg"
+            src="/images/lola_gift_box_1791590840477.jpg"
             alt="Embalagem de presente Lola"
             className="w-full h-full object-cover"
           />
