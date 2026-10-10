@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="460" viewBox="0 0 1600 460" role="img" aria-labelledby="title desc">
+  <title id="title">LOLA Aço Inox e Acessórios</title>
+  <desc id="desc">Capa editorial em tons de creme, bege, dourado suave e marrom escuro, com formas geométricas inspiradas em joias.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FBF8F2"/>
+      <stop offset="100%" stop-color="#EFE4D5"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E1C18B"/>
+      <stop offset="50%" stop-color="#C49A5A"/>
+      <stop offset="100%" stop-color="#9F7743"/>
+    </linearGradient>
+    <pattern id="grain" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M0 31.5H32" stroke="#7C6247" stroke-opacity=".035"/>
+      <path d="M31.5 0V32" stroke="#7C6247" stroke-opacity=".025"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="460" fill="url(#paper)"/>
+  <rect width="1600" height="460" fill="url(#grain)"/>
+  <circle cx="1432" cy="98" r="232" fill="#E5D3BB" opacity=".42"/>
+  <circle cx="1397" cy="114" r="169" fill="none" stroke="#C49A5A" stroke-opacity=".35" stroke-width="1.5"/>
+  <circle cx="1397" cy="114" r="143" fill="none" stroke="#C49A5A" stroke-opacity=".55" stroke-width="1"/>
+  <path d="M1110 460C1210 345 1285 329 1396 342C1502 355 1551 402 1600 432V460Z" fill="#D8C1A4" opacity=".45"/>
+  <path d="M1197 460C1276 391 1340 382 1425 393C1501 403 1544 431 1580 460" fill="none" stroke="#B58B53" stroke-opacity=".45" stroke-width="1.5"/>
+  <g fill="none" stroke="url(#gold)" stroke-width="4">
+    <circle cx="1322" cy="192" r="68"/>
+    <circle cx="1322" cy="192" r="53" stroke-width="1.4" stroke-opacity=".75"/>
+    <path d="M1379 220C1412 246 1434 277 1453 321" stroke-width="3"/>
+    <circle cx="1463" cy="343" r="20" stroke-width="2.5"/>
+    <path d="M1478 328L1507 299" stroke-width="2.5"/>
+    <circle cx="1515" cy="291" r="8" stroke-width="2"/>
+    <path d="M1495 109C1547 109 1574 146 1574 194" stroke-width="2"/>
+  </g>
+  <g fill="#C49A5A" opacity=".8">
+    <circle cx="1263" cy="82" r="4"/>
+    <circle cx="1516" cy="153" r="3"/>
+    <circle cx="1234" cy="255" r="3"/>
+    <path d="M1480 61l5 10 10 5-10 5-5 10-5-10-10-5 10-5z"/>
+  </g>
+  <g fill="#2A211B">
+    <text x="112" y="183" font-family="Georgia, 'Times New Roman', serif" font-size="104" letter-spacing="9">LOLA</text>
+    <text x="120" y="226" font-family="Arial, Helvetica, sans-serif" font-size="17" letter-spacing="6.5" fill="#766D64">AÇO INOX &amp; ACESSÓRIOS</text>
+  </g>
+  <path d="M120 264H485" stroke="#C49A5A" stroke-width="1.5"/>
+  <circle cx="505" cy="264" r="3.5" fill="#C49A5A"/>
+  <text x="120" y="305" font-family="Georgia, 'Times New Roman', serif" font-size="25" font-style="italic" fill="#766D64">Mais que acessórios, é sobre você.</text>
+  <g font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="3.3" fill="#766D64">
+    <text x="120" y="397">DESIGN ATEMPORAL</text>
+    <circle cx="300" cy="393" r="2.2" fill="#C49A5A"/>
+    <text x="321" y="397">IDENTIDADE ELEGANTE</text>
+    <circle cx="520" cy="393" r="2.2" fill="#C49A5A"/>
+    <text x="541" y="397">PROJETO EM EVOLUÇÃO</text>
+  </g>
+  <rect x="0" y="452" width="1600" height="8" fill="#2A211B"/>
+  <rect x="0" y="452" width="520" height="8" fill="#C49A5A"/>
+</svg>
