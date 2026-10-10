@@ -112,5 +112,6 @@ describe('parseDraftOrderConfirmation', () => {
     expect(parseDraftOrderConfirmation({ ...valid, success: false })).toBeNull();
     expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, total: -1 } })).toBeNull();
     expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, paymentStatus: 'paid' } })).toBeNull();
+    expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, paymentMethod: 'credit_card' } })).toBeNull();
   });
 });
