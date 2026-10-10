@@ -72,7 +72,7 @@ describe('buildOrderDraft', () => {
   });
   it('rejeita produto desconhecido, produto sem estoque e quantidade fracionada', () => {
     expect(buildOrderDraft(validInput({ items: [{ productId: 'nao-existe', quantity: 1 }] }), catalog, inventory()).ok).toBe(false);
-    expect(buildOrderDraft(validInput({ items: [{ productId: 'prod-colar-1', quantity: 1 }] }), catalog, inventory()).ok).toMatchObject({ ok: false, status: 409 });
+    expect(buildOrderDraft(validInput({ items: [{ productId: 'prod-colar-1', quantity: 1 }] }), catalog, inventory())).toMatchObject({ ok: false, status: 409 });
     expect(buildOrderDraft(validInput({ items: [{ productId: 'brinco-1', quantity: 1.5 }] }), catalog, inventory()).ok).toBe(false);
   });
   it('recusa excesso de estoque sem alterá-lo', () => {
