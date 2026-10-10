@@ -101,10 +101,10 @@ export async function consultAI(
 }
 
 
-export type CheckoutPaymentMethod = 'credit_card' | 'pix' | 'boleto';
+export type CheckoutPaymentMethod = 'pix' | 'boleto';
 export interface DraftOrderRequest {
   customer: {
-    fullName: string; phone: string; cep: string; street: string;
+    fullName: string; phone: string; cep: string; street: string; number: string;
     complement: string; neighborhood: string; city: string; state: string;
   };
   items: Array<{ productId: string; quantity: number; variant?: string }>;
@@ -138,7 +138,7 @@ export function parseDraftOrderConfirmation(json: unknown): DraftOrderConfirmati
   if (typeof order.orderNumber !== 'string' || !/^LOLA-\d{8}-[A-F0-9]{12}$/.test(order.orderNumber)) return null;
   if (typeof order.createdAt !== 'string' || !Number.isFinite(Date.parse(order.createdAt))) return null;
   if (order.status !== 'awaiting_payment_setup' || order.paymentStatus !== 'not_configured') return null;
-  if (order.paymentMethod !== 'credit_card' && order.paymentMethod !== 'pix' && order.paymentMethod !== 'boleto') return null;
+  if (order.paymentMethod !== 'pix' && order.paymentMethod !== 'boleto') return null;
   if (order.shippingOptionId !== 'pac' && order.shippingOptionId !== 'sedex' && order.shippingOptionId !== 'transportadora') return null;
   if (!Number.isSafeInteger(order.itemCount) || (order.itemCount as number) < 1) return null;
   for (const field of ['subtotal', 'discount', 'shipping', 'giftWrap', 'total'] as const) {
