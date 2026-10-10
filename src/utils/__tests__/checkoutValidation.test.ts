@@ -6,7 +6,8 @@ const validAddress: CheckoutAddressData = {
   fullName: 'Maria da Silva',
   phone: '(11) 98765-4321',
   cep: '01310-100',
-  street: 'Avenida Paulista, 1000',
+  street: 'Avenida Paulista',
+  number: '1000',
   complement: 'Apto 42',
   neighborhood: 'Bela Vista',
   city: 'São Paulo',
@@ -47,6 +48,12 @@ describe('validateAddress', () => {
     expect(errs.neighborhood).toBeDefined();
     expect(errs.city).toBeDefined();
     expect(errs.state).toBeDefined();
+  });
+
+  it('exige número do imóvel ou indicação S/N', () => {
+    expect(validateAddress({ ...validAddress, number: '' }).number).toBeDefined();
+    expect(validateAddress({ ...validAddress, number: 'S/N' }).number).toBeUndefined();
+    expect(validateAddress({ ...validAddress, number: '42' }).number).toBeUndefined();
   });
 
   it('aceita telefone celular com 11 dígitos sem máscara', () => {
