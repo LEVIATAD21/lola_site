@@ -22,6 +22,8 @@ import { ProductDetailPage } from './components/product/ProductDetailPage';
 import { CartPage } from './components/cart/CartPage';
 import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
+import { ReportModal } from './components/ReportModal';
+import { FileText } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { CartItem, ToastMessage } from './types';
 import { deductStock } from './services/api';
@@ -107,6 +109,7 @@ export default function App() {
   const [infoModalTitle, setInfoModalTitle] = useState('');
   const [infoModalContent, setInfoModalContent] = useState('');
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Category filter state for home page
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
@@ -418,6 +421,15 @@ export default function App() {
             >
               Design 05 (Checkout)
             </button>
+            <span className="hidden sm:inline text-white/20 mx-0.5">|</span>
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-700/80 hover:bg-emerald-600 text-white shadow-xs transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400/30"
+              title="Abrir o resumo executivo e auditoria técnica das 5 telas"
+            >
+              <FileText className="w-3 h-3 text-emerald-300" />
+              <span>Ver Relatório Executivo</span>
+            </button>
           </div>
         </div>
       </div>
@@ -614,6 +626,16 @@ export default function App() {
         onSelectProduct={handleSelectProduct}
         onAddToCart={(prod, qty) => handleAddToCart(prod, qty)}
         catalog={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS]}
+      />
+
+      {/* Relatório Executivo e Auditoria Técnica Modal */}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        onNavigateToScreen={(screen) => {
+          setPageView(screen);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
       {/* Discrete feedback notifications */}
