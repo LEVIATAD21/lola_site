@@ -133,7 +133,7 @@ Os comandos disponíveis são:
 | `npm run build` | Gera a versão de produção do frontend com Vite. |
 | `npm run dev` | Inicia o servidor de desenvolvimento. |
 
-O workflow [GitHub Actions · CI](.github/workflows/ci.yml) executa instalação, verificação de tipos, testes e build para alterações na branch `main) e pull requests direcionados a ela.
+O workflow [GitHub Actions · CI](.github/workflows/ci.yml) executa instalação, verificação de tipos, testes e build para alterações na branch `main` e pull requests direcionados a ela.
 
 > A existência desses comandos e do workflow não garante, por si só, que a última execução passou. Consulte a página de [Actions](https://github.com/LEVIATAD21/lola_site/actions) para conferir os resultados reais.
 
