@@ -19,7 +19,10 @@ export function validateAddress(data: CheckoutAddressData): CheckoutAddressError
     errs.cep = 'Informe um CEP com 8 dígitos.';
   }
   if (data.street.trim().length < 5) {
-    errs.street = 'Informe rua e número.';
+    errs.street = 'Informe o nome da rua ou avenida.';
+  }
+  if (!data.number.trim()) {
+    errs.number = 'Informe o número do imóvel. Se não houver, informe S/N.';
   }
   if (!data.neighborhood.trim()) {
     errs.neighborhood = 'Informe o bairro.';
