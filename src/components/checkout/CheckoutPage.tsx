@@ -160,7 +160,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         })),
         paymentMethod: paymentData.method,
         ...(coupon?.code ? { couponCode: coupon.code } : {}),
-        shippingOptionId: shipping?.id ?? 'pac',
+        shippingOptionId: shipping?.id === 'sedex' ? 'sedex' : shipping?.id === 'transportadora' ? 'transportadora' : 'pac',
         giftWrap: hasGiftWrap,
         termsAccepted: paymentData.acceptedTerms,
       });
