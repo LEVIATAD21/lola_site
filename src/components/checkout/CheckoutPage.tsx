@@ -12,6 +12,7 @@ import { getCouponDiscount, getCouponPercentage } from '../../data/coupons';
 import { ShippingOption, quoteShipping } from '../cart/ShippingCalculatorModal';
 import { validateAddress } from '../../utils/checkoutValidation';
 import { createOrderDraft, type DraftOrderConfirmation } from '../../services/api';
+import { lookupBrazilianCep } from '../../services/cep';
 import { ChevronLeft, ChevronRight, Heart, ArrowRight } from 'lucide-react';
 
 interface CheckoutPageProps {
@@ -56,6 +57,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [termsError, setTermsError] = useState(false);
   const [addressErrors, setAddressErrors] = useState<CheckoutAddressErrors>({});
   const [cepNotice, setCepNotice] = useState<string | null>(null);
+  const [isCepSearching, setIsCepSearching] = useState(false);
+  const cepLookupId = React.useRef(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<DraftOrderConfirmation | null>(null);
@@ -66,6 +69,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     phone: '',
     cep: '',
     street: '',
+    number: '',
     complement: '',
     neighborhood: '',
     city: '',
@@ -75,7 +79,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
   // Payment form state starts empty without pre-filled card or fake data
   const [paymentData, setPaymentData] = useState<PaymentData>({
-    method: 'credit_card',
+    method: 'pix',
     cardNumber: '',
     cardName: '',
     cardExpiry: '',
@@ -101,12 +105,47 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     if (scrollRef.current) scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
   };
 
-  const handleCepSearch = (_cleanCep: string) => {
-    // Nenhuma consulta é realizada nesta demonstração — o feedback abaixo evita
-    // que a ação pareça ter concluído uma busca que não existe.
-    setCepNotice(
-      'Consulta automática de CEP indisponível nesta demonstração. Preencha o endereço manualmente.'
-    );
+  const handleCepSearch = async (inputCep: string) => {
+    // Invalida qualquer consulta anterior para não preencher um CEP que o cliente já alterou.
+    const requestId = ++cepLookupId.current;
+    const cleanCep = inputCep.replace(/\D/g, '');
+    if (!/^\d{8}$/.test(cleanCep)) {
+      setIsCepSearching(false);
+      setCepNotice('Digite um CEP válido com 8 dígitos.');
+      return;
+    }
+
+    setIsCepSearching(true);
+    setCepNotice('Consultando CEP...');
+    try {
+      const result = await lookupBrazilianCep(cleanCep);
+      if (requestId !== cepLookupId.current) return;
+      if (!result) {
+        setCepNotice('CEP não encontrado. Confira os números ou preencha o endereço manualmente.');
+        return;
+      }
+
+      setAddressData((current) => ({
+        ...current,
+        cep: `${cleanCep.slice(0, 5)}-${cleanCep.slice(5)}`,
+        street: result.street,
+        neighborhood: result.neighborhood,
+        city: result.city,
+        state: result.state,
+      }));
+      setAddressErrors({});
+      setCepNotice(
+        result.street && result.neighborhood
+          ? 'Endereço preenchido. Agora informe apenas o número da casa e, se necessário, o complemento.'
+          : 'CEP encontrado, mas o logradouro ou bairro veio incompleto. Confira os campos e informe o número.'
+      );
+    } catch {
+      if (requestId === cepLookupId.current) {
+        setCepNotice('Não foi possível consultar o CEP agora. Confira sua conexão ou preencha o endereço manualmente.');
+      }
+    } finally {
+      if (requestId === cepLookupId.current) setIsCepSearching(false);
+    }
   };
 
   const handleApplyCoupon = (code: string): boolean => {
@@ -121,6 +160,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     if (isSubmitting) return;
     if (!items.length) {
       setOrderError('Sua sacola está vazia. Adicione produtos antes de continuar.');
+      return;
+    }
+    if (paymentData.method === 'credit_card') {
+      const message = 'Pagamento por cartão indisponível: a integração segura com o provedor ainda não foi configurada.';
+      setOrderError(message);
+      setCurrentStep(3);
+      onOpenInfo?.('Cartão temporariamente indisponível', message);
       return;
     }
     const errs = validateAddress(addressData);
@@ -148,6 +194,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           phone: addressData.phone,
           cep: addressData.cep,
           street: addressData.street,
+          number: addressData.number,
           complement: addressData.complement,
           neighborhood: addressData.neighborhood,
           city: addressData.city,
@@ -248,7 +295,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               data={addressData}
               errors={addressErrors}
               notice={cepNotice}
+              isCepSearching={isCepSearching}
               onChange={(data) => {
+                if (data.cep.replace(/\D/g, '') !== addressData.cep.replace(/\D/g, '')) {
+                  cepLookupId.current += 1;
+                  setIsCepSearching(false);
+                  setCepNotice(null);
+                }
                 setAddressData(data);
                 if (Object.keys(addressErrors).length > 0) setAddressErrors({});
               }}
