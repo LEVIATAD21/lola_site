@@ -169,7 +169,7 @@ export function buildOrderDraft(
     ok: true,
     order: {
       id,
-      orderNumber: 'LOLA-' + createdAt.slice(0, 10).replace(/-/g, '') + '-' + id.slice(0, 8).toUpperCase(),
+      orderNumber: 'LOLA-' + createdAt.slice(0, 10).replace(/-/g, '') + '-' + id.slice(0, 12).toUpperCase(),
       createdAt,
       status: 'awaiting_payment_setup',
       paymentStatus: 'not_configured',

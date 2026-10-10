@@ -55,7 +55,7 @@ describe('buildOrderDraft', () => {
     const result = buildOrderDraft(validInput(), catalog, inventory());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.order.orderNumber).toMatch(/^LOLA-\d{8}-[A-F0-9]{8}$/);
+    expect(result.order.orderNumber).toMatch(/^LOLA-\d{8}-[A-F0-9]{12}$/);
     expect(result.order.status).toBe('awaiting_payment_setup');
     expect(result.order.paymentStatus).toBe('not_configured');
   });

@@ -135,7 +135,7 @@ export function parseDraftOrderConfirmation(json: unknown): DraftOrderConfirmati
   const root = json as Record<string, unknown>;
   if (root.success !== true || !root.order || typeof root.order !== 'object' || Array.isArray(root.order)) return null;
   const order = root.order as Record<string, unknown>;
-  if (typeof order.orderNumber !== 'string' || !/^LOLA-\d{8}-[A-F0-9]{8}$/.test(order.orderNumber)) return null;
+  if (typeof order.orderNumber !== 'string' || !/^LOLA-\d{8}-[A-F0-9]{12}$/.test(order.orderNumber)) return null;
   if (typeof order.createdAt !== 'string' || !Number.isFinite(Date.parse(order.createdAt))) return null;
   if (order.status !== 'awaiting_payment_setup' || order.paymentStatus !== 'not_configured') return null;
   if (order.paymentMethod !== 'credit_card' && order.paymentMethod !== 'pix' && order.paymentMethod !== 'boleto') return null;

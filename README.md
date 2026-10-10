@@ -174,6 +174,7 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 ## Operação do backend
 
 - O endpoint `GET /api/health` verifica se o servidor responde.
+- A consulta pública de estoque revela somente `productId` e `disponivel`; total, reservas e unidades vendidas permanecem fora da resposta pública.
 - O catálogo da API usa a mesma fonte `src/data/mockData.ts` que alimenta as telas; IDs, nomes, descrições, imagens e preços não são duplicados no backend.
 - O estoque fica em `.data/inventory.json` (ou no caminho definido por `LOLA_DATA_DIR`). O arquivo é criado no primeiro início do servidor; mantenha o diretório em um volume persistente nos deploys.
 - Antes do uso comercial, substitua as quantidades de demonstração já existentes pelas quantidades físicas reais. Novos produtos começam com estoque zero até que ele seja configurado. Mantenha `total = reservado + vendido + disponivel` e use inteiros não negativos.
@@ -194,6 +195,16 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 
 - `GET /api/admin/pre-pedidos?limit=50` lista no máximo 100 solicitações recentes; `GET /api/admin/pre-pedidos/:orderNumber` retorna um pré-pedido específico.
 - `POST /api/estoque/atualizar` também é uma operação administrativa: não permite que visitantes diminuam artificialmente o estoque.
+- A autenticação administrativa tem limite de tentativas por IP. Os limites são locais por processo; produção com múltiplas instâncias deve adicionar um WAF ou armazenamento compartilhado de rate limiting.
 - Todas essas rotas exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável (ou com valor curto), as operações privilegiadas ficam desativadas.
 - Não coloque a chave no frontend, em variáveis `VITE_*`, em URLs ou no repositório. Use HTTPS em produção.
 - A chave é uma proteção técnica básica para a API; o projeto ainda não tem painel administrativo, contas de funcionários, perfis por função, sessões com MFA ou auditoria administrativa.
+
+
+## Cabeçalhos e limites HTTP
+
+- O backend aplica `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` e políticas de isolamento de origem. Em produção, adiciona uma Content Security Policy compatível com os recursos da loja.
+- O parser JSON aceita corpos de no máximo 16 KiB. As consultas à assistente, os pré-pedidos e as rotas administrativas têm limites de frequência.
+- Se o domínio estiver sempre servido por HTTPS, configure `LOLA_HSTS_ENABLED=true` no ambiente de produção para ativar HSTS. Não habilite essa opção se o mesmo hostname ainda precisar atender por HTTP.
+- A API administrativa e as respostas da API não são armazenadas em cache pelo navegador.
+- Os códigos de pré-pedido agora usam 12 caracteres aleatórios. Eles são identificadores, não substitutos da autenticação administrativa.
