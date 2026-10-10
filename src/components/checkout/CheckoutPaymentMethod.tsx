@@ -5,11 +5,6 @@ export type PaymentType = 'credit_card' | 'pix' | 'boleto';
 
 export interface PaymentData {
   method: PaymentType;
-  cardNumber: string;
-  cardName: string;
-  cardExpiry: string;
-  cardCvv: string;
-  installments: number;
   acceptedTerms: boolean;
 }
 
