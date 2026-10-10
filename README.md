@@ -46,8 +46,10 @@ O **Assistente Lola** funciona como um componente flutuante da experiência, e n
 - Catálogo de demonstração com categorias e recomendações.
 - Sacola e favoritos mantidos localmente no navegador.
 - Consulta de disponibilidade por meio do serviço de estoque do projeto.
+- Consulta automática de CEP via ViaCEP para preencher logradouro, bairro, cidade e UF; o cliente informa o número do imóvel.
 - Validação dos dados de endereço no checkout demonstrativo.
 - Aplicação demonstrativa de cupons e estimativa de frete.
+- Cartão de crédito desativado até a integração de um provedor seguro; Pix e boleto também apenas registram pré-pedidos, sem cobrança real.
 - Assistente flutuante com tratamento de indisponibilidade de consulta.
 - Verificação de tipos, testes unitários e build configurados no fluxo de CI.
 
@@ -150,7 +152,7 @@ O workflow [GitHub Actions · CI](.github/workflows/ci.yml) executa instalação
 - Persistência real de produtos, preços e estoque.
 - Validação definitiva de preço, disponibilidade e cupom no servidor.
 - Cotação oficial de frete e prazo.
-- Integração com provedor de pagamento.
+- Integração com provedor de pagamento e habilitação de cartão somente após autorização real do provedor.
 - Criação de pedidos e confirmação por resposta real do servidor/provedor.
 - Revisão final das políticas comerciais, privacidade e conteúdo de produto.
 
