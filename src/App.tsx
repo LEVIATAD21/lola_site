@@ -183,7 +183,7 @@ export default function App() {
       routePath = '/carrinho';
     } else if (pageView === 'checkout') {
       title = 'Finalizar Compra | LOLA Aço Inox';
-      description = 'Conclua seu pedido na Lola Aço Inox via Pix ou Cartão.';
+      description = 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
       routePath = '/checkout';
     }
 
