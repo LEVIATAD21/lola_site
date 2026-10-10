@@ -10,7 +10,7 @@ interface ProductPurchasePanelProps {
   onAddToCart: (product: Product, quantity: number, size: string) => void;
   onOpenWhatsApp: (product: Product, size: string) => void;
   onOpenInfo: (title: string, content: string) => void;
-  availableUnits?: number;
+  availableUnits?: number | null;
 }
 
 export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
@@ -20,7 +20,7 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
   onAddToCart,
   onOpenWhatsApp,
   onOpenInfo,
-  availableUnits = 8,
+  availableUnits,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
@@ -31,7 +31,11 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
     { label: 'G (2,5 cm)', value: 'G (2,5 cm)' },
   ];
 
+  const maxQuantity = availableUnits !== null && availableUnits !== undefined ? availableUnits : 99;
+  const isOutOfStock = availableUnits !== null && availableUnits !== undefined && availableUnits <= 0;
+
   const handleAdd = () => {
+    if (isOutOfStock) return;
     onAddToCart(product, quantity, selectedSize);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -52,29 +56,28 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
           {product.name}
         </h1>
 
-        {/* Rating stars & reviews count + Stock badge */}
+        {/* Rating stars & Stock badge */}
         <div className="flex flex-wrap items-center gap-3 pt-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" title="Demonstração visual do catálogo">
             <div className="flex items-center text-[#C49A5A]">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-4 h-4 fill-[#C49A5A]" />
               ))}
             </div>
-            <span className="text-xs font-semibold text-[#241F1B]">4.8</span>
-            <span className="text-xs text-[#766D64]">(124 avaliações)</span>
+            <span className="text-xs text-[#766D64]">(Catálogo ilustrativo)</span>
           </div>
 
           <BadgeEstoque availableUnits={availableUnits} />
         </div>
       </div>
 
-      {/* 2. Price & Installments */}
+      {/* 2. Price */}
       <div className="space-y-1.5 pb-2 border-b border-[#E7DED3]">
         <div className="text-3xl sm:text-4xl font-semibold text-[#241F1B] tabular-nums tracking-tight">
           R$ {product.price.toFixed(2).replace('.', ',')}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-[#766D64]">
-          <span>Em até 12x de R$ {(product.price / 10).toFixed(2).replace('.', ',')} sem juros</span>
+          <span>Condições de parcelamento sob consulta na finalização</span>
           <CreditCard className="w-3.5 h-3.5 text-[#2A211B]" />
         </div>
       </div>
@@ -113,14 +116,16 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
           <label className="block text-xs font-semibold text-[#241F1B]">
             Quantidade
           </label>
-          <span className="text-[11px] text-[#766D64]">
-            Máx: {availableUnits} un.
-          </span>
+          {availableUnits !== null && availableUnits !== undefined && (
+            <span className="text-[11px] text-[#766D64]">
+              Disponível: {availableUnits} un.
+            </span>
+          )}
         </div>
         <div className="flex items-center w-36 border border-[#E7DED3] rounded-xl bg-white overflow-hidden">
           <button
             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-            disabled={quantity <= 1}
+            disabled={quantity <= 1 || isOutOfStock}
             aria-label="Diminuir quantidade"
             className="w-11 h-10 flex items-center justify-center text-sm font-semibold text-[#766D64] hover:text-[#2A211B] hover:bg-[#F8F4ED] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
@@ -130,8 +135,8 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
             {quantity}
           </span>
           <button
-            onClick={() => setQuantity(Math.min(availableUnits, quantity + 1))}
-            disabled={quantity >= availableUnits}
+            onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+            disabled={quantity >= maxQuantity || isOutOfStock}
             aria-label="Aumentar quantidade"
             className="w-11 h-10 flex items-center justify-center text-sm font-semibold text-[#766D64] hover:text-[#2A211B] hover:bg-[#F8F4ED] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
@@ -146,13 +151,18 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
         {/* Primary CTA: Adicionar à sacola */}
         <button
           onClick={handleAdd}
-          className={`w-full py-4 px-6 rounded-2xl font-semibold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-md active:scale-[0.99] ${
-            isAdded
-              ? 'bg-emerald-700 text-white'
-              : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white'
+          disabled={isOutOfStock}
+          className={`w-full py-4 px-6 rounded-2xl font-semibold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 shadow-md active:scale-[0.99] ${
+            isOutOfStock
+              ? 'bg-stone-300 text-stone-500 cursor-not-allowed'
+              : isAdded
+              ? 'bg-emerald-700 text-white cursor-pointer'
+              : 'bg-[#2A211B] hover:bg-[#C49A5A] text-white cursor-pointer'
           }`}
         >
-          {isAdded ? (
+          {isOutOfStock ? (
+            <span>Produto Indisponível</span>
+          ) : isAdded ? (
             <>
               <Check className="w-4 h-4" />
               <span>Adicionado à sacola!</span>

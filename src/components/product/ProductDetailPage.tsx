@@ -8,7 +8,7 @@ import { RelatedProductsSection } from './RelatedProductsSection';
 import { ProductEditorialBanner } from './ProductEditorialBanner';
 import { WhatsAppModal } from './WhatsAppModal';
 import { ProductLightboxModal } from './ProductLightboxModal';
-import { Product, EARRINGS_CATALOG } from '../../data/mockData';
+import { Product, EARRINGS_CATALOG, FEATURED_PRODUCTS } from '../../data/mockData';
 import { getProductStock } from '../../services/api';
 
 interface ProductDetailPageProps {
@@ -38,12 +38,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isGlobalLightboxOpen, setIsGlobalLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [stockUnits, setStockUnits] = useState<number>(8);
+  const [stockUnits, setStockUnits] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     getProductStock(product.id).then((res) => {
-      if (isMounted) setStockUnits(res.disponivel);
+      if (isMounted) setStockUnits(res ? res.disponivel : null);
     });
     return () => {
       isMounted = false;
@@ -59,8 +59,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     '/src/assets/images/hoop_flatlay_linen_1791584262407.jpg',
   ];
 
-  // 5 Related Products for recommendations carousel
-  const relatedProducts = EARRINGS_CATALOG.filter((p) => p.id !== product.id).slice(0, 5);
+  // Related Products for recommendations carousel respecting category
+  const allProducts = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
+  const sameCategoryProducts = allProducts.filter((p) => p.category === product.category && p.id !== product.id);
+  const fallbackProducts = allProducts.filter((p) => p.id !== product.id);
+  const relatedProducts = (sameCategoryProducts.length >= 4 ? sameCategoryProducts : fallbackProducts).slice(0, 5);
 
   const isFavorite = favorites.includes(product.id);
 

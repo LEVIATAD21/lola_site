@@ -18,40 +18,26 @@ export interface AIResponse {
   referencias: AIRef[];
 }
 
-// Local fallback database in case of connection limits or offline
-const LOCAL_FALLBACK_STOCK: Record<string, number> = {
-  'brinco-1': 8,
-  'brinco-2': 4,
-  'brinco-3': 12,
-  'brinco-4': 3,
-  'brinco-5': 6,
-  'brinco-6': 9,
-  'prod-colar-1': 10,
-  'prod-pulseira-1': 7,
-  'prod-anel-1': 5,
-  'prod-conjunto-1': 2,
-};
-
-export async function getProductStock(productId: string): Promise<StockResponse> {
+/**
+ * Consulta o estoque real via API do servidor.
+ * Retorna null em caso de falha de conexão ou erro HTTP — nunca inventa números.
+ */
+export async function getProductStock(productId: string): Promise<StockResponse | null> {
   try {
     const res = await fetch(`/api/estoque/${productId}`);
     if (res.ok) {
       return await res.json();
     }
   } catch {
-    // fallback
+    // Falha de rede tratada pelo cliente
   }
-
-  const disp = LOCAL_FALLBACK_STOCK[productId] ?? 8;
-  return {
-    productId,
-    total: 15,
-    reservado: 2,
-    vendido: 5,
-    disponivel: disp,
-  };
+  return null;
 }
 
+/**
+ * Solicita a atualização/baixa de estoque no servidor.
+ * Retorna false em caso de falha — nunca simula sucesso nem decrementa localmente sem backend.
+ */
 export async function deductStock(productId: string, quantity: number): Promise<boolean> {
   try {
     const res = await fetch('/api/estoque/atualizar', {
@@ -61,15 +47,15 @@ export async function deductStock(productId: string, quantity: number): Promise<
     });
     if (res.ok) return true;
   } catch {
-    // fallback local update
+    // Falha de rede tratada pelo cliente
   }
-
-  if (LOCAL_FALLBACK_STOCK[productId] !== undefined) {
-    LOCAL_FALLBACK_STOCK[productId] = Math.max(0, LOCAL_FALLBACK_STOCK[productId] - quantity);
-  }
-  return true;
+  return false;
 }
 
+/**
+ * Consulta o assistente virtual.
+ * Se a API estiver indisponível ou falhar, retorna mensagem honesta e acolhedora sem inventar estoque ou garantias.
+ */
 export async function consultAI(
   pergunta: string,
   contexto?: { produtoId?: string; carrinho?: any[]; sessaoCliente?: string }
@@ -85,27 +71,11 @@ export async function consultAI(
       return await res.json();
     }
   } catch {
-    // fallback
-  }
-
-  // Natural fallback if server unavailable
-  const q = pergunta.toLowerCase();
-  if (q.includes('estoque') || q.includes('disponivel')) {
-    return {
-      resposta: 'Nossas peças em destaque como a Argola Lisa e o Colar Coração têm pronta entrega no momento!',
-      referencias: [{ tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' }],
-    };
-  }
-
-  if (q.includes('agua') || q.includes('banho') || q.includes('escurece') || q.includes('alergia')) {
-    return {
-      resposta: 'O aço inoxidável 316L da Lola é à prova d’água, hipoalergênico e não escurece, com 1 ano de garantia.',
-      referencias: [{ tipo: 'politica', id: 'garantia', titulo: '1 Ano de Garantia Lola', link: '#garantia' }],
-    };
+    // Erro de rede capturado
   }
 
   return {
-    resposta: 'Olá! Sou a assistente virtual da Lola Aço Inox. Posso tirar dúvidas sobre estoque, materiais, tamanhos e envio!',
+    resposta: 'No momento, o assistente virtual está indisponível para consulta em tempo real. Por favor, tente novamente mais tarde ou entre em contato pelo canal de atendimento.',
     referencias: [],
   };
 }

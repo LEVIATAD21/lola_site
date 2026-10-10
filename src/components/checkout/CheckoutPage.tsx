@@ -44,28 +44,28 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [termsError, setTermsError] = useState(false);
 
-  // Address form state
+  // Address form state starts empty
   const [addressData, setAddressData] = useState<CheckoutAddressData>({
-    fullName: 'Ana Silva',
-    phone: '(21) 99999-0000',
-    cep: '20231-010',
-    street: 'Rua das Palmeiras, 100',
-    complement: 'Apto 101',
-    neighborhood: 'Jardim',
-    city: 'Rio de Janeiro',
-    state: 'RJ',
-    saveAddress: true,
+    fullName: '',
+    phone: '',
+    cep: '',
+    street: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    saveAddress: false,
   });
 
-  // Payment form state
+  // Payment form state starts empty without pre-filled card or fake data
   const [paymentData, setPaymentData] = useState<PaymentData>({
     method: 'credit_card',
-    cardNumber: '5424 1234 5678 9012',
-    cardName: 'ANA SILVA',
-    cardExpiry: '12/28',
-    cardCvv: '888',
+    cardNumber: '',
+    cardName: '',
+    cardExpiry: '',
+    cardCvv: '',
     installments: 1,
-    acceptedTerms: true,
+    acceptedTerms: false,
   });
 
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
@@ -83,25 +83,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     if (scrollRef.current) scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
   };
 
-  const handleCepSearch = (cleanCep: string) => {
-    // Simulated CEP lookup
-    if (cleanCep.startsWith('20')) {
-      setAddressData((prev) => ({
-        ...prev,
-        street: 'Rua das Palmeiras',
-        neighborhood: 'Jardim',
-        city: 'Rio de Janeiro',
-        state: 'RJ',
-      }));
-    } else if (cleanCep.startsWith('01')) {
-      setAddressData((prev) => ({
-        ...prev,
-        street: 'Avenida Paulista',
-        neighborhood: 'Bela Vista',
-        city: 'São Paulo',
-        state: 'SP',
-      }));
-    }
+  const handleCepSearch = (_cleanCep: string) => {
+    // Integração oficial de CEP será conectada no backend pelo proprietário
   };
 
   const handleApplyCoupon = (code: string) => {
@@ -116,17 +99,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     setTermsError(false);
     setCurrentStep(4);
     setIsSuccessModalOpen(true);
-
-    if (onOrderCompleted) {
-      onOrderCompleted({
-        id: '2045',
-        date: new Date().toISOString().split('T')[0],
-        status: 'Preparando envio',
-        total: totalAmount,
-        items: items,
-        address: addressData,
-      });
-    }
+    // Não chama onOrderCompleted nem simula pedido real
   };
 
   return (
@@ -308,15 +281,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                           {prod.name}
                         </h3>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
                           <div className="flex items-center text-[#C49A5A]">
                             {[...Array(5)].map((_, i) => (
                               <Star key={i} className="w-2.5 h-2.5 fill-[#C49A5A]" />
                             ))}
                           </div>
-                          <span className="text-[10px] text-[#766D64] tabular-nums">
-                            {prod.rating || '4.8'} ({prod.reviewCount || 64})
-                          </span>
                         </div>
 
                         <p className="font-semibold text-sm text-[#241F1B] tabular-nums pt-0.5">
@@ -349,7 +319,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       {/* Modals */}
       <OrderSuccessModal
         isOpen={isSuccessModalOpen}
-        orderNumber="#2045"
         totalAmount={totalAmount}
         paymentMethod={paymentData.method}
         onGoToAccount={() => {

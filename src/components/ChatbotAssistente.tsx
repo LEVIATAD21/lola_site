@@ -34,11 +34,10 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
     {
       id: 'welcome',
       sender: 'assistant',
-      text: 'Olá! Sou a assistente virtual da Lola Aço Inox. ✨\nPosso te ajudar a consultar estoque em tempo real, dar dicas de combinações ou tirar dúvidas sobre o aço hipoalergênico.',
+      text: 'Olá! Sou a assistente virtual da Lola Aço Inox. ✨\nPosso te ajudar a navegar pela nossa coleção e sugerir combinações de acessórios.',
       timestamp: 'Agora',
       referencias: [
         { tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' },
-        { tipo: 'politica', id: 'garantia', titulo: '1 Ano de Garantia', link: '#garantia' },
       ],
     },
   ]);
@@ -91,7 +90,7 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: 'Desculpe, tive uma instabilidade momentânea para consultar o sistema. Nossas peças em aço inox contam com estoque atualizado e 1 ano de garantia!',
+        text: 'Desculpe, tive uma instabilidade momentânea para consultar o sistema. Por favor, tente novamente mais tarde.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -157,10 +156,9 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
                   <h3 className="font-serif-brand text-sm font-semibold tracking-wide">
                     Assistente Lola
                   </h3>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Online" />
                 </div>
                 <p className="text-[10px] text-[#DCC7B0]">
-                  Consulta de catálogo, estoque & garantia
+                  Atendimento e consulta de catálogo
                 </p>
               </div>
             </div>
@@ -274,10 +272,10 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
               📦 Consultar estoque
             </button>
             <button
-              onClick={() => handleQuickQuestion('Como funciona o frete e a garantia de 1 ano?')}
+              onClick={() => handleQuickQuestion('Quais as características do aço inoxidável?')}
               className="text-[10px] px-2.5 py-1 rounded-full bg-[#F8F4ED] hover:bg-[#E7DED3] text-[#241F1B] transition-colors cursor-pointer border border-[#E7DED3]"
             >
-              🛡️ Garantia de 1 ano
+              ✨ Sobre o aço inox
             </button>
           </div>
 

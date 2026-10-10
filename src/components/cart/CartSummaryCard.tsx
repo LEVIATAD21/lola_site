@@ -28,7 +28,7 @@ export const CartSummaryCard: React.FC<CartSummaryCardProps> = ({
 }) => {
   const currentShipping = shippingPrice !== null ? shippingPrice : 0;
   const finalTotal = Math.max(0, subtotal + currentShipping - discountAmount);
-  const installmentValue = (finalTotal / 12).toFixed(2).replace('.', ',');
+  const installmentValue = (finalTotal / 3).toFixed(2).replace('.', ',');
 
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-7 border border-[#E7DED3] shadow-xs space-y-5 text-left sticky top-28">
@@ -115,7 +115,7 @@ export const CartSummaryCard: React.FC<CartSummaryCardProps> = ({
           </span>
         </div>
         <p className="text-[11px] text-[#766D64] text-right">
-          ou em até 12x de R$ {installmentValue}
+          ou em até 3x de R$ {installmentValue} sem juros
         </p>
       </div>
 

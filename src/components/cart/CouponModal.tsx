@@ -39,7 +39,7 @@ export const CouponModal: React.FC<CouponModalProps> = ({
       onApplyCoupon(cleanCode, validCoupons[cleanCode]);
       onClose();
     } else {
-      setError('Cupom inválido ou expirado. Tente o código "LOLA10" ou "BEMVINDA".');
+      setError('Cupom não encontrado. A integração oficial com cupons promocionais será ativada pelo servidor.');
     }
   };
 

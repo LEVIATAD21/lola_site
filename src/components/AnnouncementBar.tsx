@@ -17,21 +17,21 @@ export const AnnouncementBar: React.FC<AnnouncementBarProps> = ({ onOpenInfo }) 
 
         {/* Center item */}
         <button
-          onClick={() => onOpenInfo('Frete para todo o Brasil', 'Enviamos para todo o território nacional através de transportadoras e Correios com código de rastreamento enviado diretamente no seu e-mail e WhatsApp.')}
+          onClick={() => onOpenInfo('Envios e Entregas', 'A loja enviará pedidos para todo o Brasil. As transportadoras e opções de envio oficiais serão configuradas na fase de lançamento.')}
           className="flex items-center gap-1.5 hover:text-[#C49A5A] transition-colors cursor-pointer"
         >
           <Truck className="w-3.5 h-3.5 text-[#C49A5A]" />
-          <span>Frete para todo o Brasil</span>
+          <span>Envios para todo o Brasil</span>
         </button>
 
         {/* Right item */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => onOpenInfo('Compra 100% Segura', 'Seus dados e pagamentos são protegidos com criptografia SSL ponta a ponta e processados com segurança total.')}
+            onClick={() => onOpenInfo('Ambiente Seguro', 'Este é o ambiente demonstrativo do front-end da LOLA Aço Inox & Acessórios. A integração bancária e certificados de segurança oficiais serão ativados pelo backend.')}
             className="flex items-center gap-1.5 hover:text-[#C49A5A] transition-colors cursor-pointer"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#C49A5A]" />
-            <span>Compra segura</span>
+            <span>Ambiente seguro</span>
           </button>
 
           {/* Social shortcuts */}

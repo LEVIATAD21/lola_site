@@ -162,7 +162,7 @@ export const FeaturedProductsSection: React.FC<FeaturedProductsSectionProps> = (
                         <p className="font-semibold text-base text-[#241F1B] tabular-nums">
                           R$ {product.price.toFixed(2).replace('.', ',')}
                         </p>
-                        <BadgeEstoque availableUnits={8} showDetailed={false} />
+                        <BadgeEstoque availableUnits={undefined} showDetailed={false} />
                       </div>
                     </div>
 

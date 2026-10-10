@@ -59,7 +59,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Contato & Atendimento',
-                      'Nosso suporte funciona de Segunda a Sexta, das 9h às 18h.\n\nWhatsApp: (11) 98765-4321\nE-mail: contato@lolaacessorios.com.br\nTempo médio de resposta: até 2 horas úteis.'
+                      'Nosso canal oficial de atendimento estará disponível em breve.\n\nHorário previsto de suporte: Segunda a Sexta, das 9h às 18h.\nCanal oficial no WhatsApp e e-mail serão divulgados no lançamento.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -107,7 +107,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Entrega e Prazos',
-                      'Entregamos para todo o Brasil via Correios e Jadlog.\n\n• Capitais: 2 a 5 dias úteis\n• Demais cidades: 4 a 10 dias úteis\nO código de rastreio é enviado automaticamente após o envio.'
+                      'Os prazos de entrega e modalidades de frete serão cotados conforme a tabela oficial dos Correios e transportadoras parceiras na finalização do pedido.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -213,7 +213,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
 
             </div>
             <p className="text-[11px] text-[#766D64] pt-1">
-              Até 6x sem juros ou 5% OFF no Pix
+              Condições de parcelamento e Pix sob consulta no checkout
             </p>
           </div>
 
@@ -235,13 +235,13 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
         </div>
       </div>
 
-      {/* Floating Back-to-Top Button */}
+      {/* Floating Back-to-Top Button (posicionado acima do widget de chat para não sobrepor) */}
       <button
         onClick={scrollToTop}
         aria-label="Voltar ao topo da página"
-        className="fixed bottom-6 right-6 z-30 w-11 h-11 rounded-full bg-[#2A211B] text-white shadow-xl hover:bg-[#C49A5A] transition-all flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95"
+        className="fixed bottom-20 right-5 sm:bottom-22 sm:right-5 z-30 w-10 h-10 rounded-full bg-[#2A211B]/90 hover:bg-[#C49A5A] text-white shadow-lg transition-all flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 border border-white/20"
       >
-        <ChevronUp className="w-5 h-5" />
+        <ChevronUp className="w-4 h-4" />
       </button>
     </footer>
   );

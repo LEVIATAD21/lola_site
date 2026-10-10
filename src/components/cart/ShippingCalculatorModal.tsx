@@ -183,7 +183,7 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
           )}
 
           <div className="text-[11px] text-[#766D64] italic text-center pt-1">
-            * Simulação demonstrativa da primeira versão da loja LOLA.
+            * Valores e prazos são estimativas ilustrativas de protótipo. A cotação oficial dos Correios e transportadoras será conectada no backend.
           </div>
 
         </div>

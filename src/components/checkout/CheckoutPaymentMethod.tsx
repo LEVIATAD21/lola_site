@@ -219,20 +219,10 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
           {paymentData.method === 'pix' && (
             <div className="mt-4 pt-4 border-t border-[#E7DED3] space-y-3 animate-in fade-in text-xs text-[#766D64]">
               <p>
-                O código Pix Copia e Cola e o QR Code serão gerados logo após a confirmação. A aprovação é instantânea.
+                O código Pix oficial e o QR Code dinâmico serão gerados pela integração com a instituição financeira no backend.
               </p>
-              <div className="p-3 bg-white rounded-xl border border-[#E7DED3] flex items-center justify-between">
-                <code className="text-[10px] text-[#241F1B] truncate max-w-[220px]">
-                  00020126580014br.gov.bcb.pix0136lola-chave-pix-demo...
-                </code>
-                <button
-                  type="button"
-                  onClick={handleCopyPix}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-[#2A211B] hover:text-[#C49A5A] cursor-pointer shrink-0 ml-2"
-                >
-                  {copiedPix ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedPix ? 'Copiado!' : 'Copiar'}</span>
-                </button>
+              <div className="p-3 bg-white rounded-xl border border-[#E7DED3] flex items-center justify-between text-[11px] text-[#766D64]">
+                <span>Ambiente de demonstração do front-end • Chave em configuração</span>
               </div>
             </div>
           )}

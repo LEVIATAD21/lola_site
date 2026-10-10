@@ -29,73 +29,70 @@ import { CartItem, ToastMessage } from './types';
 import { deductStock } from './services/api';
 
 export default function App() {
-  // Page view state: 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout'
-  // Starts on 'checkout' as requested for Parte 5 (Design 05)
-  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout'>('checkout');
+  // Inicialização segura de rota a partir de window.location.pathname
+  const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' => {
+    if (typeof window === 'undefined') return 'home';
+    const path = window.location.pathname.toLowerCase();
+    if (path === '/categoria/brincos') return 'category-earrings';
+    if (path.startsWith('/produto/')) return 'product-detail';
+    if (path === '/carrinho') return 'cart';
+    if (path === '/checkout') return 'checkout';
+    return 'home';
+  };
 
-  // Active product for detail page (defaults to Brinco Argola Lisa)
-  const [activeProduct, setActiveProduct] = useState<Product>(EARRINGS_CATALOG[0]);
+  const getInitialProduct = (): Product => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/produto/')) {
+        const id = path.replace('/produto/', '').trim();
+        const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
+        const found = all.find((p) => p.id === id);
+        if (found) return found;
+      }
+    }
+    return EARRINGS_CATALOG[0];
+  };
 
-  // Favorites State (stored in localStorage)
+  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout'>(getInitialView);
+  const [activeProduct, setActiveProduct] = useState<Product>(getInitialProduct);
+
+  // Favorites State (stored in localStorage) - starts empty if none saved
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('lola_favorites');
-      return saved ? JSON.parse(saved) : ['brinco-1', 'brinco-3'];
-    } catch {
-      return ['brinco-1', 'brinco-3'];
-    }
-  });
-
-  // Cart State (stored in localStorage) - defaults to 3 items matching Design 04 screenshot
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('lola_cart');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {
       // fallback
     }
+    return [];
+  });
 
-    return [
-      {
-        id: 'cart-1',
-        productId: 'brinco-1',
-        name: 'Brinco Argola Lisa',
-        price: 49.9,
-        image: '/src/assets/images/product_earrings_1791578709776.jpg',
-        category: 'Brincos',
-        variant: 'M (2,0 cm)',
-        color: 'Dourado',
-        material: 'Aço inox',
-        inStock: true,
-        quantity: 1,
-      },
-      {
-        id: 'cart-2',
-        productId: 'prod-colar-1',
-        name: 'Colar Coração',
-        price: 59.9,
-        image: '/src/assets/images/product_necklace_1791578719682.jpg',
-        category: 'Colares',
-        variant: 'Único',
-        color: 'Dourado',
-        material: 'Aço inox',
-        inStock: true,
-        quantity: 1,
-      },
-      {
-        id: 'cart-3',
-        productId: 'prod-pulseira-1',
-        name: 'Pulseira Corrente',
-        price: 54.9,
-        image: '/src/assets/images/product_bracelets_1791578728452.jpg',
-        category: 'Pulseiras',
-        variant: '18 cm',
-        color: 'Dourado',
-        material: 'Aço inox',
-        inStock: true,
-        quantity: 1,
-      },
-    ];
+  // Cart State (stored in localStorage) - starts empty if none saved.
+  // Limpa apenas o trio fixo de demonstração de versões antigas sem apagar itens reais do usuário.
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('lola_cart');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const isExactOldDemoSeed =
+            parsed.length === 3 &&
+            parsed.some((i) => i.id === 'cart-1' && i.productId === 'brinco-1') &&
+            parsed.some((i) => i.id === 'cart-2' && i.productId === 'prod-colar-1') &&
+            parsed.some((i) => i.id === 'cart-3' && i.productId === 'prod-pulseira-1');
+
+          if (!isExactOldDemoSeed) {
+            return parsed;
+          }
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return [];
   });
 
   // Modal & Drawer visibility states
@@ -138,7 +135,7 @@ export default function App() {
   // Synchronize dynamic document.title, meta description and URL route
   useEffect(() => {
     let title = 'LOLA Aço Inox & Acessórios | Semijoias em Aço Inoxidável';
-    let description = 'Loja online de semijoias e acessórios em aço inoxidável com design elegante, hipoalergênico e acabamento refinado.';
+    let description = 'Loja online de semijoias e acessórios em aço inoxidável com design elegante e acabamento refinado.';
     let routePath = '/';
 
     if (pageView === 'category-earrings') {
@@ -147,15 +144,15 @@ export default function App() {
       routePath = '/categoria/brincos';
     } else if (pageView === 'product-detail') {
       title = `${activeProduct.name} | LOLA Aço Inox & Acessórios`;
-      description = `${activeProduct.name} em aço inoxidável 316L hipoalergênico e à prova d’água com 1 ano de garantia.`;
+      description = `${activeProduct.name} - Conheça os detalhes desta peça contemporânea da coleção LOLA.`;
       routePath = `/produto/${activeProduct.id}`;
     } else if (pageView === 'cart') {
       title = 'Sua Sacola de Compras | LOLA Aço Inox';
-      description = 'Revise seus itens na sacola de compras com cálculo de frete e garantia de 1 ano.';
+      description = 'Revise seus itens na sacola de compras com cálculo de frete.';
       routePath = '/carrinho';
     } else if (pageView === 'checkout') {
       title = 'Finalizar Compra | LOLA Aço Inox';
-      description = 'Conclua seu pedido na Lola Aço Inox com segurança via Pix, Cartão em até 12x ou Boleto.';
+      description = 'Conclua seu pedido na Lola Aço Inox via Pix ou Cartão.';
       routePath = '/checkout';
     }
 
@@ -166,7 +163,7 @@ export default function App() {
     }
 
     if (window.location.pathname !== routePath) {
-      window.history.replaceState({ pageView }, title, routePath);
+      window.history.pushState({ pageView, productId: activeProduct.id }, title, routePath);
     }
   }, [pageView, activeProduct]);
 
@@ -175,6 +172,32 @@ export default function App() {
     const handlePopState = (e: PopStateEvent) => {
       if (e.state?.pageView) {
         setPageView(e.state.pageView);
+        if (e.state.pageView === 'product-detail' && e.state.productId) {
+          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
+          const found = all.find((p) => p.id === e.state.productId);
+          if (found) setActiveProduct(found);
+        }
+      } else {
+        const path = window.location.pathname.toLowerCase();
+        if (path === '/categoria/brincos') {
+          setPageView('category-earrings');
+        } else if (path.startsWith('/produto/')) {
+          const id = path.replace('/produto/', '').trim();
+          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
+          const found = all.find((p) => p.id === id);
+          if (found) {
+            setActiveProduct(found);
+            setPageView('product-detail');
+          } else {
+            setPageView('home');
+          }
+        } else if (path === '/carrinho') {
+          setPageView('cart');
+        } else if (path === '/checkout') {
+          setPageView('checkout');
+        } else {
+          setPageView('home');
+        }
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -364,75 +387,77 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F4ED] text-[#241F1B]">
       
-      {/* Design Switcher Bar (Quick view toggle between Design 01, 02, 03, 04 and 05) */}
-      <div className="bg-[#1E1713] text-[#DCC7B0] text-[11px] py-1.5 px-4 border-b border-[#C49A5A]/30">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1.5">
-          <span className="font-medium text-white/90">
-            Navegação entre telas:
-          </span>
-          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-            <button
-              onClick={navigateToHome}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                pageView === 'home'
-                  ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              Design 01 (Home)
-            </button>
-            <button
-              onClick={navigateToEarrings}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                pageView === 'category-earrings'
-                  ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              Design 02 (Brincos)
-            </button>
-            <button
-              onClick={navigateToProduct}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                pageView === 'product-detail'
-                  ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              Design 03 (Produto)
-            </button>
-            <button
-              onClick={navigateToCart}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                pageView === 'cart'
-                  ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              Design 04 (Sacola)
-            </button>
-            <button
-              onClick={navigateToCheckout}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
-                pageView === 'checkout'
-                  ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              Design 05 (Checkout)
-            </button>
-            <span className="hidden sm:inline text-white/20 mx-0.5">|</span>
-            <button
-              onClick={() => setIsReportModalOpen(true)}
-              className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-700/80 hover:bg-emerald-600 text-white shadow-xs transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400/30"
-              title="Abrir o resumo executivo e auditoria técnica das 5 telas"
-            >
-              <FileText className="w-3 h-3 text-emerald-300" />
-              <span>Ver Relatório Executivo</span>
-            </button>
+      {/* Development Switcher Bar (Disponível apenas em ambiente de desenvolvimento) */}
+      {import.meta.env.DEV && (
+        <div className="bg-[#1E1713] text-[#DCC7B0] text-[11px] py-1.5 px-4 border-b border-[#C49A5A]/30">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1.5">
+            <span className="font-medium text-white/90">
+              Navegação entre telas (Dev):
+            </span>
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+              <button
+                onClick={navigateToHome}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+                  pageView === 'home'
+                    ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                Design 01 (Home)
+              </button>
+              <button
+                onClick={navigateToEarrings}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+                  pageView === 'category-earrings'
+                    ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                Design 02 (Brincos)
+              </button>
+              <button
+                onClick={navigateToProduct}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+                  pageView === 'product-detail'
+                    ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                Design 03 (Produto)
+              </button>
+              <button
+                onClick={navigateToCart}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+                  pageView === 'cart'
+                    ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                Design 04 (Sacola)
+              </button>
+              <button
+                onClick={navigateToCheckout}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+                  pageView === 'checkout'
+                    ? 'bg-[#C49A5A] text-white shadow-xs font-semibold'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                Design 05 (Checkout)
+              </button>
+              <span className="hidden sm:inline text-white/20 mx-0.5">|</span>
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-700/80 hover:bg-emerald-600 text-white shadow-xs transition-colors cursor-pointer flex items-center gap-1 border border-emerald-400/30"
+                title="Abrir o painel demonstrativo das 5 telas"
+              >
+                <FileText className="w-3 h-3 text-emerald-300" />
+                <span>Painel Demonstrativo</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 1. Barra superior de informações comerciais */}
       <AnnouncementBar onOpenInfo={handleOpenInfo} />
@@ -548,17 +573,6 @@ export default function App() {
             favorites={favorites}
             onToggleFavorite={handleToggleFavorite}
             onAddToCart={handleAddToCart}
-            onOrderCompleted={(orderData) => {
-              orderData.items.forEach((item: CartItem) => {
-                deductStock(item.productId, item.quantity);
-              });
-              handleClearCart();
-              addToast(
-                'success',
-                `Pedido #${orderData.id} confirmado com sucesso!`,
-                'Recebemos seu pedido e já estamos preparando suas semijoias Lola.'
-              );
-            }}
           />
         </main>
       )}

@@ -58,14 +58,11 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
         {/* Info */}
         <div className="flex-1 min-w-0 space-y-2 text-left w-full">
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center text-[#C49A5A]">
+            <div className="flex items-center text-[#C49A5A]" title="Avaliação ilustrativa do catálogo">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-3 h-3 fill-[#C49A5A]" />
               ))}
             </div>
-            {product.reviewCount && (
-              <span className="text-[11px] text-[#766D64]">({product.reviewCount})</span>
-            )}
           </div>
 
           <h3
@@ -161,18 +158,13 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
             {product.name}
           </h3>
 
-          {/* Rating stars and review count matching reference */}
-          <div className="flex items-center gap-1.5">
+          {/* Rating stars matching reference */}
+          <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
             <div className="flex items-center text-[#C49A5A]">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-3 h-3 fill-[#C49A5A]" />
               ))}
             </div>
-            {product.reviewCount && (
-              <span className="text-[11px] text-[#766D64] tabular-nums">
-                ({product.reviewCount})
-              </span>
-            )}
           </div>
 
           {/* Price and Stock Badge */}
@@ -180,7 +172,7 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
             <p className="font-semibold text-sm sm:text-base text-[#241F1B] tabular-nums">
               R$ {product.price.toFixed(2).replace('.', ',')}
             </p>
-            <BadgeEstoque availableUnits={8} showDetailed={false} />
+            <BadgeEstoque availableUnits={undefined} showDetailed={false} />
           </div>
         </div>
 

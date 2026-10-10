@@ -129,15 +129,12 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({
                       </h3>
 
                       {/* Stars & Rating */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
                         <div className="flex items-center text-[#C49A5A]">
                           {[...Array(5)].map((_, i) => (
                             <Star key={i} className="w-2.5 h-2.5 fill-[#C49A5A]" />
                           ))}
                         </div>
-                        <span className="text-[10px] text-[#766D64] tabular-nums">
-                          {product.rating ? '4.8' : '4.7'} ({product.reviewCount || 86})
-                        </span>
                       </div>
 
                       <p className="font-semibold text-sm text-[#241F1B] tabular-nums pt-0.5">

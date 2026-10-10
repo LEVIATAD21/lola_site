@@ -166,7 +166,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-[#766D64] text-right">
-            ou em até 12x de R$ {(finalTotal / 12).toFixed(2).replace('.', ',')}
+            ou em até 3x de R$ {(finalTotal / 3).toFixed(2).replace('.', ',')} sem juros
           </p>
         </div>
 

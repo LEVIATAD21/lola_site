@@ -40,15 +40,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase font-bold tracking-widest text-[#E5BA76] bg-[#C49A5A]/20 px-2 py-0.5 rounded-full">
-                    Auditoria & Conformidade
+                    Visão de Desenvolvimento
                   </span>
-                  <span className="text-xs text-[#DCC7B0]/70">100% Implementado</span>
+                  <span className="text-xs text-[#DCC7B0]/70">5 Telas Integradas</span>
                 </div>
                 <h2 className="font-serif-brand text-xl sm:text-2xl font-bold text-white tracking-wide mt-0.5">
-                  Resumo Executivo do E-commerce LOLA
+                  Painel de Demonstração LOLA
                 </h2>
                 <p className="text-xs text-[#DCC7B0]/80 mt-0.5 font-light">
-                  Aferição técnica completa dos 5 Designs, APIs de Estoque e Assistente de IA 24/7.
+                  Navegação rápida e estado das 5 telas do front-end e fluxos demonstrativos.
                 </p>
               </div>
             </div>
@@ -154,13 +154,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 <div className="p-5 rounded-2xl bg-white border border-[#E7DED3] shadow-xs space-y-3">
                   <h3 className="font-serif-brand text-lg font-bold text-[#2A211B] flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-[#C49A5A]" />
-                    Síntese do Relatório Executivo
+                    Visão Geral do Front-End
                   </h3>
                   <p className="text-xs sm:text-sm text-[#554D46] leading-relaxed">
-                    O projeto da <strong>LOLA Aço Inox & Acessórios</strong> foi auditado conforme as diretrizes do documento executivo. Ele atende de ponta a ponta à proposta de valor da marca: peças duráveis em <strong>aço inoxidável 316L e cirúrgico</strong>, garantia de 1 ano, hipoalergênicas, com design sofisticado, paleta editorial quente (beges, dourado suave, grafite nobre) e experiência de compra fluida e segura.
+                    O front-end da <strong>LOLA Aço Inox & Acessórios</strong> conta com as 5 interfaces visuais completas, paleta editorial refinada (tons beges, dourado suave e grafite), componentes responsivos e fluxos de navegação preparados.
                   </p>
                   <p className="text-xs sm:text-sm text-[#554D46] leading-relaxed">
-                    Todas as 5 etapas da jornada do consumidor estão 100% navegáveis tanto de maneira linear (clique no produto → adicionar à sacola → finalizar compra) quanto pela <strong>barra de alternância superior</strong> para apresentação aos stakeholders.
+                    As regras de negócio definitivas, inventário real, frete com cotação dos Correios e gateway de pagamentos serão integrados no backend pelo proprietário.
                   </p>
                 </div>
 
@@ -316,7 +316,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                         </h4>
                       </div>
                       <p className="text-xs text-[#766D64]">
-                        Stepper de etapas (Carrinho → Endereço → Pagamento → Confirmação), preenchimento automático por CEP, opções de frete, Pix com QR code e baixa automática de estoque.
+                        Stepper de etapas (Carrinho → Endereço → Pagamento → Confirmação), formulário completo, Pix e Cartão com tratamento transparente e sem simulações falsas de cobrança.
                       </p>
                     </div>
                     <button
@@ -401,9 +401,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <div className="p-3.5 rounded-2xl bg-[#F8F4ED] border border-[#E7DED3] flex items-start gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2A211B]">Controle Dinâmico de Estoque</p>
+                      <p className="font-bold text-[#2A211B]">Integridade de Estoque & Catálogo</p>
                       <p className="text-[11px] text-[#766D64] mt-0.5">
-                        Badges de estoque baixo (&quot;Apenas 3 restantes&quot;), trava de quantidade máxima e baixa após compra.
+                        Diferenciação clara entre carregamento, saldo confirmado e disponibilidade não confirmada, sem inventar unidades.
                       </p>
                     </div>
                   </div>

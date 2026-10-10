@@ -63,13 +63,8 @@ export const CartItemCard: React.FC<CartItemCardProps> = ({
 
       </div>
 
-      {/* Middle & Right: In stock badge, Stepper, Subtotal, Trash */}
+      {/* Stepper, Subtotal, Trash */}
       <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#E7DED3]/60">
-        
-        {/* Badge: Em estoque */}
-        <span className="hidden md:inline-block px-2.5 py-1 rounded-full bg-[#E6F4EA] text-[#137333] text-[10px] font-semibold tracking-wide shrink-0">
-          Em estoque
-        </span>
 
         {/* Stepper [ - ] 1 [ + ] */}
         <div className="flex items-center border border-[#E7DED3] rounded-xl bg-[#F8F4ED]/60 overflow-hidden shrink-0">

@@ -2,7 +2,7 @@ import React from 'react';
 import { Check, Flame, AlertCircle } from 'lucide-react';
 
 interface BadgeEstoqueProps {
-  availableUnits: number;
+  availableUnits?: number | null;
   showDetailed?: boolean;
   className?: string;
 }
@@ -12,6 +12,17 @@ export const BadgeEstoque: React.FC<BadgeEstoqueProps> = ({
   showDetailed = true,
   className = '',
 }) => {
+  if (availableUnits === undefined || availableUnits === null) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200 select-none ${className}`}
+        aria-label="Disponibilidade sob consulta"
+      >
+        <span>Consulte disponibilidade</span>
+      </span>
+    );
+  }
+
   if (availableUnits <= 0) {
     return (
       <span
