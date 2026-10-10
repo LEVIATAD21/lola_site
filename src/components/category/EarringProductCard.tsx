@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Star, ShoppingBag } from 'lucide-react';
+import { Heart, ShoppingBag } from 'lucide-react';
 import { Product } from '../../data/mockData';
 import { BadgeEstoque } from '../BadgeEstoque';
 import { getProductStock } from '../../services/api';
@@ -55,11 +55,6 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
       <div className="bg-white rounded-2xl overflow-hidden border border-[#E7DED3] hover:border-[#C49A5A]/50 shadow-xs hover:shadow-md transition-all duration-300 p-4 flex flex-col sm:flex-row gap-5 items-center group">
         {/* Image */}
         <div className="relative w-full sm:w-44 aspect-square bg-[#F1E8DC] rounded-xl overflow-hidden shrink-0">
-          {product.badge && (
-            <span className="absolute top-2.5 left-2.5 z-10 px-2 py-0.5 rounded-full bg-[#2A211B] text-white text-[10px] font-semibold tracking-wide">
-              {product.badge}
-            </span>
-          )}
           <button
             onClick={() => onSelectProduct(product)}
             className="w-full h-full block focus:outline-none cursor-pointer"
@@ -87,14 +82,6 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
 
         {/* Info */}
         <div className="flex-1 min-w-0 space-y-2 text-left w-full">
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center text-[#C49A5A]" title="Avaliação ilustrativa do catálogo">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-3 h-3 fill-[#C49A5A]" />
-              ))}
-            </div>
-          </div>
-
           <h3
             onClick={() => onSelectProduct(product)}
             className="font-medium text-base text-[#241F1B] hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -159,13 +146,6 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
       
       {/* Image Container with Badges and Favorite Button */}
       <div className="relative aspect-square bg-[#F1E8DC] overflow-hidden">
-        
-        {/* Badge on top left if available */}
-        {product.badge && (
-          <span className="absolute top-3 left-3 z-10 px-2.5 py-0.5 rounded-full bg-[#2A211B] text-white text-[10px] font-semibold tracking-wide shadow-xs">
-            {product.badge}
-          </span>
-        )}
 
         {/* Product image with click trigger */}
         <button
@@ -210,15 +190,6 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
           >
             {product.name}
           </h3>
-
-          {/* Rating stars matching reference */}
-          <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
-            <div className="flex items-center text-[#C49A5A]">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-3 h-3 fill-[#C49A5A]" />
-              ))}
-            </div>
-          </div>
 
           {/* Price and Stock Badge */}
           <div className="flex items-center justify-between pt-0.5">

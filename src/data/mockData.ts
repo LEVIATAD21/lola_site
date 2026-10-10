@@ -6,16 +6,12 @@ export interface Product {
   originalPrice?: number;
   image: string;
   description: string;
-  badge?: 'Mais vendido' | 'Novo' | 'Lançamento';
   isFeatured: boolean;
-  rating?: number;
-  reviewCount?: number;
   // Category specific filter tags
   earringType?: 'Argolas' | 'Pontos de luz' | 'Ear cuffs' | 'Estilo minimalista' | 'Com pedras' | 'Tendências';
   color?: 'Dourado' | 'Prateado' | 'Rosé' | 'Preto' | 'Colorido';
   material?: 'Aço inox' | 'Aço cirúrgico' | 'Com zircônia' | 'Pérola artificial';
   isNewArrival?: boolean;
-  salesCount?: number;
 }
 
 export interface Category {
@@ -124,14 +120,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 49.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Argola em aço inoxidável com acabamento polido espelhado e fecho click anatômico. Resistente, hipoalergênica e atemporal.',
-    badge: 'Mais vendido',
-    rating: 5,
-    reviewCount: 124,
     earringType: 'Argolas',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 380,
   },
   {
     id: 'brinco-2',
@@ -140,15 +132,11 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 39.90,
     image: '/src/assets/images/earrings_heart_stud_1791580831036.jpg',
     description: 'Brinco delicado em formato de coração em aço inox com banho de ouro 18k e tarraxa confortável.',
-    badge: 'Novo',
-    rating: 5,
-    reviewCount: 86,
     earringType: 'Estilo minimalista',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
     isNewArrival: true,
-    salesCount: 290,
   },
   {
     id: 'brinco-3',
@@ -157,13 +145,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 54.90,
     image: '/src/assets/images/earrings_twisted_hoop_1791580841517.jpg',
     description: 'Argola clássica com textura torcida entrelaçada, brilho facetado e fecho italiano firme e seguro.',
-    rating: 5,
-    reviewCount: 72,
     earringType: 'Argolas',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 240,
   },
   {
     id: 'brinco-4',
@@ -172,13 +157,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 59.90,
     image: '/src/assets/images/earrings_ear_cuff_1791580851230.jpg',
     description: 'Ear cuff anatômico ajustável com micro cravação de zircônias cúbicas brilhantes sobre aço cirúrgico.',
-    rating: 5,
-    reviewCount: 58,
     earringType: 'Ear cuffs',
     color: 'Dourado',
     material: 'Com zircônia',
     isFeatured: true,
-    salesCount: 210,
   },
   {
     id: 'brinco-5',
@@ -187,13 +169,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 44.90,
     image: '/src/assets/images/earrings_teardrop_1791580862381.jpg',
     description: 'Design escultural contemporâneo em forma de gota suave, ultra leve e elegante para todos os momentos.',
-    rating: 5,
-    reviewCount: 41,
     earringType: 'Estilo minimalista',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 195,
   },
   {
     id: 'brinco-6',
@@ -202,13 +181,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 34.90,
     image: '/src/assets/images/earrings_ear_cuff_1791580851230.jpg',
     description: 'Clássico ponto de luz solitário com zircônia de alta refração em caixa quadrada polida em aço inoxidável.',
-    rating: 5,
-    reviewCount: 112,
     earringType: 'Pontos de luz',
     color: 'Dourado',
     material: 'Com zircônia',
     isFeatured: true,
-    salesCount: 350,
   },
   {
     id: 'brinco-7',
@@ -217,13 +193,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 69.90,
     image: '/src/assets/images/earrings_twisted_hoop_1791580841517.jpg',
     description: 'Argola cravejada na parte frontal com zircônias cristalinas para um brilho sofisticado e refinado.',
-    rating: 5,
-    reviewCount: 93,
     earringType: 'Argolas',
     color: 'Dourado',
     material: 'Com zircônia',
     isFeatured: true,
-    salesCount: 310,
   },
   {
     id: 'brinco-8',
@@ -232,13 +205,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 42.90,
     image: '/src/assets/images/earrings_heart_stud_1791580831036.jpg',
     description: 'Coração em relevo com acabamento martelado artesanal, conferindo reflexos dourados únicos.',
-    rating: 5,
-    reviewCount: 67,
     earringType: 'Estilo minimalista',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 180,
   },
   {
     id: 'brinco-9',
@@ -247,13 +217,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 59.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Chunky hoop moderna de tubo largo, pesada no visual mas leve e oca na orelha para conforto máximo.',
-    rating: 5,
-    reviewCount: 76,
     earringType: 'Argolas',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 225,
   },
   {
     id: 'brinco-10',
@@ -262,13 +229,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 56.90,
     image: '/src/assets/images/earrings_teardrop_1791580862381.jpg',
     description: 'Pêndulo de gota esbelta com movimento fluido e pino anatômico antialérgico.',
-    rating: 5,
-    reviewCount: 49,
     earringType: 'Tendências',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: true,
-    salesCount: 160,
   },
   {
     id: 'brinco-11',
@@ -277,15 +241,11 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 46.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Argola bicolore com esmaltação preta brilhante sobre aço cirúrgico dourado, acabamento de alta joalheria.',
-    badge: 'Lançamento',
-    rating: 5,
-    reviewCount: 38,
     earringType: 'Tendências',
     color: 'Preto',
     material: 'Aço inox',
     isFeatured: true,
     isNewArrival: true,
-    salesCount: 140,
   },
   {
     id: 'brinco-12',
@@ -294,13 +254,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 49.90,
     image: '/src/assets/images/earrings_pearl_1791580874887.jpg',
     description: 'Pérola barroca artificial com lustre nacarado e base em aço inoxidável dourado resistente.',
-    rating: 5,
-    reviewCount: 91,
     earringType: 'Estilo minimalista',
     color: 'Dourado',
     material: 'Pérola artificial',
     isFeatured: true,
-    salesCount: 280,
   },
   // Additional catalog items for pagination & alternative colors/materials
   {
@@ -310,13 +267,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 44.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Argola clássica em aço inoxidável prata polida com acabamento espelhado e fecho click.',
-    rating: 5,
-    reviewCount: 52,
     earringType: 'Argolas',
     color: 'Prateado',
     material: 'Aço inox',
     isFeatured: false,
-    salesCount: 175,
   },
   {
     id: 'brinco-14',
@@ -325,13 +279,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 29.90,
     image: '/src/assets/images/earrings_ear_cuff_1791580851230.jpg',
     description: 'Ponto de luz delicado em aço cirúrgico prateado com pedra solitária cristal.',
-    rating: 5,
-    reviewCount: 64,
     earringType: 'Pontos de luz',
     color: 'Prateado',
     material: 'Aço cirúrgico',
     isFeatured: false,
-    salesCount: 215,
   },
   {
     id: 'brinco-15',
@@ -340,13 +291,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 52.90,
     image: '/src/assets/images/earrings_teardrop_1791580862381.jpg',
     description: 'Brinco com banho em ouro rosé e design orgânico acetinado.',
-    rating: 5,
-    reviewCount: 33,
     earringType: 'Estilo minimalista',
     color: 'Rosé',
     material: 'Aço inox',
     isFeatured: false,
-    salesCount: 120,
   },
   {
     id: 'brinco-16',
@@ -355,13 +303,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 49.90,
     image: '/src/assets/images/earrings_ear_cuff_1791580851230.jpg',
     description: 'Ear cuff com dois aros entrelaçados em aço cirúrgico polido.',
-    rating: 5,
-    reviewCount: 47,
     earringType: 'Ear cuffs',
     color: 'Prateado',
     material: 'Aço cirúrgico',
     isFeatured: false,
-    salesCount: 155,
   },
   {
     id: 'brinco-17',
@@ -370,13 +315,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 64.90,
     image: '/src/assets/images/earrings_twisted_hoop_1791580841517.jpg',
     description: 'Argola cravejada com micro zircônias coloridas em degradê suave.',
-    rating: 5,
-    reviewCount: 29,
     earringType: 'Com pedras',
     color: 'Colorido',
     material: 'Com zircônia',
     isFeatured: false,
-    salesCount: 110,
   },
   {
     id: 'brinco-18',
@@ -385,13 +327,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 49.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Tubo cilíndrico polido com fecho invisível e acabamento impecável.',
-    rating: 5,
-    reviewCount: 61,
     earringType: 'Argolas',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: false,
-    salesCount: 190,
   },
   {
     id: 'brinco-19',
@@ -400,13 +339,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 38.90,
     image: '/src/assets/images/earrings_heart_stud_1791580831036.jpg',
     description: 'Estrela em aço inox dourado com caimento assimétrico delicado.',
-    rating: 5,
-    reviewCount: 44,
     earringType: 'Estilo minimalista',
     color: 'Dourado',
     material: 'Aço inox',
     isFeatured: false,
-    salesCount: 145,
   },
   {
     id: 'brinco-20',
@@ -415,13 +351,10 @@ export const EARRINGS_CATALOG: Product[] = [
     price: 36.90,
     image: '/src/assets/images/earrings_ear_cuff_1791580851230.jpg',
     description: 'Zircônia formato navete com engaste moderno de duas garras.',
-    rating: 5,
-    reviewCount: 39,
     earringType: 'Pontos de luz',
     color: 'Dourado',
     material: 'Com zircônia',
     isFeatured: false,
-    salesCount: 130,
   },
 ];
 
@@ -544,8 +477,6 @@ export const CART_RECOMMENDED_PRODUCTS: Product[] = [
     price: 59.90,
     image: '/src/assets/images/product_earrings_1791578709776.jpg',
     description: 'Chunky hoop moderna de tubo largo em aço inoxidável dourado.',
-    rating: 4.8,
-    reviewCount: 76,
     isFeatured: true,
   },
   {
@@ -555,8 +486,6 @@ export const CART_RECOMMENDED_PRODUCTS: Product[] = [
     price: 44.90,
     image: '/src/assets/images/product_necklace_1791578719682.jpg',
     description: 'Corrente fina com pingente geométrico sutil e fecho seguro.',
-    rating: 4.7,
-    reviewCount: 52,
     isFeatured: true,
   },
   {
@@ -566,8 +495,6 @@ export const CART_RECOMMENDED_PRODUCTS: Product[] = [
     price: 39.90,
     image: '/src/assets/images/product_bracelets_1791578728452.jpg',
     description: 'Pulseira de elos finos com berloques delicados e extensor.',
-    rating: 4.6,
-    reviewCount: 38,
     isFeatured: true,
   },
   {
@@ -577,8 +504,6 @@ export const CART_RECOMMENDED_PRODUCTS: Product[] = [
     price: 34.90,
     image: '/src/assets/images/earrings_heart_stud_1791580831036.jpg',
     description: 'Brinco delicado em formato de coração em aço inox.',
-    rating: 4.9,
-    reviewCount: 102,
     isFeatured: true,
   },
   {
@@ -588,8 +513,6 @@ export const CART_RECOMMENDED_PRODUCTS: Product[] = [
     price: 42.90,
     image: '/src/assets/images/product_rings_1791578737141.jpg',
     description: 'Aro duplo entrelaçado com acabamento polido de alto brilho.',
-    rating: 4.7,
-    reviewCount: 61,
     isFeatured: true,
   },
 ];

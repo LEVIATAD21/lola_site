@@ -8,7 +8,8 @@ import { WhatsAppModal } from '../product/WhatsAppModal';
 import { ProductEditorialBanner } from '../product/ProductEditorialBanner';
 import { CartItem } from '../../types';
 import { Product, CART_RECOMMENDED_PRODUCTS } from '../../data/mockData';
-import { ChevronLeft, ChevronRight, Heart, Star, ShoppingBag, ArrowRight } from 'lucide-react';
+import { getCouponDiscount, getCouponPercentage } from '../../data/coupons';
+import { ChevronLeft, ChevronRight, Heart, ArrowRight } from 'lucide-react';
 
 interface CheckoutPageProps {
   items: CartItem[];
@@ -69,7 +70,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   });
 
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const discountAmount = appliedCoupon === 'LOLA10' ? subtotal * 0.1 : appliedCoupon === 'BEMVINDA' ? subtotal * 0.15 : 0;
+  const discountAmount = getCouponDiscount(appliedCoupon, subtotal);
+  // Frete e embalagem: valores demonstrativos de protótipo (sem cotação oficial de transportadora)
   const shippingPrice = subtotal >= 150 ? 0 : 19.90;
   const giftWrapPrice = hasGiftWrap ? 9.90 : 0;
   const totalAmount = Math.max(0, subtotal + shippingPrice + giftWrapPrice - discountAmount);
@@ -87,8 +89,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     // Integração oficial de CEP será conectada no backend pelo proprietário
   };
 
-  const handleApplyCoupon = (code: string) => {
-    setAppliedCoupon(code);
+  const handleApplyCoupon = (code: string): boolean => {
+    const clean = code.trim().toUpperCase();
+    if (!getCouponPercentage(clean)) return false;
+    setAppliedCoupon(clean);
+    return true;
   };
 
   const handleSubmitOrder = () => {
@@ -280,14 +285,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                         >
                           {prod.name}
                         </h3>
-
-                        <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
-                          <div className="flex items-center text-[#C49A5A]">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className="w-2.5 h-2.5 fill-[#C49A5A]" />
-                            ))}
-                          </div>
-                        </div>
 
                         <p className="font-semibold text-sm text-[#241F1B] tabular-nums pt-0.5">
                           R$ {prod.price.toFixed(2).replace('.', ',')}

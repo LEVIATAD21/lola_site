@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { useState, useEffect } from 'react';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { SiteHeader } from './components/SiteHeader';
@@ -26,7 +21,7 @@ import { ReportModal } from './components/ReportModal';
 import { FileText } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { CartItem, ToastMessage } from './types';
-import { deductStock } from './services/api';
+import { getProductStock } from './services/api';
 
 export default function App() {
   // Inicialização segura de rota a partir de window.location.pathname
@@ -230,18 +225,54 @@ export default function App() {
     }
   };
 
-  // Add item to cart
-  const handleAddToCart = (product: Product, quantity = 1, size?: string) => {
+  // Add item to cart — sempre revalida o estoque no servidor antes de registrar
+  const handleAddToCart = async (product: Product, quantity = 1, size?: string) => {
     if (!product || quantity <= 0) return;
     const itemKey = size ? `${product.id}-${size}` : product.id;
     const variantLabel = size || 'Único';
 
+    const stock = await getProductStock(product.id);
+    if (!stock) {
+      addToast(
+        'error',
+        'Estoque não confirmado',
+        `Não foi possível confirmar a disponibilidade de ${product.name}. Fale com a loja pelo WhatsApp.`
+      );
+      return;
+    }
+    if (stock.disponivel <= 0) {
+      addToast('error', 'Produto esgotado', `${product.name} não possui unidades disponíveis no momento.`);
+      return;
+    }
+
+    const existing = cartItems.find((item) => item.id === itemKey);
+    const currentQty = existing ? existing.quantity : 0;
+    let finalQty = quantity;
+
+    if (currentQty + quantity > stock.disponivel) {
+      const allowed = stock.disponivel - currentQty;
+      if (allowed <= 0) {
+        addToast(
+          'error',
+          'Limite de estoque atingido',
+          `Só restam ${stock.disponivel} un. de ${product.name} e elas já estão na sua sacola.`
+        );
+        return;
+      }
+      finalQty = allowed;
+      addToast(
+        'info',
+        'Quantidade ajustada ao estoque',
+        `Adicionamos apenas ${allowed} un. de ${product.name} (disponível: ${stock.disponivel} un.).`
+      );
+    }
+
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === itemKey);
-      if (existing) {
+      const existingItem = prev.find((item) => item.id === itemKey);
+      if (existingItem) {
         return prev.map((item) =>
-          item.id === existing.id
-            ? { ...item, quantity: item.quantity + quantity }
+          item.id === existingItem.id
+            ? { ...item, quantity: item.quantity + finalQty, inStock: true }
             : item
         );
       }
@@ -258,7 +289,7 @@ export default function App() {
           color: product.color || 'Dourado',
           material: product.material || 'Aço inox',
           inStock: true,
-          quantity,
+          quantity: finalQty,
         },
       ];
     });
@@ -266,7 +297,7 @@ export default function App() {
     addToast(
       'success',
       'Adicionado à sacola!',
-      `${quantity}x ${product.name} (R$ ${(product.price * quantity).toFixed(2).replace('.', ',')})`
+      `${finalQty}x ${product.name} (R$ ${(product.price * finalQty).toFixed(2).replace('.', ',')})`
     );
   };
 

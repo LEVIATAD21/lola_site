@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CreditCard, QrCode, Barcode, ArrowLeft, ArrowRight, ShieldCheck, Copy, Check } from 'lucide-react';
+import React from 'react';
+import { CreditCard, QrCode, Barcode, ArrowLeft, ArrowRight } from 'lucide-react';
 
 export type PaymentType = 'credit_card' | 'pix' | 'boleto';
 
@@ -32,16 +32,8 @@ export const CheckoutPaymentMethod: React.FC<CheckoutPaymentMethodProps> = ({
   isSubmitting = false,
   termsError = false,
 }) => {
-  const [copiedPix, setCopiedPix] = useState(false);
-
   const update = (field: keyof PaymentData, val: any) => {
     onChange({ ...paymentData, [field]: val });
-  };
-
-  const handleCopyPix = () => {
-    navigator.clipboard?.writeText('00020126580014br.gov.bcb.pix0136lola-acessorios-demonstrativo@pix.com.br5204000053039865405164.705802BR5925LOLA ACO INOX E ACESSOR6009SAO PAULO62070503***6304E8A2');
-    setCopiedPix(true);
-    setTimeout(() => setCopiedPix(false), 2500);
   };
 
   return (

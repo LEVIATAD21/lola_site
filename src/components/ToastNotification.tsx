@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Heart, Info, X } from 'lucide-react';
+import { CheckCircle2, Heart, Info, X, AlertCircle } from 'lucide-react';
 import { ToastMessage } from '../types';
 
 interface ToastNotificationProps {
@@ -22,6 +22,8 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ toasts, on
               <Heart className="w-4 h-4 text-[#C49A5A] fill-[#C49A5A]" />
             ) : toast.type === 'success' ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            ) : toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-red-400" />
             ) : (
               <Info className="w-4 h-4 text-[#C49A5A]" />
             )}

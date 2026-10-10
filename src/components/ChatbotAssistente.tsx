@@ -128,7 +128,7 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
             </div>
             <div className="text-left hidden sm:block">
               <span className="text-[10px] tracking-widest uppercase font-semibold text-[#DCC7B0] block">
-                Atendimento IA 24/7
+                Atendimento 24/7
               </span>
               <span className="text-xs font-serif-brand font-medium tracking-wide">
                 Dúvidas & Estoque

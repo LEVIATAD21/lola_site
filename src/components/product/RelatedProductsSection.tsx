@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Heart, Star, ShoppingBag } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Heart, ShoppingBag } from 'lucide-react';
 import { Product } from '../../data/mockData';
 
 interface RelatedProductsSectionProps {
@@ -127,15 +127,6 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({
                       >
                         {product.name}
                       </h3>
-
-                      {/* Stars & Rating */}
-                      <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
-                        <div className="flex items-center text-[#C49A5A]">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className="w-2.5 h-2.5 fill-[#C49A5A]" />
-                          ))}
-                        </div>
-                      </div>
 
                       <p className="font-semibold text-sm text-[#241F1B] tabular-nums pt-0.5">
                         R$ {product.price.toFixed(2).replace('.', ',')}

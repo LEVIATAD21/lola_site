@@ -8,7 +8,7 @@ interface CheckoutOrderSummaryProps {
   shippingPrice: number | null;
   discountAmount: number;
   appliedCoupon?: string | null;
-  onApplyCoupon: (code: string) => void;
+  onApplyCoupon: (code: string) => boolean;
   onRemoveItem: (id: string) => void;
   onFinalizeOrder: () => void;
   onOpenWhatsApp: () => void;
@@ -31,7 +31,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
 }) => {
   const [isItemsExpanded, setIsItemsExpanded] = useState(true);
   const [couponInput, setCouponInput] = useState('');
-  const [couponFeedback, setCouponFeedback] = useState('');
+  const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const giftWrapCost = hasGiftWrap ? 9.90 : 0;
   const currentShipping = shippingPrice !== null ? shippingPrice : 0;
@@ -41,10 +41,15 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
     if (!couponInput.trim()) return;
-    onApplyCoupon(couponInput.trim().toUpperCase());
-    setCouponFeedback(`Cupom ${couponInput.trim().toUpperCase()} aplicado!`);
+    const code = couponInput.trim().toUpperCase();
+    const ok = onApplyCoupon(code);
+    setCouponFeedback(
+      ok
+        ? { type: 'success', message: `Cupom ${code} aplicado!` }
+        : { type: 'error', message: `Cupom ${code} inválido ou expirado.` }
+    );
     setCouponInput('');
-    setTimeout(() => setCouponFeedback(''), 3000);
+    setTimeout(() => setCouponFeedback(null), 3000);
   };
 
   return (
@@ -128,7 +133,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
           </div>
 
           <div className="flex justify-between">
-            <span className="text-[#766D64]">Frete</span>
+            <span className="text-[#766D64]">Frete (estimativa)</span>
             <span className="font-medium">
               {shippingPrice === null ? (
                 'A calcular'
@@ -153,6 +158,10 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
               <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
             </div>
           )}
+
+          <p className="text-[10px] text-[#766D64] leading-snug pt-1">
+            Frete e embalagem são valores demonstrativos de protótipo. A cotação oficial com transportadora será confirmada após a compra.
+          </p>
         </div>
 
         {/* Total and Installments */}
@@ -194,7 +203,13 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
             </button>
           </div>
           {couponFeedback && (
-            <p className="text-[11px] text-emerald-700 font-medium">{couponFeedback}</p>
+            <p
+              className={`text-[11px] font-medium ${
+                couponFeedback.type === 'error' ? 'text-red-600' : 'text-emerald-700'
+              }`}
+            >
+              {couponFeedback.message}
+            </p>
           )}
         </form>
 
@@ -245,7 +260,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
             </h4>
           </div>
           <p className="text-[11px] text-[#766D64] leading-relaxed">
-            Embalagem para presente disponível na finalização da compra (+ R$ 9,90).
+            Embalagem para presente disponível na finalização da compra (+ R$ 9,90, valor demonstrativo).
           </p>
 
           <div className="pt-1">

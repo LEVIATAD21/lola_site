@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Trash2, ChevronLeft, ChevronRight, ArrowRight, Heart, Star, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Trash2, ChevronLeft, ChevronRight, ArrowRight, Heart, ShoppingBag } from 'lucide-react';
 import { CartBanner } from './CartBanner';
 import { CartItemCard } from './CartItemCard';
 import { CartSummaryCard } from './CartSummaryCard';
@@ -240,14 +240,6 @@ export const CartPage: React.FC<CartPageProps> = ({
                         >
                           {prod.name}
                         </h3>
-
-                        <div className="flex items-center gap-1.5" title="Demonstração visual do catálogo">
-                          <div className="flex items-center text-[#C49A5A]">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className="w-2.5 h-2.5 fill-[#C49A5A]" />
-                            ))}
-                          </div>
-                        </div>
 
                         <p className="font-semibold text-sm text-[#241F1B] tabular-nums pt-0.5">
                           R$ {prod.price.toFixed(2).replace('.', ',')}

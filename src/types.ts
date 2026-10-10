@@ -1,6 +1,6 @@
 export interface ToastMessage {
   id: string;
-  type: 'success' | 'info' | 'favorite';
+  type: 'success' | 'info' | 'favorite' | 'error';
   title: string;
   description?: string;
 }

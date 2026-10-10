@@ -34,7 +34,7 @@ export const EarringsCategoryPage: React.FC<EarringsCategoryPageProps> = ({
     materials: [],
   });
 
-  const [sortBy, setSortBy] = useState<string>('popular');
+  const [sortBy, setSortBy] = useState<string>('recent');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
@@ -127,8 +127,6 @@ export const EarringsCategoryPage: React.FC<EarringsCategoryPageProps> = ({
   const sortedProducts = useMemo(() => {
     const list = [...filteredProducts];
     switch (sortBy) {
-      case 'popular':
-        return list.sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0));
       case 'recent':
         return list.sort((a, b) => (b.isNewArrival ? 1 : 0) - (a.isNewArrival ? 1 : 0));
       case 'price-low':
@@ -244,7 +242,6 @@ export const EarringsCategoryPage: React.FC<EarringsCategoryPageProps> = ({
                       aria-label="Critério de ordenação de produtos"
                       className="text-xs font-medium text-[#241F1B] bg-white border border-[#E7DED3] rounded-xl px-3 py-2 focus:outline-none focus:border-[#C49A5A] cursor-pointer"
                     >
-                      <option value="popular">Mais vendidos</option>
                       <option value="recent">Mais recentes</option>
                       <option value="price-low">Menor preço</option>
                       <option value="price-high">Maior preço</option>

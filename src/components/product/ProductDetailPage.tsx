@@ -160,6 +160,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
       {/* 4. Detailed Information Section (Mini Gallery + Tabs + Card) */}
       <ProductDetailsSection
+        product={product}
         images={galleryImages}
         onOpenAllPhotos={() => setIsGlobalLightboxOpen(true)}
         selectedSize={selectedSize}

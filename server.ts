@@ -30,7 +30,7 @@ const INITIAL_STOCK: Record<string, StockItem> = {
   'prod-conjunto-1': { productId: 'prod-conjunto-1', total: 6, reservado: 1, vendido: 3, disponivel: 2 },
 };
 
-// Store catalog summary for grounding Gemini
+// Catálogo resumido para contexto do assistente
 const CATALOG_INFO = [
   { id: 'brinco-1', name: 'Brinco Argola Lisa', category: 'Brincos', price: 49.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 8, badge: 'Mais vendido', desc: 'Argola clássica lisa com fecho click seguro e banho dourado de alta durabilidade.' },
   { id: 'brinco-2', name: 'Brinco Coração Pequeno', category: 'Brincos', price: 39.9, material: 'Aço cirúrgico', color: 'Dourado', disponivel: 4, badge: 'Lançamento', desc: 'Brinco ponto fixo em formato de coração minimalista e delicado.' },
@@ -245,7 +245,7 @@ Pergunta da cliente: "${pergunta}"
         });
       }
     } catch (err) {
-      console.error('Error invoking Gemini:', err);
+      console.error('Error invoking AI model:', err);
     }
 
     // Graceful intelligent fallback if API key is not configured or fails

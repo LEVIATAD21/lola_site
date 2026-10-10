@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, ShoppingBag, MessageCircle, Truck, ShieldCheck, RefreshCw, CreditCard, Check } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Truck, ShieldCheck, RefreshCw, CreditCard, Check } from 'lucide-react';
 import { Product } from '../../data/mockData';
 import { BadgeEstoque } from '../BadgeEstoque';
 
@@ -48,29 +48,13 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
   return (
     <div className="w-full space-y-6 text-left">
       
-      {/* 1. Badge & Title & Ratings */}
+      {/* 1. Title & Stock badge */}
       <div className="space-y-3">
-        {product.badge && (
-          <span className="inline-block px-3 py-1 rounded-full bg-[#2A211B] text-white text-[11px] font-semibold tracking-wide">
-            {product.badge}
-          </span>
-        )}
-
         <h1 className="font-serif-brand text-3xl sm:text-4xl lg:text-5xl font-normal text-[#241F1B] tracking-tight leading-tight">
           {product.name}
         </h1>
 
-        {/* Rating stars & Stock badge */}
         <div className="flex flex-wrap items-center gap-3 pt-0.5">
-          <div className="flex items-center gap-2" title="Demonstração visual do catálogo">
-            <div className="flex items-center text-[#C49A5A]">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-4 h-4 fill-[#C49A5A]" />
-              ))}
-            </div>
-            <span className="text-xs text-[#766D64]">(Catálogo ilustrativo)</span>
-          </div>
-
           <BadgeEstoque availableUnits={availableUnits} />
         </div>
       </div>

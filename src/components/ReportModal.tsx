@@ -131,10 +131,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                     <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center mb-2">
                       <Cpu className="w-4 h-4" />
                     </div>
-                    <p className="text-xs text-[#766D64] uppercase font-bold tracking-wider">IA Assistente 24/7</p>
-                    <p className="text-2xl font-serif-brand font-bold text-[#2A211B] mt-0.5">Integrada</p>
+                    <p className="text-xs text-[#766D64] uppercase font-bold tracking-wider">Assistente Virtual</p>
+                    <p className="text-2xl font-serif-brand font-bold text-[#2A211B] mt-0.5">Protótipo</p>
                     <p className="text-[11px] text-[#766D64] mt-1">
-                      Widget com Gemini + Fallback inteligente, estoque em tempo real e links.
+                      Widget funcional com motor de respostas de regras. Modelo de IA opcional configurável no backend.
                     </p>
                   </div>
 
@@ -143,9 +143,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       <Database className="w-4 h-4" />
                     </div>
                     <p className="text-xs text-[#766D64] uppercase font-bold tracking-wider">APIs REST</p>
-                    <p className="text-2xl font-serif-brand font-bold text-[#2A211B] mt-0.5">Ativas</p>
+                    <p className="text-2xl font-serif-brand font-bold text-[#2A211B] mt-0.5">Protótipo</p>
                     <p className="text-[11px] text-[#766D64] mt-1">
-                      Endpoints de estoque (/api/estoque/:id, /api/estoque/atualizar) e catálogo.
+                      Endpoints de estoque e catálogo em memória (demonstrativos), sem persistência real de inventário.
                     </p>
                   </div>
                 </div>
@@ -166,23 +166,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
                 {/* Key features */}
                 <div className="p-4 rounded-2xl bg-[#F1E8DC]/40 border border-[#E7DED3] text-xs text-[#554D46] space-y-2">
-                  <p className="font-semibold text-[#2A211B]">🌟 Diferenciais implementados segundo o relatório:</p>
+                  <p className="font-semibold text-[#2A211B]">🌟 Diferenciais implementados (estado real do protótipo):</p>
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 list-none p-0">
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span><strong>Estoque em tempo real:</strong> badges dinâmicos e trava de excesso.</span>
+                      <span><strong>Estoque simulado:</strong> badges dinâmicos e trava de excesso sobre dados em memória.</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span><strong>Barra de Frete Grátis:</strong> cálculo progressivo em tempo real.</span>
+                      <span><strong>Barra de frete grátis:</strong> cálculo demonstrativo no front-end (sem cotação oficial).</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span><strong>Assistente de IA com Gemini:</strong> tira dúvidas sobre materiais e estoque.</span>
+                      <span><strong>Assistente virtual:</strong> widget com motor de regras; modelo de IA opcional via chave no backend.</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span><strong>Checkout transparente:</strong> Pix instantâneo, Cartão com parcelamento.</span>
+                      <span><strong>Fluxo de checkout:</strong> endereço, pagamento e confirmação — gateway ainda não conectado.</span>
                     </li>
                   </ul>
                 </div>
@@ -289,7 +289,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                         </h4>
                       </div>
                       <p className="text-xs text-[#766D64]">
-                        Barra progressiva de frete grátis (R$ 150,00), itens detalhados, embalagem para presente, cupom de desconto (LOLA10/BEMVINDA), carrossel de sugestões.
+                        Barra progressiva de frete grátis (R$ 150,00), itens detalhados, embalagem para presente, cupom de desconto (LOLA10/BEMVINDA/BRILHO5), carrossel de sugestões.
                       </p>
                     </div>
                     <button
@@ -338,7 +338,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <div className="space-y-4">
                 <div className="p-4 rounded-2xl bg-[#1E1713] text-[#DCC7B0] font-mono text-xs space-y-3">
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <span className="text-emerald-400 font-bold">API REST & Gemini Integration</span>
+                    <span className="text-amber-400 font-bold">APIs REST (protótipo em memória)</span>
                     <span className="text-[10px] text-white/50">Arquivo: server.ts</span>
                   </div>
 
@@ -346,28 +346,28 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                     <div className="p-2 bg-white/5 rounded-lg border border-white/5">
                       <span className="text-emerald-400 font-bold">GET</span> <span className="text-white">/api/estoque/:productId</span>
                       <p className="text-white/60 font-sans text-[11px] mt-1">
-                        Retorna estoque do produto: &#123; total, reservado, vendido, disponivel &#125;.
+                        Retorna estoque demonstrativo em memória: &#123; total, reservado, vendido, disponivel &#125;. Sem persistência real.
                       </p>
                     </div>
 
                     <div className="p-2 bg-white/5 rounded-lg border border-white/5">
                       <span className="text-amber-400 font-bold">POST</span> <span className="text-white">/api/estoque/atualizar</span>
                       <p className="text-white/60 font-sans text-[11px] mt-1">
-                        Abate unidades do estoque após confirmação de compra no Checkout.
+                        Baixa unidades na memória do servidor (demonstrativo). A baixa real de estoque depende do backend definitivo.
                       </p>
                     </div>
 
                     <div className="p-2 bg-white/5 rounded-lg border border-white/5">
                       <span className="text-emerald-400 font-bold">GET</span> <span className="text-white">/api/produtos</span>
                       <p className="text-white/60 font-sans text-[11px] mt-1">
-                        Catálogo consolidado com metadados de material, garantia e fotos.
+                        Catálogo de demonstração com metadados de material e fotos.
                       </p>
                     </div>
 
                     <div className="p-2 bg-white/5 rounded-lg border border-white/5">
                       <span className="text-purple-400 font-bold">POST</span> <span className="text-white">/api/ai/consulta</span>
                       <p className="text-white/60 font-sans text-[11px] mt-1">
-                        Aciona o modelo <code>gemini-2.5-flash</code> com contexto do produto atual, carrinho e FAQs da marca (não alucina estoque nem garantias).
+                        Assistente com motor de regras em português. Se uma chave de modelo de IA estiver configurada no servidor, a consulta é encaminhada a ela; caso contrário, responde pelo fallback local.
                       </p>
                     </div>
                   </div>
@@ -376,10 +376,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 <div className="p-4 rounded-2xl bg-[#F8F4ED] border border-[#E7DED3] text-xs text-[#554D46] space-y-2">
                   <p className="font-semibold text-[#2A211B]">🛡️ Regras de integridade aplicadas:</p>
                   <p>
-                    1. <strong>Validação em tempo real:</strong> O carrinho e a página de produto impedem o cliente de adicionar mais itens do que o saldo disponível retornado pelo endpoint.
+                    1. <strong>Validação de adição à sacola:</strong> O fluxo central de adição revalida o saldo pelo endpoint de estoque (dados de protótipo em memória) e bloqueia quantidades acima do disponível.
                   </p>
                   <p>
-                    2. <strong>Fallback de contingência:</strong> Se a chave de API do Gemini não estiver configurada no ambiente, o endpoint possui um motor inteligente de regras em português que responde dúvidas sobre aço 316L, água, alergias e estoque sem falhar.
+                    2. <strong>Fallback de contingência:</strong> Sem chave de modelo configurada ou com falha de rede, o assistente responde pelo motor de regras em português sobre aço, água, alergias e políticas da marca, sem simular integrações externas.
+                  </p>
+                  <p>
+                    3. <strong>Limitação atual:</strong> O inventário não é persistente e não representa o estoque real da loja até a integração do backend definitivo.
                   </p>
                 </div>
               </div>
@@ -401,9 +404,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <div className="p-3.5 rounded-2xl bg-[#F8F4ED] border border-[#E7DED3] flex items-start gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2A211B]">Integridade de Estoque & Catálogo</p>
+                      <p className="font-bold text-[#2A211B]">Estoque e Catálogo Honestos</p>
                       <p className="text-[11px] text-[#766D64] mt-0.5">
-                        Diferenciação clara entre carregamento, saldo confirmado e disponibilidade não confirmada, sem inventar unidades.
+                        Diferenciação clara entre saldo confirmado e disponibilidade não confirmada, sem inventar unidades nem avaliações.
                       </p>
                     </div>
                   </div>
@@ -441,9 +444,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <div className="p-3.5 rounded-2xl bg-[#F8F4ED] border border-[#E7DED3] flex items-start gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-[#2A211B]">Finalização com Pix e Cartão</p>
+                      <p className="font-bold text-[#2A211B]">Fluxo de Finalização (sem gateway)</p>
                       <p className="text-[11px] text-[#766D64] mt-0.5">
-                        Cálculo de parcelamento em até 3x sem juros, cópia de chave Pix e modal de pedido concluído.
+                        Seleção de Pix/Cartão/Boleto, parcelamento e modal de confirmação. Pix sem chave oficial até a integração do gateway.
                       </p>
                     </div>
                   </div>
@@ -456,7 +459,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           <div className="p-4 sm:p-5 bg-[#F8F4ED] border-t border-[#E7DED3] flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-[#766D64]">
               <Sparkles className="w-4 h-4 text-[#C49A5A]" />
-              <span>LOLA Aço Inox & Acessórios • Versão Executiva Auditada</span>
+              <span>LOLA Aço Inox & Acessórios • Protótipo Front-End (sem backend definitivo)</span>
             </div>
 
             <button

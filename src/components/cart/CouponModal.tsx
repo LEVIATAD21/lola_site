@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Tag, X, Check, AlertCircle } from 'lucide-react';
+import { VALID_COUPONS, COUPON_LIST } from '../../data/coupons';
 
 interface CouponModalProps {
   isOpen: boolean;
@@ -19,12 +20,6 @@ export const CouponModal: React.FC<CouponModalProps> = ({
 
   if (!isOpen) return null;
 
-  const validCoupons: Record<string, number> = {
-    LOLA10: 10,
-    BEMVINDA: 15,
-    BRILHO5: 5,
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanCode = code.trim().toUpperCase();
@@ -34,9 +29,10 @@ export const CouponModal: React.FC<CouponModalProps> = ({
       return;
     }
 
-    if (validCoupons[cleanCode]) {
+    const percentage = VALID_COUPONS[cleanCode];
+    if (percentage) {
       setError('');
-      onApplyCoupon(cleanCode, validCoupons[cleanCode]);
+      onApplyCoupon(cleanCode, percentage);
       onClose();
     } else {
       setError('Cupom não encontrado. A integração oficial com cupons promocionais será ativada pelo servidor.');
@@ -103,8 +99,11 @@ export const CouponModal: React.FC<CouponModalProps> = ({
           {/* Tips for demo testing */}
           <div className="p-3 bg-[#F8F4ED] rounded-xl border border-[#E7DED3] text-[11px] text-[#766D64] space-y-1">
             <p className="font-semibold text-[#241F1B]">Cupons disponíveis para teste:</p>
-            <p>• <strong>LOLA10</strong> — 10% de desconto no pedido</p>
-            <p>• <strong>BEMVINDA</strong> — 15% de desconto de boas-vindas</p>
+            {COUPON_LIST.map(({ code: couponCode, percentage }) => (
+              <p key={couponCode}>
+                • <strong>{couponCode}</strong> — {percentage}% de desconto no pedido
+              </p>
+            ))}
           </div>
 
           {appliedCoupon && (

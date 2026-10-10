@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Check, Images, Info } from 'lucide-react';
+import { Product } from '../../data/mockData';
 
 interface ProductDetailsSectionProps {
+  product: Product;
   images: string[];
   onOpenAllPhotos: () => void;
   selectedSize: string;
 }
 
 export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
+  product,
   images,
   onOpenAllPhotos,
   selectedSize,
@@ -15,12 +18,14 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
   const [activeTab, setActiveTab] = useState<'descricao' | 'especificacoes'>('descricao');
 
   const miniGalleryImages = images.slice(0, 4);
+  const materialLabel = product.material || 'Aço inox';
+  const colorLabel = product.color || 'Dourado';
 
   return (
     <section className="my-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* 1. Left Column: 2x2 Mini Photo Grid (lg:col-span-4) */}
           <div className="lg:col-span-4 space-y-3">
             <div className="grid grid-cols-2 gap-2.5">
@@ -50,7 +55,7 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
 
           {/* 2. Center Column: Tabs & Content (lg:col-span-5) */}
           <div className="lg:col-span-5 space-y-6 text-left">
-            
+
             {/* Tabs Header */}
             <div className="flex items-center gap-8 border-b border-[#E7DED3] pb-1">
               <button
@@ -79,40 +84,33 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
             {activeTab === 'descricao' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <h2 className="font-serif-brand text-2xl font-normal text-[#241F1B]">
-                  Elegância em todos os momentos
+                  {product.name}
                 </h2>
                 <p className="text-xs sm:text-sm text-[#766D64] leading-relaxed">
-                  O Brinco Argola Lisa é a escolha perfeita para quem busca um acessório versátil, moderno e atemporal. Com design clássico e acabamento impecável, ele valoriza qualquer look, do casual ao sofisticado.
+                  {product.description}
                 </p>
 
-                {/* 4 Checkmark items matching Design 03 */}
+                {/* Benefícios gerais da marca (aplicam-se a todas as peças) */}
                 <div className="space-y-2.5 pt-1">
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Design clássico e atemporal</span>
+                    <span>Hipoalergênica e à prova d'água</span>
                   </div>
 
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Leve e confortável</span>
+                    <span>Não escurece e mantém o brilho no dia a dia</span>
                   </div>
 
                   <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
                     <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3" />
                     </div>
-                    <span>Acabamento polido de alta qualidade</span>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-xs sm:text-sm text-[#241F1B]">
-                    <div className="w-5 h-5 rounded-full bg-[#2A211B] text-white flex items-center justify-center shrink-0">
-                      <Check className="w-3 h-3" />
-                    </div>
-                    <span>Ideal para o dia a dia e ocasiões especiais</span>
+                    <span>Acompanha garantia contra defeitos de fabricação</span>
                   </div>
                 </div>
               </div>
@@ -122,25 +120,24 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
             {activeTab === 'especificacoes' && (
               <div className="space-y-3.5 text-xs sm:text-sm text-[#241F1B] animate-in fade-in duration-200">
                 <div className="flex justify-between py-2 border-b border-[#E7DED3]">
-                  <span className="text-[#766D64]">Material Base</span>
-                  <span className="font-medium">Aço Inoxidável Cirúrgico 316L</span>
+                  <span className="text-[#766D64]">Categoria</span>
+                  <span className="font-medium">{product.category}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-[#E7DED3]">
-                  <span className="text-[#766D64]">Banho</span>
-                  <span className="font-medium">Ouro 18k PVD de Alta Resistência</span>
+                  <span className="text-[#766D64]">Material</span>
+                  <span className="font-medium">{materialLabel}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-[#E7DED3]">
-                  <span className="text-[#766D64]">Propriedades</span>
-                  <span className="font-medium">100% Hipoalergênico (Livre de Níquel)</span>
+                  <span className="text-[#766D64]">Cor</span>
+                  <span className="font-medium">{colorLabel}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-[#E7DED3]">
-                  <span className="text-[#766D64]">Tipo de Fecho</span>
-                  <span className="font-medium">Click Anatômico de Encaixe Seguro</span>
+                  <span className="text-[#766D64]">Tamanho selecionado</span>
+                  <span className="font-medium">{selectedSize}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-[#E7DED3]">
-                  <span className="text-[#766D64]">Garantia</span>
-                  <span className="font-medium">Garantia contra defeitos de fabricação</span>
-                </div>
+                <p className="text-[11px] text-[#766D64] leading-relaxed pt-1">
+                  Especificações técnicas complementares (peso, fecho e banho) serão confirmadas com a loja no atendimento — evitamos informar detalhes que não correspondem à peça escolhida.
+                </p>
               </div>
             )}
 
@@ -155,23 +152,19 @@ export const ProductDetailsSection: React.FC<ProductDetailsSectionProps> = ({
             <div className="space-y-2.5 text-xs text-[#241F1B]">
               <div className="flex justify-between py-1.5 border-b border-[#E7DED3]">
                 <span className="text-[#766D64]">Material</span>
-                <span className="font-medium">Aço inox</span>
+                <span className="font-medium">{materialLabel}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#E7DED3]">
                 <span className="text-[#766D64]">Cor</span>
-                <span className="font-medium">Dourado</span>
+                <span className="font-medium">{colorLabel}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#E7DED3]">
                 <span className="text-[#766D64]">Tamanho</span>
                 <span className="font-medium">{selectedSize}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#E7DED3]">
-                <span className="text-[#766D64]">Peso</span>
-                <span className="font-medium">Aprox. 4 g (o par)</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-[#E7DED3]">
-                <span className="text-[#766D64]">Fecho</span>
-                <span className="font-medium">Tarraxa</span>
+                <span className="text-[#766D64]">Categoria</span>
+                <span className="font-medium">{product.category}</span>
               </div>
             </div>
 
