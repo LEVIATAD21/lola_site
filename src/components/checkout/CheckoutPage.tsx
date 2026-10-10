@@ -80,11 +80,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   // Payment form state starts empty without pre-filled card or fake data
   const [paymentData, setPaymentData] = useState<PaymentData>({
     method: 'pix',
-    cardNumber: '',
-    cardName: '',
-    cardExpiry: '',
-    cardCvv: '',
-    installments: 1,
     acceptedTerms: false,
   });
 
@@ -221,14 +216,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       setCreatedOrder(result.order);
       setCurrentStep(4);
       setIsSuccessModalOpen(true);
-      setPaymentData((current) => ({
-        ...current,
-        cardNumber: '',
-        cardName: '',
-        cardExpiry: '',
-        cardCvv: '',
-        acceptedTerms: false,
-      }));
+      setPaymentData({ method: 'pix', acceptedTerms: false });
       onOrderCompleted?.(result.order);
       onClearCart();
     } catch {
