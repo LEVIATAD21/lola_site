@@ -7,7 +7,7 @@ import {
 import { join } from 'node:path';
 import { VALID_COUPONS } from '../data/coupons';
 
-export type PaymentMethod = 'credit_card' | 'pix' | 'boleto';
+export type PaymentMethod = 'pix' | 'boleto';
 export type ShippingOptionId = 'pac' | 'sedex' | 'transportadora';
 export interface OrderCatalogProduct { id: string; name: string; category: string; price: number; }
 export interface StockLookup { get(productId: string): { disponivel: number } | undefined; }
@@ -16,7 +16,7 @@ export interface DraftOrderLine {
   variant?: string; unitPriceCents: number; lineTotalCents: number;
 }
 export interface OrderCustomer {
-  fullName: string; phone: string; cep: string; street: string;
+  fullName: string; phone: string; cep: string; street: string; number: string;
   complement: string; neighborhood: string; city: string; state: string;
 }
 export interface StoredOrderDraft {
@@ -43,7 +43,7 @@ const STATES = new Set([
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
   'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
 ]);
-const PAYMENT_METHODS = new Set<PaymentMethod>(['credit_card', 'pix', 'boleto']);
+const PAYMENT_METHODS = new Set<PaymentMethod>(['pix', 'boleto']);
 const SHIPPING_OPTIONS = new Set<ShippingOptionId>(['pac', 'sedex', 'transportadora']);
 
 function cleanText(value: unknown, maxLength: number): string | null {
@@ -72,6 +72,7 @@ export function buildOrderDraft(
   const inputCustomer = raw.customer;
   const fullName = requiredText(inputCustomer.fullName, 3, 120);
   const street = requiredText(inputCustomer.street, 5, 180);
+  const number = requiredText(inputCustomer.number, 1, 20);
   const neighborhood = requiredText(inputCustomer.neighborhood, 1, 100);
   const city = requiredText(inputCustomer.city, 1, 100);
   const complement = cleanText(inputCustomer.complement ?? '', 120);
@@ -79,15 +80,18 @@ export function buildOrderDraft(
   const phone = typeof inputCustomer.phone === 'string' ? inputCustomer.phone.replace(/\D/g, '') : '';
   const cep = typeof inputCustomer.cep === 'string' ? inputCustomer.cep.replace(/\D/g, '') : '';
 
-  if (!fullName || !street || !neighborhood || !city || complement === null) {
-    return { ok: false, status: 400, error: 'Confira nome e endereço antes de continuar.' };
+  if (!fullName || !street || !number || !neighborhood || !city || complement === null) {
+    return { ok: false, status: 400, error: 'Confira nome, logradouro, número e endereço antes de continuar.' };
   }
   if (phone.length < 10 || phone.length > 11) return { ok: false, status: 400, error: 'Informe um telefone válido com DDD.' };
   if (cep.length !== 8) return { ok: false, status: 400, error: 'Informe um CEP com 8 dígitos.' };
   if (!state || !STATES.has(state)) return { ok: false, status: 400, error: 'Selecione um estado brasileiro válido.' };
   if (raw.termsAccepted !== true) return { ok: false, status: 400, error: 'É necessário aceitar os termos para registrar a solicitação.' };
+  if (raw.paymentMethod === 'credit_card') {
+    return { ok: false, status: 400, error: 'Pagamento por cartão indisponível: a integração segura com o provedor ainda não foi configurada.' };
+  }
   if (typeof raw.paymentMethod !== 'string' || !PAYMENT_METHODS.has(raw.paymentMethod as PaymentMethod)) {
-    return { ok: false, status: 400, error: 'Selecione uma forma de pagamento válida.' };
+    return { ok: false, status: 400, error: 'Selecione uma forma de pré-pedido válida.' };
   }
   if (typeof raw.giftWrap !== 'boolean') return { ok: false, status: 400, error: 'Opção de embalagem de presente inválida.' };
 
@@ -177,7 +181,7 @@ export function buildOrderDraft(
       shippingOptionId,
       termsAccepted: true,
       customer: {
-        fullName, phone, cep, street, complement, neighborhood, city, state,
+        fullName, phone, cep, street, number, complement, neighborhood, city, state,
       },
       items: lines,
       itemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
