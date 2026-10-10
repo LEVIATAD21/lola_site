@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Dependency audit
-        run: npm audit --audit-level=high
+        run: npm audit
 
       - name: Typecheck
         run: npm run lint
