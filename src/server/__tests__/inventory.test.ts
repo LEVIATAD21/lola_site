@@ -65,6 +65,14 @@ describe('InventoryStore', () => {
     expect(restarted.get('brinco-1')).toMatchObject({ vendido: 4, disponivel: 5 });
   });
 
+  it('cria o arquivo inicial de estoque quando o armazenamento ainda não existe', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-seed-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'inventory.json');
+    new InventoryStore(initial, file);
+    expect(JSON.parse(readFileSync(file, 'utf8'))['brinco-1'].disponivel).toBe(7);
+  });
+
   it('falha de forma segura se os dados persistidos estiverem inconsistentes', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-corrupt-'));
     tempDirs.push(dir);

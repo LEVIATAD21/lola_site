@@ -28,6 +28,7 @@ export class InventoryStore {
     );
     this.filePath = filePath;
     if (this.filePath && existsSync(this.filePath)) this.loadFromDisk();
+    else if (this.filePath) this.persist();
   }
 
   private isValidItem(id: string, value: unknown): value is StockItem {

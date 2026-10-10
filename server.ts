@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { InventoryStore } from './src/server/inventory';
+import { CATALOG_INFO } from './src/server/catalog';
 
 dotenv.config();
 
@@ -31,23 +32,18 @@ const INITIAL_STOCK: Record<string, StockItem> = {
   'prod-conjunto-1': { productId: 'prod-conjunto-1', total: 6, reservado: 1, vendido: 3, disponivel: 2 },
 };
 
+// IDs do catálogo sem estoque cadastrado começam indisponíveis.
+for (const product of CATALOG_INFO) {
+  if (!INITIAL_STOCK[product.id]) {
+    INITIAL_STOCK[product.id] = { productId: product.id, total: 0, reservado: 0, vendido: 0, disponivel: 0 };
+  }
+}
+
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
 
 // Catálogo resumido para contexto do assistente
-const CATALOG_INFO = [
-  { id: 'brinco-1', name: 'Brinco Argola Lisa', category: 'Brincos', price: 49.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 8, badge: 'Mais vendido', desc: 'Argola clássica lisa com fecho click seguro e banho dourado de alta durabilidade.' },
-  { id: 'brinco-2', name: 'Brinco Coração Pequeno', category: 'Brincos', price: 39.9, material: 'Aço cirúrgico', color: 'Dourado', disponivel: 4, badge: 'Lançamento', desc: 'Brinco ponto fixo em formato de coração minimalista e delicado.' },
-  { id: 'brinco-3', name: 'Brinco Argola Torcida', category: 'Brincos', price: 59.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 12, badge: 'Novo', desc: 'Design torcido sofisticado com brilho radiante em relevo.' },
-  { id: 'brinco-4', name: 'Brinco Ear Cuff Zircônia', category: 'Brincos', price: 54.9, material: 'Aço inoxidável com zircônias', color: 'Dourado', disponivel: 3, badge: 'Mais vendido', desc: 'Ear cuff moderno cravejado com micro zircônias de brilho cristalino.' },
-  { id: 'brinco-5', name: 'Brinco Gota Minimalista', category: 'Brincos', price: 44.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 6, badge: 'Novo', desc: 'Silhueta orgânica de gota polida com acabamento espelhado leve e confortável.' },
-  { id: 'brinco-6', name: 'Brinco Pérola Clássico', category: 'Brincos', price: 49.9, material: 'Aço inoxidável e pérola shell', color: 'Dourado', disponivel: 9, desc: 'Pérola selecionada de alto brilho com pino antialérgico em aço dourado.' },
-  { id: 'prod-colar-1', name: 'Colar Coração Madreperola', category: 'Colares', price: 59.9, material: 'Aço inoxidável 316L e madreperola', color: 'Dourado', disponivel: 10, badge: 'Destaque', desc: 'Corrente veneziana fina com pingente de coração com madrepérola natural.' },
-  { id: 'prod-pulseira-1', name: 'Pulseira Corrente Elos', category: 'Pulseiras', price: 54.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 7, badge: 'Destaque', desc: 'Elos clássicos polidos com extensor ajustável para pulsos de 16 a 20 cm.' },
-  { id: 'prod-anel-1', name: 'Anel Duplo Torcido', category: 'Anéis', price: 39.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 5, badge: 'Destaque', desc: 'Design aberto regulável com visual de dois aros sobrepostos.' },
-  { id: 'prod-conjunto-1', name: 'Conjunto Aurora Dourado', category: 'Conjuntos', price: 89.9, material: 'Aço inoxidável 316L', color: 'Dourado', disponivel: 2, badge: 'Especial', desc: 'Kit coordenado com brinco de argola torcida e colar elos delicado.' },
-];
-
+// Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
 const STORE_FAQS = `
 SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 - Catálogo: use os nomes, descrições, materiais e preços fornecidos pelo catálogo vigente.
@@ -278,8 +274,11 @@ Pergunta da cliente: "${pergunta}"
         fallbackAnswer = `O catálogo registra ${activeProduct.estoqueDisponivel} unidades disponíveis de ${activeProduct.nome}. O prazo de envio ainda precisa ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: activeProduct.id, titulo: activeProduct.nome, link: `/produto/${activeProduct.id}` });
       } else {
-        fallbackAnswer = `Nossas peças mais procuradas, como o Brinco Argola Lisa (${liveCatalog[0].estoqueDisponivel} un.) e o Colar Coração (${liveCatalog[6].estoqueDisponivel} un.), estão com estoque pronto para envio!`;
-        fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: 'Brinco Argola Lisa', link: '/produto/brinco-1' });
+        const featured = liveCatalog.find((product) => product.id === 'brinco-1');
+        const necklace = liveCatalog.find((product) => product.id === 'prod-colar-1');
+        fallbackAnswer = `O catálogo registra ${featured?.estoqueDisponivel ?? 0} unidades de ${featured?.nome ?? 'Brinco Argola Lisa'} e ${necklace?.estoqueDisponivel ?? 0} unidades de ${necklace?.nome ?? 'Colar Coração Madreperola'}. O prazo de envio deve ser confirmado no atendimento.`;
+        fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: featured?.nome ?? 'Brinco Argola Lisa', link: '/produto/brinco-1' });
+        if (necklace) fallbackRefs.push({ tipo: 'produto', id: necklace.id, titulo: necklace.nome, link: '/produto/' + necklace.id });
       }
     } else if (pLow.includes('escurece') || pLow.includes('molhar') || pLow.includes('alergia') || pLow.includes('banho') || pLow.includes('agua')) {
       fallbackAnswer = 'Para te orientar com segurança, preciso confirmar as características, os cuidados e a garantia desta peça com a loja. Posso informar o material que está declarado no catálogo.';
