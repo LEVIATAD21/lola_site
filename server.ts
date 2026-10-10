@@ -5,11 +5,18 @@ import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { InventoryStore } from './src/server/inventory';
 import { CATALOG_INFO } from './src/server/catalog';
-import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './src/server/orders';
+import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } from './src/server/orders';
+import { timingSafeEqual } from 'node:crypto';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function hasValidAdminKey(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // In-memory stock store initialized from catalog
 interface StockItem {
@@ -124,6 +131,40 @@ async function startServer() {
     if (!result.ok) return res.status(result.status).json({ error: result.error });
     if (!orders.save(result.order)) return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
     return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
+  });
+
+  // Protected admin endpoints for a future dashboard. Never return PII without server-side authentication.
+  const requireAdminKey = (req: express.Request, res: express.Response): boolean => {
+    res.setHeader('Cache-Control', 'no-store');
+    const expected = process.env.LOLA_ADMIN_API_KEY;
+    if (!expected || expected.length < 32) {
+      res.status(503).json({ error: 'Gestão de pedidos desativada. Configure LOLA_ADMIN_API_KEY com pelo menos 32 caracteres.' });
+      return false;
+    }
+    if (!hasValidAdminKey(req.get('x-admin-key') || '', expected)) {
+      res.status(401).json({ error: 'Chave administrativa inválida.' });
+      return false;
+    }
+    return true;
+  };
+
+  // GET /api/admin/pre-pedidos?limit=50 — requires x-admin-key.
+  app.get('/api/admin/pre-pedidos', (req, res) => {
+    if (!requireAdminKey(req, res)) return;
+    const requestedLimit = Number(req.query.limit ?? 50);
+    const limit = Number.isSafeInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
+    return res.json({ orders: orders.listRecent(limit).map(toAdminOrder) });
+  });
+
+  // GET /api/admin/pre-pedidos/:orderNumber — requires x-admin-key.
+  app.get('/api/admin/pre-pedidos/:orderNumber', (req, res) => {
+    if (!requireAdminKey(req, res)) return;
+    if (!/^LOLA-\d{8}-[A-F0-9]{8}$/.test(req.params.orderNumber)) {
+      return res.status(400).json({ error: 'Código de pré-pedido inválido.' });
+    }
+    const order = orders.findByOrderNumber(req.params.orderNumber);
+    if (!order) return res.status(404).json({ error: 'Pré-pedido não encontrado.' });
+    return res.json({ order: toAdminOrder(order) });
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)

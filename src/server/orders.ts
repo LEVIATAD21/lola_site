@@ -186,6 +186,44 @@ export function buildOrderDraft(
   };
 }
 
+export interface AdminOrderView {
+  orderNumber: string;
+  createdAt: string;
+  status: 'awaiting_payment_setup';
+  paymentStatus: 'not_configured';
+  paymentMethod: PaymentMethod;
+  shippingOptionId: ShippingOptionId;
+  customer: OrderCustomer;
+  items: DraftOrderLine[];
+  itemCount: number;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  giftWrap: number;
+  total: number;
+  couponCode: string | null;
+}
+
+export function toAdminOrder(order: StoredOrderDraft): AdminOrderView {
+  return {
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    shippingOptionId: order.shippingOptionId,
+    customer: { ...order.customer },
+    items: order.items.map((item) => ({ ...item })),
+    itemCount: order.itemCount,
+    subtotal: order.subtotalCents / 100,
+    discount: order.discountCents / 100,
+    shipping: order.shippingCents / 100,
+    giftWrap: order.giftWrapCents / 100,
+    total: order.totalCents / 100,
+    couponCode: order.couponCode,
+  };
+}
+
 export function toPublicOrder(order: StoredOrderDraft): PublicOrderDraft {
   return {
     orderNumber: order.orderNumber,
@@ -295,6 +333,18 @@ export class EncryptedOrderStore {
 
   hasOrder(orderNumber: string): boolean {
     return this.records.some((record) => record.orderNumber === orderNumber);
+  }
+
+  findByOrderNumber(orderNumber: string): StoredOrderDraft | undefined {
+    const record = this.records.find((item) => item.orderNumber === orderNumber);
+    return record ? JSON.parse(JSON.stringify(record)) as StoredOrderDraft : undefined;
+  }
+
+  listRecent(limit = 50): StoredOrderDraft[] {
+    const boundedLimit = Number.isSafeInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 50;
+    return this.records.slice(-boundedLimit).reverse().map(
+      (item) => JSON.parse(JSON.stringify(item)) as StoredOrderDraft,
+    );
   }
 
   get size(): number { return this.records.length; }

@@ -114,6 +114,19 @@ describe('EncryptedOrderStore', () => {
     expect(restarted.hasOrder(order.orderNumber)).toBe(true);
     expect(restarted.size).toBe(1);
   });
+  it('lista pré-pedidos recentes sem expor referências mutáveis internas', () => {
+    const store = new EncryptedOrderStore(tempDirectory());
+    const first = builtOrder();
+    const second = builtOrder();
+    expect(store.save(first)).toBe(true);
+    expect(store.save(second)).toBe(true);
+    const latest = store.listRecent(1);
+    expect(latest).toHaveLength(1);
+    expect(latest[0].orderNumber).toBe(second.orderNumber);
+    latest[0].customer.fullName = 'Nome alterado externamente';
+    expect(store.findByOrderNumber(second.orderNumber)?.customer.fullName).toBe('Maria da Silva');
+  });
+
   it('exige chave do ambiente em produção e não salva sem ela', () => {
     const store = new EncryptedOrderStore(tempDirectory(), undefined, true);
     expect(store.ready).toBe(false);

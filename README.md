@@ -188,3 +188,10 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - Número do cartão, CVV e validade não são enviados à API nem persistidos. Nome, telefone, endereço e itens são gravados cifrados com AES-256-GCM em `.data/orders.enc.json`.
 - Em desenvolvimento, a chave é criada em `.data/orders.key` com permissões restritas. Em produção, configure `LOLA_ORDERS_ENCRYPTION_KEY` como segredo (64 caracteres hexadecimais; `openssl rand -hex 32`). Sem a chave, o backend recusa registrar dados pessoais.
 - O armazenamento JSON serve a uma única instância. Para produção comercial/múltiplas instâncias, use banco transacional, backup protegido, controle de acesso e integrações reais de pagamento e logística.
+
+
+## API administrativa protegida
+
+- `GET /api/admin/pre-pedidos?limit=50` lista no máximo 100 solicitações recentes; `GET /api/admin/pre-pedidos/:orderNumber` retorna um pré-pedido específico.
+- Os dois endpoints exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável, a API administrativa permanece desativada.
+- Não coloque a chave em código do frontend, variáveis `VITE_*`, URLs ou no repositório. A resposta contém dados pessoais e deve ser acessada somente por administração autenticada usando HTTPS.
