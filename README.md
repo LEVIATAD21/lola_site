@@ -120,6 +120,8 @@ npm run dev
 
 O servidor de desenvolvimento usa a porta **3000** por padrão. Acesse [http://localhost:3000](http://localhost:3000).
 
+> ⚠️ **O modo de desenvolvimento não é ambiente de produção.** Ele expõe os middlewares do Vite na porta da aplicação e transforma arquivos `.ts` sob demanda. O `vite.config.ts` já nega o backend (`server.ts`, `src/server/**`), `.data/**`, chaves locais, `.env*`, `.npmrc` e lockfiles, mas **não rode `npm run dev` em rede pública nem com dados reais de clientes**. Em produção use `npm run build` e `NODE_ENV=production npm start`, que serve apenas os arquivos compilados de `dist/`.
+
 ### Variáveis de ambiente
 
 A integração da assistente pode depender de uma chave configurada no ambiente do servidor, como `GEMINI_API_KEY`. Configure segredos somente no ambiente local ou no gerenciador de segredos do serviço de hospedagem. **Nunca inclua chaves privadas no frontend, no repositório ou em variáveis com prefixo público `VITE_`.**

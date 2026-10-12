@@ -442,6 +442,13 @@ ${JSON.stringify(pergunta)}
       appType: 'spa',
     });
     app.use(vite.middlewares);
+    // VUL-04: os middlewares do Vite transformam qualquer `.ts` do projeto. O
+    // vite.config.ts nega backend, `.data` e chaves, mas o modo dev continua
+    // sendo ferramenta de desenvolvimento, não ambiente de produção.
+    console.warn(
+      '[dev] Modo desenvolvimento ativo (Vite servindo a aplicação nesta porta). '
+      + 'Use apenas em rede local e nunca com dados reais de clientes.',
+    );
   }
 
   app.listen(PORT, '0.0.0.0', () => {
