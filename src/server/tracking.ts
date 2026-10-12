@@ -86,9 +86,10 @@ export class TrackingStore {
       events: [{ id: randomUUID(), status, title: TITLES[status], description: 'Atualização registrada pela loja.', occurredAt: now, source: 'store' }],
     };
     const index = this.records.findIndex((item) => item.orderNumber === orderNumber);
+    const previous = index >= 0 ? this.records[index] : undefined;
     if (index >= 0) this.records[index] = record; else this.records.push(record);
     try { this.persist(); return { token, tracking: this.publicView(record) }; }
-    catch { if (index >= 0) this.records.splice(index, 1, ...[]); else this.records = this.records.filter((item) => item !== record); return null; }
+    catch { if (index >= 0 && previous) this.records[index] = previous; else this.records = this.records.filter((item) => item !== record); return null; }
   }
   update(orderNumber: string, input: { status: InternalShippingStatus; carrierCode?: string; description?: string; location?: string }) {
     const record = this.records.find((item) => item.orderNumber === orderNumber);
