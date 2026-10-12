@@ -269,47 +269,70 @@ export class EncryptedOrderStore {
     } else if (production) {
       reason = 'Configure LOLA_ORDERS_ENCRYPTION_KEY (32 bytes em hexadecimal) para habilitar pré-pedidos em produção.';
     } else {
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      const keyPath = join(directory, 'orders.key');
-      if (existsSync(keyPath)) {
-        const text = readFileSync(keyPath, 'utf8').trim();
-        if (/^[a-f\d]{64}$/i.test(text)) key = Buffer.from(text, 'hex');
-        else reason = 'A chave local de pedidos está inválida.';
-      } else {
-        const text = randomBytes(32).toString('hex');
-        try {
-          writeFileSync(keyPath, text + '\n', { mode: 0o600, flag: 'wx' });
-          key = Buffer.from(text, 'hex');
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code;
-          if (code === 'EEXIST') {
-            const existing = readFileSync(keyPath, 'utf8').trim();
-            if (/^[a-f\d]{64}$/i.test(existing)) key = Buffer.from(existing, 'hex');
-            else reason = 'A chave local de pedidos está inválida.';
-          } else reason = 'Não foi possível criar uma chave local para criptografia.';
+      try {
+        mkdirSync(directory, { recursive: true, mode: 0o700 });
+        const keyPath = join(directory, 'orders.key');
+        if (existsSync(keyPath)) {
+          const text = readFileSync(keyPath, 'utf8').trim();
+          if (/^[a-f\d]{64}$/i.test(text)) key = Buffer.from(text, 'hex');
+          else reason = 'A chave local de pedidos está inválida.';
+        } else {
+          const text = randomBytes(32).toString('hex');
+          try {
+            writeFileSync(keyPath, text + '\n', { mode: 0o600, flag: 'wx' });
+            key = Buffer.from(text, 'hex');
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === 'EEXIST') {
+              const existing = readFileSync(keyPath, 'utf8').trim();
+              if (/^[a-f\d]{64}$/i.test(existing)) key = Buffer.from(existing, 'hex');
+              else reason = 'A chave local de pedidos está inválida.';
+            } else reason = 'Não foi possível criar uma chave local para criptografia.';
+          }
         }
+        // Permissões restritas são desejáveis, mas uma falha aqui não pode impedir o boot.
+        try { if (existsSync(keyPath)) chmodSync(keyPath, 0o600); } catch { /* best effort */ }
+      } catch (error) {
+        // VUL-05: erro de E/S no diretório local também reiniciava o processo em loop.
+        // Motivo fica genérico porque ele é devolvido ao cliente via 503.
+        reason = 'Não foi possível preparar o armazenamento local de pré-pedidos.';
+        console.error('[pedidos] Falha ao preparar diretório local:', (error as Error)?.message);
       }
-      if (existsSync(keyPath)) chmodSync(keyPath, 0o600);
     }
 
     this.key = key;
+
+    let records: StoredOrderDraft[] = [];
+    if (key && !reason) {
+      try {
+        mkdirSync(directory, { recursive: true, mode: 0o700 });
+        if (existsSync(this.filePath)) {
+          const envelope = JSON.parse(readFileSync(this.filePath, 'utf8')) as EncryptedEnvelope;
+          if (envelope.version !== 1) throw new Error('Versão desconhecida no arquivo cifrado de pedidos.');
+          const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'hex'));
+          decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+          const plaintext = Buffer.concat([
+            decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final(),
+          ]).toString('utf8');
+          const parsed: unknown = JSON.parse(plaintext);
+          if (!Array.isArray(parsed)) throw new Error('Arquivo cifrado de pedidos inválido.');
+          records = parsed as StoredOrderDraft[];
+        }
+      } catch (error) {
+        // VUL-05: chave trocada/corrompida jogava a exceção para fora do construtor e
+        // reiniciava o processo em loop. O arquivo permanece intacto; o servidor sobe
+        // indisponível para pré-pedidos e o operador conserta a chave.
+        records = [];
+        reason = 'Não foi possível decifrar o arquivo de pré-pedidos (.data/orders.enc.json). '
+          + 'Verifique LOLA_ORDERS_ENCRYPTION_KEY ou restaure o backup do arquivo. '
+          + 'O arquivo não foi alterado.';
+        console.error('[pedidos] Falha ao decifrar orders.enc.json:', (error as Error)?.message);
+      }
+    }
+
+    this.records = records;
     this.unavailableReason = reason;
     this.ready = Boolean(key) && !reason;
-    if (!this.ready || !this.key) return;
-
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
-    if (existsSync(this.filePath)) {
-      const envelope = JSON.parse(readFileSync(this.filePath, 'utf8')) as EncryptedEnvelope;
-      if (envelope.version !== 1) throw new Error('Versão desconhecida no arquivo cifrado de pedidos.');
-      const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(envelope.iv, 'hex'));
-      decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
-      const plaintext = Buffer.concat([
-        decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final(),
-      ]).toString('utf8');
-      const parsed: unknown = JSON.parse(plaintext);
-      if (!Array.isArray(parsed)) throw new Error('Arquivo cifrado de pedidos inválido.');
-      this.records = parsed as StoredOrderDraft[];
-    }
   }
 
   private persist() {

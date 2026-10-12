@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildOrderDraft, EncryptedOrderStore, type StoredOrderDraft, type OrderCatalogProduct } from '../orders';
@@ -139,5 +139,36 @@ describe('EncryptedOrderStore', () => {
     const store = new EncryptedOrderStore(tempDirectory(), 'ab'.repeat(32), true);
     expect(store.ready).toBe(true);
     expect(store.save(builtOrder())).toBe(true);
+  });
+
+  // VUL-05: a exceção saía do construtor, o processo morria e o PM2/systemd reiniciava
+  // indefinidamente (boot loop) a partir do momento em que a chave mudava.
+  it('não derruba o processo quando a chave não decifra o arquivo', () => {
+    const dir = tempDirectory();
+    const store = new EncryptedOrderStore(dir, 'ab'.repeat(32), true);
+    expect(store.ready).toBe(true);
+    expect(store.save(builtOrder())).toBe(true);
+    const original = readFileSync(join(dir, 'orders.enc.json'), 'utf8');
+
+    const reopen = () => new EncryptedOrderStore(dir, 'cd'.repeat(32), true);
+    expect(reopen).not.toThrow();
+    const recovered = reopen();
+    expect(recovered.ready).toBe(false);
+    expect(recovered.unavailableReason).toMatch(/decifrar/);
+    expect(recovered.save(builtOrder())).toBe(false);
+    // O arquivo cifrado nunca é reescrito quando a leitura falha.
+    expect(readFileSync(join(dir, 'orders.enc.json'), 'utf8')).toBe(original);
+  });
+
+  it('não derruba o processo com arquivo cifrado corrompido ou ilegível', () => {
+    const garbage = tempDirectory();
+    writeFileSync(join(garbage, 'orders.enc.json'), '{json invalido', { mode: 0o600 });
+    expect(() => new EncryptedOrderStore(garbage, 'ab'.repeat(32), true)).not.toThrow();
+    expect(new EncryptedOrderStore(garbage, 'ab'.repeat(32), true).ready).toBe(false);
+
+    const unreadable = tempDirectory();
+    mkdirSync(join(unreadable, 'orders.enc.json'), { recursive: true });
+    expect(() => new EncryptedOrderStore(unreadable, 'ab'.repeat(32), true)).not.toThrow();
+    expect(new EncryptedOrderStore(unreadable, 'ab'.repeat(32), true).ready).toBe(false);
   });
 });
