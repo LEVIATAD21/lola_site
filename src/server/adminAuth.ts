@@ -1,8 +1,16 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
+import { auditAdminAccess } from './logger';
 import { createRateLimitMiddleware } from './rateLimit';
 
 export type AdminKeyProvider = () => string | undefined;
+
+/**
+ * Resposta única para "chave errada" e "chave não configurada".
+ * Ser idêntica nos dois casos é proposital: qualquer diferença vira um oráculo
+ * que diz a um atacante externo se existe chave administrativa no servidor.
+ */
+const ADMIN_UNAVAILABLE_MESSAGE = 'Chave administrativa inválida ou operação não habilitada neste servidor.';
 
 /**
  * Protects privileged server routes with an admin key kept only in the server environment.
@@ -25,18 +33,22 @@ export function createAdminKeyMiddleware(
     const expected = getExpectedKey();
 
     if (!expected || expected.length < 32) {
-      return res.status(503).json({
-        error: 'Operação administrativa desativada. Configure LOLA_ADMIN_API_KEY com pelo menos 32 caracteres.',
-      });
+      // VUL-11: responder 503 aqui revelava a um atacante externo se a chave
+      // administrativa existe no servidor. A resposta passa a ser idêntica à de
+      // chave errada; o diagnóstico fica no log e no aviso de subida.
+      auditAdminAccess(req, 'not_configured', 'LOLA_ADMIN_API_KEY ausente ou curta');
+      return res.status(401).json({ error: ADMIN_UNAVAILABLE_MESSAGE });
     }
 
     const provided = Buffer.from(req.get('x-admin-key') || '', 'utf8');
     const expectedBuffer = Buffer.from(expected, 'utf8');
 
     if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) {
-      return res.status(401).json({ error: 'Chave administrativa inválida.' });
+      auditAdminAccess(req, 'denied', 'chave ausente ou inválida');
+      return res.status(401).json({ error: ADMIN_UNAVAILABLE_MESSAGE });
     }
 
+    auditAdminAccess(req, 'allow');
     return next();
   });
 }

@@ -202,9 +202,10 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - `GET /api/admin/pre-pedidos?limit=50` lista no máximo 100 solicitações recentes; `GET /api/admin/pre-pedidos/:orderNumber` retorna um pré-pedido específico.
 - `POST /api/estoque/atualizar` também é uma operação administrativa: não permite que visitantes diminuam artificialmente o estoque.
 - A autenticação administrativa tem limite de tentativas por IP. Os limites são locais por processo; produção com múltiplas instâncias deve adicionar um WAF ou armazenamento compartilhado de rate limiting.
-- Todas essas rotas exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável (ou com valor curto), as operações privilegiadas ficam desativadas.
+- Todas essas rotas exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável (ou com valor curto), as operações privilegiadas ficam recusadas.
 - Não coloque a chave no frontend, em variáveis `VITE_*`, em URLs ou no repositório. Use HTTPS em produção.
-- A chave é uma proteção técnica básica para a API; o projeto ainda não tem painel administrativo, contas de funcionários, perfis por função, sessões com MFA ou auditoria administrativa.
+- A resposta para "chave errada" e para "chave não configurada" é **idêntica (401)**, de propósito: uma diferença de status ou texto seria um oráculo que diz a um visitante se existe chave administrativa no servidor. O diagnóstico real aparece no log (`admin.desativado` na subida e `admin.access` a cada tentativa) e nunca contém a chave.
+- A chave é uma proteção técnica básica para a API; o projeto ainda não tem painel administrativo, contas de funcionários, perfis por função ou sessões com MFA. Toda tentativa administrativa é registrada em log, mas sem trilha de "quem" (não há identidade de usuário nesta versão).
 
 
 ## Cabeçalhos e limites HTTP
@@ -215,3 +216,26 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - Se o domínio estiver sempre servido por HTTPS, configure `LOLA_HSTS_ENABLED=true` no ambiente de produção para ativar HSTS. Não habilite essa opção se o mesmo hostname ainda precisar atender por HTTP.
 - A API administrativa e as respostas da API não são armazenadas em cache pelo navegador.
 - Os códigos de pré-pedido agora usam 12 caracteres aleatórios. Eles são identificadores, não substitutos da autenticação administrativa.
+
+
+## 📋 Registro de eventos e operação
+
+O backend emite uma linha por evento, com carimbo de tempo, nível e campos no formato `chave=valor`:
+
+```
+2026-10-12T12:00:00.000Z INFO  servidor.iniciado porta=3000 ambiente=development estatico=nao trustProxy=nao reservaEstoqueMs=1800000
+2026-10-12T12:00:01.000Z INFO  http.request ip=127.0.0.1 method=POST path=/api/pedidos/rascunho status=201 ms=4.2
+2026-10-12T12:00:01.000Z INFO  pedido.registrado ip=127.0.0.1 numero=LOLA-20261012-8F3A1C0D2B4E itens=2
+2026-10-12T12:00:05.000Z WARN  admin.access ip=203.0.113.9 method=POST path=/api/estoque/atualizar outcome=denied reason=chave_ausente_ou_inválida
+```
+
+Eventos: `servidor.iniciado`, `servidor.falha_ao_iniciar`, `http.request`, `http.erro_nao_tratado`, `http.logs_suppressed`, `pedido.registrado`, `pedido.recusado_por_estoque`, `pedido.falha_ao_persistir`, `admin.access`, `admin.desativado`, `estoque.reserva_expirada`, `dev.exposto`.
+
+Regras fixas do registro:
+
+- **Nunca** são gravados: corpo de requisição, cabeçalhos, chave administrativa, `GEMINI_API_KEY`, nome/telefone/endereço do cliente, conteúdo de prompt ou resposta do assistente. Só o número do pré-pedido, que é identificador de negócio.
+- A query string fica de fora por padrão (`req.path`, sem `?...`), porque filtros de busca podem conter dados digitados pela cliente.
+- As linhas de log são limitadas a 600 por minuto; acima disso elas são suprimidas e a contagem de supressão vira um evento `http.logs_suppressed`. Sem esse teto, um flood de requisições encheria o disco da máquina com logs.
+- Falhas 500 gravam o motivo real do lado do servidor, enquanto a resposta HTTP continua genérica — antes, `console.error('Erro interno na API.')` descartava o motivo e tornava incidente inexplicável.
+- As rotas administrativas registram cada tentativa com IP, caminho e desfecho (`allow`/`denied`/`not_configured`), sem a chave em si.
+- Em produção, direcione a saída para o coletor do sistema (journald, CloudWatch, Loki) e configure rotação de arquivos; o log em si contém endereço IP e identificador de pedido, então trate como dado de operação sujeito à LGPD.

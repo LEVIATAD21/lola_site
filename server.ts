@@ -7,6 +7,7 @@ import { InventoryStore } from './src/server/inventory';
 import { CATALOG_INFO } from './src/server/catalog';
 import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } from './src/server/orders';
 import { createAdminKeyMiddleware } from './src/server/adminAuth';
+import { createRequestLogger, log } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { resolveTrustProxy } from './src/server/trustedProxy';
@@ -61,9 +62,19 @@ const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPT
 // Libera reservas vencidas mesmo que nenhum novo pedido chegue.
 const reservationSweep = setInterval(() => {
   const expired = inventory.sweep();
-  if (expired > 0) console.log(`[estoque] ${expired} pré-reserva(s) expiraram e o estoque voltou a ficar disponível.`);
+  if (expired > 0) log('info', 'estoque.reserva_expirada', { liberadas: expired });
 }, Math.min(RESERVATION_TTL_MS, 60_000));
 reservationSweep.unref();
+
+// Sem chave (ou curta), as rotas administrativas recusam tudo. O diagnóstico é
+// só de log porque a resposta HTTP não pode revelar se a chave existe (VUL-11).
+const ADMIN_KEY_MIN_LENGTH = 32;
+if (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH) {
+  log('warn', 'admin.desativado', {
+    motivo: process.env.LOLA_ADMIN_API_KEY ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
+    acao: 'rotas administrativas recusam qualquer chave',
+  });
+}
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -96,6 +107,8 @@ async function startServer() {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  // VUL-08: registro por requisição de API, sem corpos nem dados pessoais.
+  app.use(createRequestLogger());
   app.use(express.json({ limit: '16kb' }));
 
   const requireAdminKey = createAdminKeyMiddleware();
@@ -171,12 +184,22 @@ async function startServer() {
       result.order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
       Date.now() + RESERVATION_TTL_MS,
     );
-    if (!hold.ok) return res.status(hold.status).json({ error: hold.error });
+    if (!hold.ok) {
+      log('warn', 'pedido.recusado_por_estoque', {
+        ip: req.ip, status: hold.status, produto: hold.productId,
+        solicitado: hold.requested, disponivel: hold.available,
+      });
+      return res.status(hold.status).json({ error: hold.error });
+    }
 
     if (!orders.save(result.order)) {
       inventory.removeHold(result.order.id);
+      log('error', 'pedido.falha_ao_persistir', { ip: req.ip });
       return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
     }
+    // Número do pré-pedido é identificador de negócio, não dado pessoal: serve
+    // para rastrear a origem do registro sem expor nome, telefone ou endereço.
+    log('info', 'pedido.registrado', { ip: req.ip, numero: result.order.orderNumber, itens: result.order.itemCount });
     return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
   });
 
@@ -419,10 +442,17 @@ ${JSON.stringify(pergunta)}
     res.status(404).json({ error: 'Endpoint de API não encontrado.' });
   });
 
-  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const candidate = error as { status?: number };
     const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
-    if (status === 500) console.error('Erro interno na API.');
+    // VUL-08: o motivo real era descartado, o que tornava incidente inexplicável.
+    // Ele só vai para o log do servidor; a resposta continua genérica.
+    if (status === 500) {
+      log('error', 'http.erro_nao_tratado', {
+        ip: req.ip, method: req.method, path: req.originalUrl.split('?')[0] || '/',
+        motivo: error instanceof Error ? error.message : String(error),
+      });
+    }
     res.status(status).json({
       error: status === 413 ? 'Corpo da requisição muito grande.' :
         status === 400 ? 'JSON inválido na requisição.' : 'Erro interno do servidor.',
@@ -445,15 +475,28 @@ ${JSON.stringify(pergunta)}
     // VUL-04: os middlewares do Vite transformam qualquer `.ts` do projeto. O
     // vite.config.ts nega backend, `.data` e chaves, mas o modo dev continua
     // sendo ferramenta de desenvolvimento, não ambiente de produção.
-    console.warn(
-      '[dev] Modo desenvolvimento ativo (Vite servindo a aplicação nesta porta). '
-      + 'Use apenas em rede local e nunca com dados reais de clientes.',
-    );
+    log('warn', 'dev.exposto', {
+      aviso: 'modo_desenvolvimento_nao_e_producao',
+      porta: PORT,
+    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Lola Aço Inox server running on http://0.0.0.0:${PORT}`);
+    log('info', 'servidor.iniciado', {
+      porta: PORT,
+      ambiente: process.env.NODE_ENV || 'development',
+      estatico: process.env.NODE_ENV === 'production' ? 'sim' : 'nao',
+      trustProxy: trustProxy === undefined ? 'nao' : String(trustProxy),
+      reservaEstoqueMs: RESERVATION_TTL_MS,
+    });
   });
 }
 
-startServer();
+// Falha de subida precisa virar código de saída: um processo que morre depois de
+// logar é reiniciado pelo supervisor, um que continua "vivo" sem HTTP não é.
+startServer().catch((error: unknown) => {
+  log('error', 'servidor.falha_ao_iniciar', {
+    motivo: error instanceof Error ? error.message : String(error),
+  });
+  process.exit(1);
+});

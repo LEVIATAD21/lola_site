@@ -41,12 +41,30 @@ describe('createAdminKeyMiddleware', () => {
     const endpoint = await startProtectedEndpoint(() => undefined);
     const response = await fetch(endpoint.url, { method: 'POST' });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(401);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(endpoint.mutations()).toBe(0);
   });
 
-  it('blocks requests without a key or with an incorrect key', async () => {
+  // VUL-11: 503 (sem chave) contra 401 (chave errada) era um oráculo de
+  // configuração: bastava uma requisição para saber se o servidor tem chave.
+  it('não revela se a chave administrativa está configurada no servidor', async () => {
+    const semChave = await startProtectedEndpoint(() => undefined);
+    const comChave = await startProtectedEndpoint(() => expectedKey);
+
+    const semChaveResposta = await fetch(semChave.url, {
+      method: 'POST', headers: { 'x-admin-key': 'qualquer-coisa' },
+    });
+    const chaveErrada = await fetch(comChave.url, {
+      method: 'POST', headers: { 'x-admin-key': 'qualquer-coisa' },
+    });
+
+    expect(semChaveResposta.status).toBe(chaveErrada.status);
+    expect(await semChaveResposta.text()).toBe(await chaveErrada.text());
+    expect(semChaveResposta.status).toBe(401);
+  });
+
+  it('bloqueia requisições sem chave ou com chave incorreta', async () => {
     const endpoint = await startProtectedEndpoint(() => expectedKey);
     const missing = await fetch(endpoint.url, { method: 'POST' });
     const incorrect = await fetch(endpoint.url, {
@@ -78,7 +96,7 @@ describe('createAdminKeyMiddleware', () => {
       headers: { 'x-admin-key': 'short' },
     });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(401);
     expect(endpoint.mutations()).toBe(0);
   });
 });
