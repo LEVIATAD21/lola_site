@@ -6,9 +6,9 @@ import { createRateLimitMiddleware } from '../rateLimit';
 
 const servers: Server[] = [];
 
-async function startLimitedEndpoint() {
+async function startLimitedEndpoint(route = '/limited') {
   const app = express();
-  app.get('/limited', createRateLimitMiddleware({
+  app.post(route, createRateLimitMiddleware({
     windowMs: 60_000,
     maxRequests: 2,
     message: 'Too many test requests',
@@ -33,18 +33,26 @@ afterEach(async () => {
 describe('createRateLimitMiddleware', () => {
   it('returns 429 after the configured number of requests and includes Retry-After', async () => {
     const url = await startLimitedEndpoint();
-    expect((await fetch(url)).status).toBe(200);
-    expect((await fetch(url)).status).toBe(200);
-    const blocked = await fetch(url);
+    expect((await fetch(url, { method: 'POST' })).status).toBe(200);
+    expect((await fetch(url, { method: 'POST' })).status).toBe(200);
+    const blocked = await fetch(url, { method: 'POST' });
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('retry-after')).toBeTruthy();
     expect(blocked.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('shares one bucket across case and trailing-slash variants handled by the same Express route', async () => {
+    const url = await startLimitedEndpoint('/api/pedidos/rascunho');
+    expect((await fetch(url, { method: 'POST' })).status).toBe(200);
+    expect((await fetch(url.replace('/api/pedidos/rascunho', '/API/PEDIDOS/RASCUNHO/'), { method: 'POST' })).status).toBe(200);
+    const blocked = await fetch(url.replace('/api/pedidos/rascunho', '/Api/Pedidos/Rascunho/'), { method: 'POST' });
+    expect(blocked.status).toBe(429);
+  });
+
   it('does not trust caller-supplied X-Forwarded-For by default', async () => {
     const url = await startLimitedEndpoint();
-    expect((await fetch(url, { headers: { 'x-forwarded-for': '198.51.100.1' } })).status).toBe(200);
-    expect((await fetch(url, { headers: { 'x-forwarded-for': '203.0.113.2' } })).status).toBe(200);
-    expect((await fetch(url, { headers: { 'x-forwarded-for': '192.0.2.3' } })).status).toBe(429);
+    expect((await fetch(url, { method: 'POST', headers: { 'x-forwarded-for': '198.51.100.1' } })).status).toBe(200);
+    expect((await fetch(url, { method: 'POST', headers: { 'x-forwarded-for': '203.0.113.2' } })).status).toBe(200);
+    expect((await fetch(url, { method: 'POST', headers: { 'x-forwarded-for': '192.0.2.3' } })).status).toBe(429);
   });
 });
