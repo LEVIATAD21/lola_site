@@ -16,7 +16,7 @@ export function createAdminKeyMiddleware(
     windowMs: 60_000,
     maxRequests: 10,
     maxBuckets: 10_000,
-    keyGenerator: (req) => req.socket.remoteAddress || 'unknown',
+    keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
     message: 'Muitas tentativas administrativas. Aguarde um minuto e tente novamente.',
   });
 
@@ -25,16 +25,15 @@ export function createAdminKeyMiddleware(
     const expected = getExpectedKey();
 
     if (!expected || expected.length < 32) {
-      return res.status(503).json({
-        error: 'Operação administrativa desativada. Configure LOLA_ADMIN_API_KEY com pelo menos 32 caracteres.',
-      });
+      // Do not reveal whether an administrative secret has been configured.
+      return res.status(401).json({ error: 'Não autorizado.' });
     }
 
     const provided = Buffer.from(req.get('x-admin-key') || '', 'utf8');
     const expectedBuffer = Buffer.from(expected, 'utf8');
 
     if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) {
-      return res.status(401).json({ error: 'Chave administrativa inválida.' });
+      return res.status(401).json({ error: 'Não autorizado.' });
     }
 
     return next();
