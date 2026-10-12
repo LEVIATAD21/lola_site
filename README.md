@@ -24,7 +24,7 @@
 A interface foi construída em torno de uma paleta de **creme, bege, dourado suave e marrom escuro**, com tipografia elegante, fotografias de produto e componentes responsivos. O objetivo é oferecer uma navegação acolhedora, do primeiro contato com a coleção até a revisão da sacola e a demonstração do checkout.
 
 > [!IMPORTANT]
-> **Este repositório ainda está em desenvolvimento.** O checkout registra um pré-pedido pendente e cifrado, mas não cobra, não gera Pix/boleto, não reserva estoque e não confirma uma venda. Frete e cupons ainda são demonstrativos; as quantidades iniciais do estoque também são dados de exemplo. Não use dados reais de cartão neste protótipo.
+> **Este repositório ainda está em desenvolvimento.** O checkout registra um pré-pedido pendente e cifrado, mas não cobra, não gera Pix/boleto e não confirma uma venda. O estoque fica reservado em memória por 30 minutos enquanto o pré-pedido aguarda pagamento. Frete e cupons ainda são demonstrativos; as quantidades iniciais do estoque também são dados de exemplo. Não use dados reais de cartão neste protótipo.
 
 ## 💎 Experiência da loja
 
@@ -187,7 +187,9 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 ## Pré-pedido e proteção de dados
 
 - `POST /api/pedidos/rascunho` valida endereço, termos, itens, estoque, cupom e modalidade de frete, usando preços do catálogo no servidor. Preços enviados pelo cliente são ignorados.
-- A solicitação fica com status `awaiting_payment_setup` e pagamento `not_configured`: não há cobrança real, Pix/boletos emitidos, reserva de estoque ou confirmação final de venda nesta versão.
+- A solicitação fica com status `awaiting_payment_setup` e pagamento `not_configured`: não há cobrança real, Pix/boletos emitidos ou confirmação final de venda nesta versão.
+- Ao registrar o pré-pedido, o backend **reserva as unidades por `LOLA_RESERVATION_TTL_MS` (padrão 30 minutos)**, sem gravar nada no arquivo de estoque: `disponivel` devolvido à vitrine já vem líquido das reservas ativas. Assim, pedidos simultâneos não vendem o mesmo exemplar duas vezes. Ao expirar, o estoque volta sozinho. As reservas vivem em memória, então reiniciar o processo libera as reservas ativas.
+- A baixa administrativa em `POST /api/estoque/atualizar` consome primeiro as unidades pré-reservadas (ordem de chegada) e só depois as livres; uma baixa acima do saldo restaura as reservas intactas.
 - Número do cartão, CVV e validade não são enviados à API nem persistidos. Nome, telefone, endereço e itens são gravados cifrados com AES-256-GCM em `.data/orders.enc.json`.
 - Em desenvolvimento, a chave é criada em `.data/orders.key` com permissões restritas. Em produção, configure `LOLA_ORDERS_ENCRYPTION_KEY` como segredo (64 caracteres hexadecimais; `openssl rand -hex 32`). Sem a chave, o backend recusa registrar dados pessoais.
 - O armazenamento JSON serve a uma única instância. Para produção comercial/múltiplas instâncias, use banco transacional, backup protegido, controle de acesso e integrações reais de pagamento e logística.

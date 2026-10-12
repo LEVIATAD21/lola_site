@@ -45,8 +45,18 @@ for (const product of CATALOG_INFO) {
 }
 
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
+// VUL-03: janela em que um pré-pedido segura o estoque. Ao vencer, a reserva
+// expira e as unidades voltam para a vitrine automaticamente.
+const RESERVATION_TTL_MS = Math.max(60_000, Number(process.env.LOLA_RESERVATION_TTL_MS) || 1_800_000);
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
 const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
+
+// Libera reservas vencidas mesmo que nenhum novo pedido chegue.
+const reservationSweep = setInterval(() => {
+  const expired = inventory.sweep();
+  if (expired > 0) console.log(`[estoque] ${expired} pré-reserva(s) expiraram e o estoque voltou a ficar disponível.`);
+}, Math.min(RESERVATION_TTL_MS, 60_000));
+reservationSweep.unref();
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -119,7 +129,7 @@ async function startServer() {
     });
   });
 
-  // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar ou reservar estoque.
+  // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar o cliente.
   app.post('/api/pedidos/rascunho', limitOrderDraft, (req, res) => {
     if (!orders.ready) return res.status(503).json({ error: orders.unavailableReason || 'Armazenamento seguro de pré-pedidos indisponível.' });
     // VUL-10: sem este check, o `false` do teto de 10k virava 500 genérico sem causa.
@@ -128,7 +138,21 @@ async function startServer() {
     }
     const result = buildOrderDraft(req.body, CATALOG_INFO, inventory);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
-    if (!orders.save(result.order)) return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
+
+    // VUL-03: sem reserva, 12 pedidos de 5 unidades passavam todos contra 7 em
+    // estoque, porque cada um voltava a enxergar o mesmo saldo. O handler é
+    // síncrono, então validar e comprometer acontece sem interleave.
+    const hold = inventory.placeHold(
+      result.order.id,
+      result.order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+      Date.now() + RESERVATION_TTL_MS,
+    );
+    if (!hold.ok) return res.status(hold.status).json({ error: hold.error });
+
+    if (!orders.save(result.order)) {
+      inventory.removeHold(result.order.id);
+      return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
+    }
     return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
   });
 

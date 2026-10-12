@@ -13,6 +13,13 @@ export type StockAdjustment =
   | { ok: true; stock: StockItem }
   | { ok: false; status: 400 | 404 | 409 | 500; error: string };
 
+export interface HoldLine { productId: string; quantity: number; }
+interface HoldEntry { productId: string; quantity: number; expiresAt: number; }
+
+export type HoldResult =
+  | { ok: true }
+  | { ok: false; status: 404 | 409; productId: string; requested: number; available: number; error: string };
+
 /**
  * Persistent inventory for a single Node process. Mutations are synchronous to
  * prevent request handlers in this process from interleaving validation and write.
@@ -21,6 +28,12 @@ export type StockAdjustment =
 export class InventoryStore {
   private readonly items: Record<string, StockItem>;
   private readonly filePath?: string;
+  /**
+   * Pré-reservas de pré-pedidos, só em memória. O arquivo de estoque permanece
+   * intacto: `disponivel` devolvido ao cliente já desconta as reservas ativas,
+   * então nada se perde e nada é contado em duplicidade ao reiniciar o processo.
+   */
+  private readonly holds = new Map<string, HoldEntry[]>();
 
   constructor(initial: Record<string, StockItem>, filePath?: string) {
     this.items = Object.fromEntries(
@@ -69,13 +82,117 @@ export class InventoryStore {
     renameSync(temporaryPath, this.filePath);
   }
 
+  /** Unidades já comprometidas por pré-reservas ativas. */
+  heldQuantity(productId: string, now = Date.now()): number {
+    let total = 0;
+    for (const entries of this.holds.values()) {
+      for (const entry of entries) {
+        if (entry.productId === productId && entry.expiresAt > now) total += entry.quantity;
+      }
+    }
+    return total;
+  }
+
+  /** Unidades realmente vendáveis: estoque gravado menos as pré-reservas ativas. */
+  availableQuantity(productId: string, now = Date.now()): number {
+    const item = this.items[productId];
+    if (!item) return 0;
+    return Math.max(0, item.disponivel - this.heldQuantity(productId, now));
+  }
+
+  /** Estoque contábil com `disponivel` já líquido das pré-reservas ativas. */
   get(productId: string): StockItem | undefined {
     const item = this.items[productId];
-    return item ? { ...item } : undefined;
+    return item ? { ...item, disponivel: this.availableQuantity(productId) } : undefined;
   }
 
   list(): StockItem[] {
-    return Object.values(this.items).map((item) => ({ ...item }));
+    return Object.keys(this.items).map((id) => this.get(id)!).filter(Boolean);
+  }
+
+  /**
+   * Registra uma pré-reserva depois de validar TODAS as linhas de uma vez.
+   *
+   * VUL-03: antes disto, buildOrderDraft apenas conferia `disponivel` e seguia.
+   * Doze pedidos de 5 unidades passavam todos contra 7 em estoque porque nada
+   * era comprometido entre a validação e a gravação. Como o handler de pedido é
+   * totalmente síncrono, validar tudo e gravar em seguida é atômico.
+   */
+  placeHold(holdId: string, lines: HoldLine[], expiresAt: number, now = Date.now()): HoldResult {
+    this.sweep(now);
+    // Acumula por produto durante a validação: sem isso, três linhas de 3
+    // unidades passariam separadamente contra 7 em estoque (total 9).
+    const pending = new Map<string, number>();
+    for (const line of lines) {
+      if (!this.items[line.productId]) {
+        return {
+          ok: false, status: 404, productId: line.productId,
+          requested: line.quantity, available: 0,
+          error: 'O estoque deste produto ainda não foi configurado.',
+        };
+      }
+      const available = this.availableQuantity(line.productId, now) - (pending.get(line.productId) ?? 0);
+      if (available < line.quantity) {
+        return {
+          ok: false, status: 409, productId: line.productId,
+          requested: line.quantity, available: Math.max(0, available),
+          error: 'O estoque acabou durante o registro. Atualize a sacola e tente novamente.',
+        };
+      }
+      pending.set(line.productId, (pending.get(line.productId) ?? 0) + line.quantity);
+    }
+    this.holds.set(holdId, lines.map((line) => ({ ...line, expiresAt })));
+    return { ok: true };
+  }
+
+  removeHold(holdId: string): boolean {
+    return this.holds.delete(holdId);
+  }
+
+  /** Devolve ao estoque as pré-reservas vencidas. */
+  sweep(now = Date.now()): number {
+    let expired = 0;
+    for (const [holdId, entries] of [...this.holds]) {
+      const live = entries.filter((entry) => entry.expiresAt > now);
+      if (live.length === entries.length) continue;
+      expired += entries.length - live.length;
+      if (live.length) this.holds.set(holdId, live);
+      else this.holds.delete(holdId);
+    }
+    return expired;
+  }
+
+  private snapshotHolds(): Map<string, HoldEntry[]> {
+    return new Map([...this.holds].map(([holdId, entries]) => [holdId, entries.map((e) => ({ ...e }))]));
+  }
+
+  private restoreHolds(snapshot: Map<string, HoldEntry[]>) {
+    this.holds.clear();
+    for (const [holdId, entries] of snapshot) this.holds.set(holdId, entries);
+  }
+
+  /**
+   * Uma baixa consome primeiro as unidades pré-reservadas (alocação FIFO) e só
+   * depois as livres. Sem isso, o atendente não conseguiria registrar a venda de
+   * um pedido em pré-reserva — `disponivel` já estaria descontado.
+   */
+  private releaseHolds(productId: string, quantity: number, now = Date.now()) {
+    let remaining = quantity;
+    for (const [holdId, entries] of [...this.holds]) {
+      if (remaining <= 0) break;
+      for (let index = 0; index < entries.length && remaining > 0;) {
+        const entry = entries[index];
+        if (entry.productId !== productId || entry.expiresAt <= now) {
+          index += 1;
+          continue;
+        }
+        const taken = Math.min(entry.quantity, remaining);
+        entry.quantity -= taken;
+        remaining -= taken;
+        if (entry.quantity === 0) entries.splice(index, 1);
+      }
+      if (entries.length === 0) this.holds.delete(holdId);
+    }
   }
 
   deduct(productId: unknown, quantity: unknown): StockAdjustment {
@@ -89,7 +206,11 @@ export class InventoryStore {
     if (!current) {
       return { ok: false, status: 404, error: 'Produto não encontrado no catálogo.' };
     }
+
+    const holdsBefore = this.snapshotHolds();
+    this.releaseHolds(productId, quantity);
     if (quantity > current.disponivel) {
+      this.restoreHolds(holdsBefore);
       return { ok: false, status: 409, error: 'Estoque insuficiente para esta quantidade.' };
     }
 
@@ -100,8 +221,9 @@ export class InventoryStore {
       this.persist();
     } catch {
       this.items[productId] = previous;
+      this.restoreHolds(holdsBefore);
       return { ok: false, status: 500, error: 'Não foi possível salvar a atualização de estoque.' };
     }
-    return { ok: true, stock: { ...current } };
+    return { ok: true, stock: { ...current, disponivel: this.availableQuantity(productId) } };
   }
 }
