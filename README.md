@@ -209,6 +209,7 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 
 - O backend aplica `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` e políticas de isolamento de origem. Em produção, adiciona uma Content Security Policy compatível com os recursos da loja.
 - O parser JSON aceita corpos de no máximo 16 KiB. As consultas à assistente, os pré-pedidos e as rotas administrativas têm limites de frequência.
+- `POST /api/ai/consulta` tem três camadas por IP (20/min, 120/h e 400/dia) e aborta a chamada ao modelo após `LOLA_AI_TIMEOUT_MS` (padrão 20 s), caindo no motor local de regras. Sem essas camadas, um atacante dispara centenas de milhares de chamadas pagas por dia em nome da loja. Em produção com tráfego real, ajuste os tetos conforme o orçamento da conta Gemini.
 - Se o domínio estiver sempre servido por HTTPS, configure `LOLA_HSTS_ENABLED=true` no ambiente de produção para ativar HSTS. Não habilite essa opção se o mesmo hostname ainda precisar atender por HTTP.
 - A API administrativa e as respostas da API não são armazenadas em cache pelo navegador.
 - Os códigos de pré-pedido agora usam 12 caracteres aleatórios. Eles são identificadores, não substitutos da autenticação administrativa.

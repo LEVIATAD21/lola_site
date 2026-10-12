@@ -45,9 +45,16 @@ for (const product of CATALOG_INFO) {
 }
 
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
+
+/** Lê um inteiro do ambiente com faixa segura; fora da faixa, usa o padrão. */
+function envInt(name: string, fallback: number, min: number, max: number): number {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
+}
+
 // VUL-03: janela em que um pré-pedido segura o estoque. Ao vencer, a reserva
 // expira e as unidades voltam para a vitrine automaticamente.
-const RESERVATION_TTL_MS = Math.max(60_000, Number(process.env.LOLA_RESERVATION_TTL_MS) || 1_800_000);
+const RESERVATION_TTL_MS = envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000);
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
 const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
 
@@ -99,9 +106,26 @@ async function startServer() {
   });
   const limitAI = createRateLimitMiddleware({
     windowMs: 60_000,
-    maxRequests: 20,
+    maxRequests: envInt('LOLA_AI_PER_MINUTE', 20, 1, 10_000),
     message: 'Limite temporário de consultas atingido. Tente novamente em um minuto.',
   });
+  // VUL-02: o teto por minuto sozinho deixa um atacante disparar ~28.800 chamadas
+  // pagas por dia contra a conta do Gemini. Limites longos cortam o custo real.
+  const limitAIHourly = createRateLimitMiddleware({
+    windowMs: 60 * 60_000,
+    maxRequests: envInt('LOLA_AI_PER_HOUR', 120, 1, 100_000),
+    maxBuckets: 5_000,
+    message: 'Limite horário de consultas atingido. Tente novamente mais tarde.',
+  });
+  const limitAIDaily = createRateLimitMiddleware({
+    windowMs: 24 * 60 * 60_000,
+    maxRequests: envInt('LOLA_AI_PER_DAY', 400, 1, 1_000_000),
+    maxBuckets: 5_000,
+    message: 'Limite diário de consultas atingido. Fale com o atendimento se precisar de ajuda.',
+  });
+  // Trava dura contra chamada pendurada: uma requisição presa segura um socket e
+  // um slot de rate limit até o provedor responder.
+  const AI_TIMEOUT_MS = envInt('LOLA_AI_TIMEOUT_MS', 20_000, 5_000, 120_000);
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'lola-api', timestamp: new Date().toISOString() });
@@ -211,7 +235,7 @@ async function startServer() {
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
-  app.post('/api/ai/consulta', limitAI, async (req, res) => {
+  app.post('/api/ai/consulta', limitAI, limitAIHourly, limitAIDaily, async (req, res) => {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const pergunta = typeof body.pergunta === 'string' ? body.pergunta.trim() : '';
     const contexto = body.contexto && typeof body.contexto === 'object' && !Array.isArray(body.contexto)
@@ -300,6 +324,8 @@ ${JSON.stringify(pergunta)}
           config: {
             systemInstruction,
             temperature: 0.2, // low temperature to ensure strict adherence to facts
+            // VUL-02: interrompe a chamada pendurada e cai no motor local.
+            abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
           },
         });
 
@@ -342,7 +368,9 @@ ${JSON.stringify(pergunta)}
         });
       }
     } catch (err) {
-      console.error('Error invoking AI model:', err);
+      // Só a mensagem: o objeto de erro do SDK pode carregar o cabeçalho com a
+      // chave da API, que não pode ir para o log.
+      console.error('[assistente] Falha ao chamar o modelo:', err instanceof Error ? err.message : 'erro desconhecido');
     }
 
     // Graceful intelligent fallback if API key is not configured or fails
