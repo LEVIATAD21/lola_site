@@ -3,10 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { InventoryStore } from './src/server/inventory';
 import { CATALOG_INFO } from './src/server/catalog';
-import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } from './src/server/orders';
-import { createAdminKeyMiddleware } from './src/server/adminAuth';
+import {
+  createLocalDataPlane, type DataPlane, type LocalDataPlane, PLANO_DE_DADOS_INDISPONIVEL,
+} from './src/server/dataPlane';
+import { HttpDataPlane } from './src/server/httpDataPlane';
+import { InternalClient } from './src/server/internalClient';
+import { createAdminRouter } from './src/server/adminRoutes';
+import { resolveAdminAllowlist } from './src/server/ipAllow';
 import { createRequestLogger, log } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
@@ -19,36 +23,23 @@ dotenv.config({ quiet: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// In-memory stock store initialized from catalog
-interface StockItem {
-  productId: string;
-  total: number;
-  reservado: number;
-  vendido: number;
-  disponivel: number;
-}
-
-const INITIAL_STOCK: Record<string, StockItem> = {
-  'brinco-1': { productId: 'brinco-1', total: 15, reservado: 2, vendido: 5, disponivel: 8 },
-  'brinco-2': { productId: 'brinco-2', total: 10, reservado: 1, vendido: 5, disponivel: 4 },
-  'brinco-3': { productId: 'brinco-3', total: 20, reservado: 3, vendido: 5, disponivel: 12 },
-  'brinco-4': { productId: 'brinco-4', total: 8, reservado: 2, vendido: 3, disponivel: 3 },
-  'brinco-5': { productId: 'brinco-5', total: 14, reservado: 0, vendido: 8, disponivel: 6 },
-  'brinco-6': { productId: 'brinco-6', total: 12, reservado: 1, vendido: 2, disponivel: 9 },
-  'prod-colar-1': { productId: 'prod-colar-1', total: 18, reservado: 2, vendido: 6, disponivel: 10 },
-  'prod-pulseira-1': { productId: 'prod-pulseira-1', total: 15, reservado: 1, vendido: 7, disponivel: 7 },
-  'prod-anel-1': { productId: 'prod-anel-1', total: 10, reservado: 2, vendido: 3, disponivel: 5 },
-  'prod-conjunto-1': { productId: 'prod-conjunto-1', total: 6, reservado: 1, vendido: 3, disponivel: 2 },
-};
-
-// IDs do catálogo sem estoque cadastrado começam indisponíveis.
-for (const product of CATALOG_INFO) {
-  if (!INITIAL_STOCK[product.id]) {
-    INITIAL_STOCK[product.id] = { productId: product.id, total: 0, reservado: 0, vendido: 0, disponivel: 0 };
-  }
-}
-
-const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
+/**
+ * Modo de operação — decidido no boot, nunca por requisição.
+ *
+ *  - **dividido** (`LOLA_DATA_SERVICE_URL` definido): este processo serve só a
+ *    vitrine. Ele não cria `InventoryStore`, não cria `EncryptedOrderStore`, não
+ *    tem a chave de cifra dos pedidos e não monta rota administrativa alguma —
+ *    quem detém tudo isso é o `data-server.ts`, em outra máquina.
+ *  - **embutido**: um processo só faz as duas partes, para desenvolvimento e
+ *    para quem ainda não separou os servidores. Mesmo aí, em produção as rotas
+ *    administrativas só aparecem se quem opera pedir explicitamente.
+ *
+ * Não existe caminho de requisição que troque de modo.
+ */
+const PRODUCTION = process.env.NODE_ENV === 'production';
+const DATA_SERVICE_URL = (process.env.LOLA_DATA_SERVICE_URL || '').trim();
+const SPLIT_MODE = DATA_SERVICE_URL.length > 0;
+const MOUNT_ADMIN = !SPLIT_MODE && (PRODUCTION ? process.env.LOLA_EMBEDDED_ADMIN === 'true' : true);
 
 /** Lê um inteiro do ambiente com faixa segura; fora da faixa, usa o padrão. */
 function envInt(name: string, fallback: number, min: number, max: number): number {
@@ -59,46 +50,15 @@ function envInt(name: string, fallback: number, min: number, max: number): numbe
 // VUL-03: janela em que um pré-pedido segura o estoque. Ao vencer, a reserva
 // expira e as unidades voltam para a vitrine automaticamente.
 const RESERVATION_TTL_MS = envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000);
-const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
+// Estoque, pré-pedidos cifrados e a varredura de reservas agora vivem dentro de
+// `createLocalDataPlane`, que só é chamado pelo processo que realmente tem os
+// arquivos (o `data-server.ts`, ou este em modo embutido). O site público em
+// modo dividido não carrega nenhum dos dois.
+//
 // VUL-17: a chave pode vir de fora do diretório de dados (volume de segredo do
-// Docker/Kubernetes), para não ficar ao lado do próprio ciphertext. Em
-// produção, ou a variável de ambiente ou o arquivo apontado por
-// LOLA_ORDERS_KEY_FILE — sem nenhum dos dois, os pré-pedidos ficam desligados.
-const orders = new EncryptedOrderStore(
-  DATA_DIR,
-  process.env.LOLA_ORDERS_ENCRYPTION_KEY,
-  process.env.NODE_ENV === 'production',
-  process.env.LOLA_ORDERS_KEY_FILE,
-);
-
-// VUL-18: o diagnóstico do armazenamento de pedidos é só de log. Devolver
-// `unavailableReason` na resposta seria um oráculo de configuração para qualquer
-// visitante — a mesma fenda do VUL-11 na rota administrativa: a mensagem diz se a
-// chave está ausente, malformada, com permissão errada ou se o arquivo está
-// corrompido, tudo sem autenticação.
-if (!orders.ready) {
-  log('warn', 'pedidos.desativado', {
-    motivo: orders.unavailableReason ?? 'armazenamento indisponível',
-    acao: 'a rota de pré-pedido responde 503 genérico',
-  });
-}
-
-// Libera reservas vencidas mesmo que nenhum novo pedido chegue.
-const reservationSweep = setInterval(() => {
-  const expired = inventory.sweep();
-  if (expired > 0) log('info', 'estoque.reserva_expirada', { liberadas: expired });
-}, Math.min(RESERVATION_TTL_MS, 60_000));
-reservationSweep.unref();
-
-// Sem chave (ou curta), as rotas administrativas recusam tudo. O diagnóstico é
-// só de log porque a resposta HTTP não pode revelar se a chave existe (VUL-11).
-const ADMIN_KEY_MIN_LENGTH = 32;
-if (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH) {
-  log('warn', 'admin.desativado', {
-    motivo: process.env.LOLA_ADMIN_API_KEY ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
-    acao: 'rotas administrativas recusam qualquer chave',
-  });
-}
+// Docker/Kubernetes). VUL-18: o diagnóstico do armazenamento de pedidos é só de
+// log — devolver `unavailableReason` na resposta seria um oráculo de
+// configuração para qualquer visitante.
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -116,6 +76,66 @@ SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
+
+  // Plano de dados: remoto quando os servidores estão separados, local quando
+  // este processo é também o dono dos arquivos. Nenhum caminho de requisição
+  // participa dessa escolha.
+  let plane: DataPlane;
+  let localPlane: LocalDataPlane | undefined;
+  if (SPLIT_MODE) {
+    const client = new InternalClient({
+      baseUrl: DATA_SERVICE_URL,
+      secret: (process.env.LOLA_INTERNAL_SECRET ?? '').trim(),
+      timeoutMs: envInt('LOLA_INTERNAL_TIMEOUT_MS', 3_000, 100, 30_000),
+      allowPlaintext: process.env.LOLA_INTERNAL_PLAINTEXT === 'true',
+    });
+    plane = new HttpDataPlane(client, {
+      ttlMs: envInt('LOLA_SNAPSHOT_TTL_MS', 5_000, 0, 600_000),
+      staleMs: envInt('LOLA_SNAPSHOT_STALE_MS', 60_000, 0, 3_600_000),
+      allowedIds: new Set(CATALOG_INFO.map((product) => product.id)),
+    });
+    log('info', 'plano.remoto_configurado', { alvo: client.target });
+  } else {
+    const dataDir = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
+    localPlane = createLocalDataPlane({
+      dataDir,
+      production: PRODUCTION,
+      reservationTtlMs: RESERVATION_TTL_MS,
+      encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
+      keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+    });
+    plane = localPlane;
+    log('info', 'plano.local_configurado', { dados: dataDir });
+  }
+
+  // O painel administrativo não fica no site público quando os servidores estão
+  // separados — é esse o ponto da separação. Nem embutido em produção ele aparece
+  // sem declaração explícita: quem comprometer este processo não pode encontrar
+  // rota de administração nenhuma, mesmo que a chave esteja correta.
+  if (MOUNT_ADMIN) {
+    // Sem chave (ou curta), as rotas administrativas recusam tudo. O diagnóstico
+    // é só de log porque a resposta HTTP não pode revelar se a chave existe (VUL-11).
+    const ADMIN_KEY_MIN_LENGTH = 32;
+    if (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH) {
+      log('warn', 'admin.desativado', {
+        motivo: process.env.LOLA_ADMIN_API_KEY ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
+        acao: 'rotas administrativas recusam qualquer chave',
+      });
+    }
+    if (PRODUCTION) {
+      log('warn', 'admin.embutido_em_producao', {
+        aviso: 'o painel compartilha processo e servidor com a vitrine',
+        recomendacao: 'separe o data-server.ts em outra máquina',
+      });
+    }
+  } else {
+    log(SPLIT_MODE ? 'info' : 'warn', 'admin.nao_exposto', {
+      motivo: SPLIT_MODE ? 'servidor_dividido' : 'producao_embutido_sem_LOLA_EMBEDDED_ADMIN',
+      acao: SPLIT_MODE
+        ? 'rotas administrativas vivem no data-server.ts'
+        : 'defina LOLA_EMBEDDED_ADMIN=true ou execute o data-server.ts',
+    });
+  }
 
   app.disable('x-powered-by');
   // Só confia em X-Forwarded-For quando os proxies são declarados explicitamente.
@@ -140,10 +160,9 @@ async function startServer() {
   app.use(createRequestLogger());
   app.use(express.json({ limit: '16kb' }));
 
-  const requireAdminKey = createAdminKeyMiddleware();
   const limitOrderDraft = createRateLimitMiddleware({
     windowMs: 60_000,
-    maxRequests: 10,
+    maxRequests: envInt('LOLA_ORDER_PER_MINUTE', 10, 1, 10_000),
     message: 'Limite temporário de pré-pedidos atingido. Tente novamente em um minuto.',
   });
   const limitAI = createRateLimitMiddleware({
@@ -186,92 +205,49 @@ async function startServer() {
   });
 
   // 1. GET /api/estoque/:productId
-  app.get('/api/estoque/:productId', limitRead, (req, res) => {
-    const stock = inventory.get(req.params.productId);
-    if (!stock) return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
+  app.get('/api/estoque/:productId', limitRead, async (req, res) => {
+    // O estoque vem do plano de dados. Este processo não guarda cópia alguma:
+    // ele consulta e devolve, e é o servidor de dados que diz o que é verdade.
+    const snapshot = await plane.snapshot().catch(() => null);
+    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const disponivel = snapshot[req.params.productId];
+    if (disponivel === undefined) {
+      return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
+    }
     // Storefront clients only need availability, not sales/reservation/inventory accounting.
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ productId: stock.productId, disponivel: stock.disponivel });
+    return res.json({ productId: req.params.productId, disponivel });
   });
 
-  // 2. POST /api/estoque/atualizar (baixa estrita e persistente)
-  app.post('/api/estoque/atualizar', requireAdminKey, (req, res) => {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const result = inventory.deduct(body.productId, body.quantidade);
-    if (!result.ok) return res.status(result.status).json({ error: result.error });
-    return res.json({
-      success: true,
-      productId: result.stock.productId,
-      novoDisponivel: result.stock.disponivel,
-      vendido: result.stock.vendido,
-    });
-  });
+  // 2. POST /api/estoque/atualizar — NÃO existe mais aqui. É escrita de estoque,
+  //    e escrita pertence ao servidor de dados, atrás da chave administrativa e
+  //    da allowlist de origem. No site público esta URL cai no 404 da API, com a
+  //    mesma resposta de qualquer rota inexistente: nem com a chave administrativa
+  //    certa em mão existe superfície de administração na vitrine.
 
-  // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar o cliente.
-  app.post('/api/pedidos/rascunho', limitOrderDraft, (req, res) => {
-    // VUL-18: resposta genérica. O motivo real está em `pedidos.desativado`, no
-    // log de subida — aqui dentro ele viraria um oráculo de configuração.
-    if (!orders.ready) {
+  // 3. POST /api/pedidos/rascunho — encaminha ao plano de dados.
+  //    Validação, reserva e persistência acontecem do outro lado: este processo
+  //    não tem estoque, não tem pedidos e não tem chave nenhuma para oferecer a
+  //    quem comprometesse a vitrine.
+  app.post('/api/pedidos/rascunho', limitOrderDraft, async (req, res) => {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'Dados do pré-pedido inválidos.' });
+    }
+    const result = await plane.createDraft(req.body, { ip: req.ip || '' }).catch(() => null);
+    if (!result) {
       return res.status(503).json({ error: 'O registro de pré-pedidos está temporariamente indisponível. Tente novamente mais tarde ou fale com o atendimento.' });
     }
-    // VUL-10: sem este check, o `false` do teto de 10k virava 500 genérico sem causa.
-    if (orders.atCapacity) {
-      return res.status(503).json({ error: 'Capacidade de pré-pedidos esgotada. A loja precisa liberar espaço antes de novas solicitações.' });
-    }
-    const result = buildOrderDraft(req.body, CATALOG_INFO, inventory);
-    if (!result.ok) return res.status(result.status).json({ error: result.error });
-
-    // VUL-03: sem reserva, 12 pedidos de 5 unidades passavam todos contra 7 em
-    // estoque, porque cada um voltava a enxergar o mesmo saldo. O handler é
-    // síncrono, então validar e comprometer acontece sem interleave.
-    const hold = inventory.placeHold(
-      result.order.id,
-      result.order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
-      Date.now() + RESERVATION_TTL_MS,
-    );
-    if (!hold.ok) {
-      log('warn', 'pedido.recusado_por_estoque', {
-        ip: req.ip, status: hold.status, produto: hold.productId,
-        solicitado: hold.requested, disponivel: hold.available,
-      });
-      return res.status(hold.status).json({ error: hold.error });
-    }
-
-    if (!orders.save(result.order)) {
-      inventory.removeHold(result.order.id);
-      log('error', 'pedido.falha_ao_persistir', { ip: req.ip });
-      return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
-    }
-    // Número do pré-pedido é identificador de negócio, não dado pessoal: serve
-    // para rastrear a origem do registro sem expor nome, telefone ou endereço.
-    log('info', 'pedido.registrado', { ip: req.ip, numero: result.order.orderNumber, itens: result.order.itemCount });
-    return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
-  });
-
-  // Protected admin endpoints for a future dashboard. Never return PII without server-side authentication.
-  // GET /api/admin/pre-pedidos?limit=50 — requires x-admin-key.
-  app.get('/api/admin/pre-pedidos', requireAdminKey, (req, res) => {
-    const requestedLimit = Number(req.query.limit ?? 50);
-    const limit = Number.isSafeInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
-    return res.json({ orders: orders.listRecent(limit).map(toAdminOrder) });
-  });
-
-  // GET /api/admin/pre-pedidos/:orderNumber — requires x-admin-key.
-  app.get('/api/admin/pre-pedidos/:orderNumber', requireAdminKey, (req, res) => {
-    if (!/^LOLA-\d{8}-[A-F0-9]{12}$/.test(req.params.orderNumber)) {
-      return res.status(400).json({ error: 'Código de pré-pedido inválido.' });
-    }
-    const order = orders.findByOrderNumber(req.params.orderNumber);
-    if (!order) return res.status(404).json({ error: 'Pré-pedido não encontrado.' });
-    return res.json({ order: toAdminOrder(order) });
+    return res.status(result.status).json(result.body);
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)
-  app.get('/api/produtos', limitRead, (req, res) => {
+  app.get('/api/produtos', limitRead, async (req, res) => {
+    const snapshot = await plane.snapshot().catch(() => null);
+    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
     let list = CATALOG_INFO.map((item) => ({
       ...item,
-      disponivel: inventory.get(item.id)?.disponivel ?? item.disponivel,
+      disponivel: snapshot[item.id] ?? item.disponivel,
     }));
 
     if (categoria && typeof categoria === 'string') {
@@ -292,13 +268,15 @@ async function startServer() {
   });
 
   // 5. GET /api/produto/:productId
-  app.get('/api/produto/:productId', limitRead, (req, res) => {
+  app.get('/api/produto/:productId', limitRead, async (req, res) => {
     const { productId } = req.params;
     const item = CATALOG_INFO.find((p) => p.id === productId);
     if (!item) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
-    const stock = inventory.get(productId)?.disponivel ?? item.disponivel;
+    const snapshot = await plane.snapshot().catch(() => null);
+    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const stock = snapshot[productId] ?? item.disponivel;
     res.json({ ...item, disponivel: stock });
   });
 
@@ -317,7 +295,9 @@ async function startServer() {
       return res.status(413).json({ error: 'A pergunta deve ter no máximo 1200 caracteres.' });
     }
 
-    // Prepare real-time inventory snapshot
+    // Prepare real-time inventory snapshot, consultado no plano de dados.
+    const stockSnapshot = await plane.snapshot().catch(() => null);
+    if (!stockSnapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const liveCatalog = CATALOG_INFO.map((prod) => ({
       id: prod.id,
       nome: prod.name,
@@ -325,7 +305,7 @@ async function startServer() {
       preco: `R$ ${prod.price.toFixed(2).replace('.', ',')}`,
       material: prod.material,
       cor: prod.color,
-      estoqueDisponivel: inventory.get(prod.id)?.disponivel ?? prod.disponivel,
+      estoqueDisponivel: stockSnapshot[prod.id] ?? prod.disponivel,
       descricao: prod.desc,
     }));
 
@@ -483,6 +463,24 @@ ${JSON.stringify(pergunta)}
     });
   });
 
+  // Painel administrativo: só em modo embutido, e só se quem opera pedir.
+  // Em modo dividido isto não existe — as rotas vivem no `data-server.ts`, em
+  // outra máquina, atrás da chave administrativa e da allowlist de origem.
+  if (MOUNT_ADMIN && localPlane) {
+    app.use('/api', createAdminRouter({
+      plane: localPlane,
+      allowlist: resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS),
+    }));
+  }
+
+  // Prefixo do canal interno pertence ao servidor de dados, nunca a esta
+  // aplicação. Declarar o 404 aqui mantém a superfície explícita: sem isto, um
+  // refactor futuro que montasse o router interno no lugar errado cairia no
+  // fallback da SPA em produção e ninguém perceberia.
+  app.use('/internal', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint de API não encontrado.' });
+  });
+
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint de API não encontrado.' });
   });
@@ -532,7 +530,9 @@ ${JSON.stringify(pergunta)}
       ambiente: process.env.NODE_ENV || 'development',
       estatico: process.env.NODE_ENV === 'production' ? 'sim' : 'nao',
       trustProxy: trustProxy === undefined ? 'nao' : String(trustProxy),
-      reservaEstoqueMs: RESERVATION_TTL_MS,
+      planoDeDados: SPLIT_MODE ? 'remoto' : 'local',
+      administrativo: MOUNT_ADMIN ? 'ativo' : 'inativo',
+      reservaEstoqueMs: SPLIT_MODE ? null : RESERVATION_TTL_MS,
     });
   });
 }

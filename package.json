@@ -8,8 +8,10 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:data": "tsx data-server.ts",
     "build": "vite build",
     "start": "tsx server.ts",
+    "start:data": "tsx data-server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
