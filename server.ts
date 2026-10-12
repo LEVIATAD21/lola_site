@@ -174,7 +174,12 @@ async function startServer() {
     if (!orders.ready) return res.status(503).json({ error: orders.unavailableReason || 'Armazenamento seguro de pré-pedidos indisponível.' });
     const result = buildOrderDraft(req.body, CATALOG_INFO, inventory);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
-    if (!orders.save(result.order)) return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });
+    const reserved = inventory.reserve(result.order.orderNumber, result.order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })), result.order.reservationExpiresAt);
+    if (!reserved) return res.status(409).json({ error: 'O estoque mudou enquanto a solicitação era registrada. Revise a quantidade e tente novamente.' });
+    if (!orders.save(result.order)) {
+      inventory.releaseReservation(result.order.orderNumber);
+      return res.status(503).json({ error: 'Não foi possível guardar a solicitação com segurança. Tente novamente mais tarde.' });
+    }
     return res.status(201).json({ success: true, order: toPublicOrder(result.order) });
   });
 
