@@ -9,6 +9,7 @@ import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } fro
 import { createAdminKeyMiddleware } from './src/server/adminAuth';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
+import { TrackingStore } from './src/server/tracking';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ for (const product of CATALOG_INFO) {
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
 const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
+const tracking = new TrackingStore(DATA_DIR, process.env.LOLA_TRACKING_ENCRYPTION_KEY || process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -139,6 +141,35 @@ async function startServer() {
     const order = orders.findByOrderNumber(req.params.orderNumber);
     if (!order) return res.status(404).json({ error: 'Pré-pedido não encontrado.' });
     return res.json({ order: toAdminOrder(order) });
+  });
+
+  // Shipment tracking: public access uses an unguessable token; administrative changes require the server-side admin key.
+  const limitTrackingLookup = createRateLimitMiddleware({
+    windowMs: 60_000, maxRequests: 20, message: 'Muitas consultas de rastreamento. Tente novamente em um minuto.',
+  });
+  app.get('/api/rastreio/:token', limitTrackingLookup, (req, res) => {
+    if (!tracking.ready) return res.status(503).json({ error: 'Rastreamento indisponível: configure a chave de criptografia.' });
+    const result = tracking.lookup(req.params.token);
+    if (!result) return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
+    return res.json({ tracking: result });
+  });
+
+  app.post('/api/admin/rastreios/:orderNumber', requireAdminKey, (req, res) => {
+    if (!orders.ready || !tracking.ready) return res.status(503).json({ error: 'Armazenamento seguro indisponível.' });
+    const orderNumber = req.params.orderNumber;
+    if (!/^LOLA-\\d{8}-[A-F0-9]{12}$/.test(orderNumber)) return res.status(400).json({ error: 'Número do pedido inválido.' });
+    if (!orders.findByOrderNumber(orderNumber)) return res.status(404).json({ error: 'Pedido não encontrado.' });
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (body.status !== undefined || body.carrierCode !== undefined || body.description !== undefined || body.location !== undefined) {
+      const status = body.status;
+      if (typeof status !== 'string') return res.status(400).json({ error: 'Informe um status de rastreamento válido.' });
+      const updated = tracking.update(orderNumber, { status: status as import('./src/server/tracking').InternalShippingStatus, ...(typeof body.carrierCode === 'string' ? { carrierCode: body.carrierCode } : {}), ...(typeof body.description === 'string' ? { description: body.description } : {}), ...(typeof body.location === 'string' ? { location: body.location } : {}) });
+      if (!updated) return res.status(400).json({ error: 'Não foi possível atualizar o rastreamento. Confira o status e o código.' });
+      return res.json({ tracking: updated });
+    }
+    const created = tracking.create(orderNumber);
+    if (!created) return res.status(500).json({ error: 'Não foi possível criar o link de rastreamento.' });
+    return res.status(201).json({ tracking: created.tracking, trackingUrl: '/rastreio?token=' + encodeURIComponent(created.token), token: created.token });
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)
