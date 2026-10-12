@@ -199,6 +199,7 @@ export function buildOrderDraft(
 export interface AdminOrderView {
   orderNumber: string;
   createdAt: string;
+  reservationExpiresAt: string;
   status: 'awaiting_payment_setup';
   paymentStatus: 'not_configured';
   paymentMethod: PaymentMethod;
