@@ -41,7 +41,7 @@ export default function App() {
       return findProductById(id) ? 'product-detail' : 'home';
     }
     if (path === '/carrinho') return 'cart';
-    if (path === '/checkout') return'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
+    if (path === '/checkout') return 'checkout';
     return 'home';
   };
 
@@ -187,7 +187,7 @@ export default function App() {
       title = 'Sua Sacola de Compras | LOLA Aço Inox';
       description = 'Revise seus itens na sacola de compras com cálculo de frete.';
       routePath = '/carrinho';
-    } else if (pageView ==='home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking') {
+    } else if (pageView === 'checkout') {
       title = 'Finalizar Compra | LOLA Aço Inox';
       description = 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
       routePath = '/checkout';
