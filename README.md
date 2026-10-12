@@ -210,3 +210,13 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 - Se o domínio estiver sempre servido por HTTPS, configure `LOLA_HSTS_ENABLED=true` no ambiente de produção para ativar HSTS. Não habilite essa opção se o mesmo hostname ainda precisar atender por HTTP.
 - A API administrativa e as respostas da API não são armazenadas em cache pelo navegador.
 - Os códigos de pré-pedido agora usam 12 caracteres aleatórios. Eles são identificadores, não substitutos da autenticação administrativa.
+
+
+## Rastreamento de pedidos (fundação em implementação)
+
+- A tela `/rastreio?token=...` segue a identidade visual existente da LOLA e consulta o backend sem armazenar o token no navegador.
+- `POST /api/admin/rastreios/:orderNumber` exige `x-admin-key`. Sem corpo de atualização, cria um link de rastreamento com token aleatório; guarde e envie o link ao cliente por um canal confiável. O token em texto puro só é retornado na criação, e somente seu hash é persistido.
+- Para atualizar, envie JSON com `status` (`preparing`, `posted`, `in_transit`, `out_for_delivery`, `delivered` ou `exception`) e, opcionalmente, `carrierCode`, `description` e `location`.
+- `GET /api/rastreio/:token` expõe somente resumo logístico e eventos, nunca nome, telefone ou endereço do cliente. As respostas não são armazenadas em cache e a consulta tem limite de frequência.
+- O armazenamento de rastreamento usa AES-256-GCM em `.data/tracking.enc.json`. Em produção, configure `LOLA_TRACKING_ENCRYPTION_KEY` (64 caracteres hexadecimais; `openssl rand -hex 32`) ou reutilize uma chave de pedidos estável. A chave precisa permanecer igual entre reinicializações.
+- **Limitação importante:** nesta etapa os eventos são atualizados pela administração. A integração automática com API/provedor dos Correios, notificações por e-mail, login/Minha Conta e recuperação de senha ainda precisam ser configurados antes de considerar o rastreamento ponta a ponta pronto para produção. Não são geradas movimentações reais automaticamente.
