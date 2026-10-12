@@ -68,13 +68,29 @@ describe('parseAIResponse', () => {
       resposta: 'Resposta',
       referencias: [
         { tipo: 'produto', id: 'x', titulo: 'Externo', link: 'javascript:alert(1)' },
-        { tipo: 'produto', id: 'x', titulo: 'Externo', link: '//evil.example' },
-        { tipo: 'produto', id: 'ok', titulo: 'Interno', link: '/produto/ok' },
-        { tipo: 'desconhecido', id: 'x', titulo: 'X', link: '/x' },
+        { tipo: 'produto', id: 'x', titulo: 'Host', link: '//evil.com' },
+        // VUL-07: barra invertida é normalizada em barra pelo navegador e o
+        // destino vira https://evil.com — open redirect disfarçado de interno.
+        { tipo: 'produto', id: 'x', titulo: 'Barra invertida', link: '/' + String.fromCharCode(92) + 'evil.com' },
+        { tipo: 'produto', id: 'x', titulo: 'Duas invertidas', link: '/' + String.fromCharCode(92) + String.fromCharCode(92) + 'evil.com' },
+        { tipo: 'produto', id: 'x', titulo: 'Tabulação', link: '/' + String.fromCharCode(9) + 'evil.com' },
+        { tipo: 'produto', id: 'x', titulo: 'Espaço', link: '/ evil.com' },
+        { tipo: 'produto', id: 'x', titulo: 'Outra origem', link: 'https://evil.com/produto/x' },
+        { tipo: 'produto', id: 'x', titulo: 'Sem barra', link: 'produto/x' },
+        { tipo: 'desconhecido', id: 'x', titulo: 'Tipo inválido', link: '/produto/x' },
       ],
-    })?.referencias).toEqual([
-      { tipo: 'produto', id: 'ok', titulo: 'Interno', link: '/produto/ok' },
-    ]);
+    })?.referencias).toEqual([]);
+  });
+
+  it('mantém fragmentos e caminhos internos legítimos', () => {
+    expect(parseAIResponse({
+      resposta: 'Resposta',
+      referencias: [
+        { tipo: 'produto', id: 'brinco-1', titulo: 'Argola', link: '/produto/brinco-1' },
+        { tipo: 'FAQ', id: 'garantia', titulo: 'Garantia', link: '#garantia' },
+        { tipo: 'politica', id: 'frete', titulo: 'Frete', link: '#frete' },
+      ],
+    })?.referencias).toHaveLength(3);
   });
 });
 

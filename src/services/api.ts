@@ -15,6 +15,42 @@ export interface AIResponse {
   referencias: AIRef[];
 }
 
+/**
+ * Só aceita destinos internos da própria loja.
+ *
+ * O padrão WHATWG de URL normaliza barra invertida em barra nos esquemas
+ * especiais, então um caminho iniciado com barra invertida + host resolve para
+ * o domínio do atacante — um open redirect disfarçado de link interno (VUL-07).
+ * Por isso a regra textual (sem barra invertida, sem caracteres de controle,
+ * sem espaço) vem ANTES da conferência de origem, e o caminho precisa continuar
+ * na mesma origem depois de resolvido pelo navegador.
+ */
+function hasUnsafeLinkChar(link: string): boolean {
+  for (let index = 0; index < link.length; index += 1) {
+    const code = link.charCodeAt(index);
+    // 0x00-0x20 = controles e espaço; 0x7f = DEL; 0x5c = barra invertida.
+    if (code <= 0x20 || code === 0x7f || code === 0x5c) return true;
+  }
+  return false;
+}
+
+function isInternalReferenceLink(link: string): boolean {
+  if (!link || link.length > 300) return false;
+  if (hasUnsafeLinkChar(link)) return false;
+  // Fragmento interno (#garantia, #frete): nunca sai do documento.
+  if (link.startsWith('#')) return true;
+  // "barra barra host" é relativo a outra origem; esquema de script nem chega aqui.
+  if (!link.startsWith('/') || link.startsWith('//')) return false;
+  try {
+    const base = typeof location !== 'undefined' && location.origin
+      ? location.origin
+      : 'https://lola.local';
+    return new URL(link, base).origin === base;
+  } catch {
+    return false;
+  }
+}
+
 /** Accept only a well-formed assistant response with safe internal reference links. */
 export function parseAIResponse(json: unknown): AIResponse | null {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
@@ -28,7 +64,7 @@ export function parseAIResponse(json: unknown): AIResponse | null {
     if (ref.tipo !== 'produto' && ref.tipo !== 'FAQ' && ref.tipo !== 'politica') continue;
     if (typeof ref.id !== 'string' || typeof ref.titulo !== 'string' || typeof ref.link !== 'string') continue;
     if (ref.id.length > 120 || ref.titulo.length > 200 || ref.link.length > 300) continue;
-    if (!(ref.link.startsWith('/') && !ref.link.startsWith('//')) && !ref.link.startsWith('#')) continue;
+    if (!isInternalReferenceLink(ref.link)) continue;
     referencias.push({ tipo: ref.tipo, id: ref.id, titulo: ref.titulo, link: ref.link });
   }
   return { resposta: value.resposta, referencias };
