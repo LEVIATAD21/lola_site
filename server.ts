@@ -9,6 +9,7 @@ import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } fro
 import { createAdminKeyMiddleware } from './src/server/adminAuth';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
+import { resolveTrustProxy } from './src/server/trustedProxy';
 
 dotenv.config();
 
@@ -65,6 +66,10 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   app.disable('x-powered-by');
+  // Só confia em X-Forwarded-For quando os proxies são declarados explicitamente.
+  // Sem isso o rate limit usa o IP do socket e não pode ser contornado por header.
+  const trustProxy = resolveTrustProxy(process.env.LOLA_TRUSTED_PROXY);
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
   // Apply headers before body parsing so malformed/oversized JSON also gets protections.
   app.use(createSecurityHeadersMiddleware({
     production: process.env.NODE_ENV === 'production',
