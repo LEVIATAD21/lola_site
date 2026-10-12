@@ -62,7 +62,12 @@ export class InventoryStore {
         throw new Error('Formato inválido no arquivo de estoque.');
       }
       for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
-        if (!(id in this.items)) continue;
+        // `Object.hasOwn` e não `id in this.items`: o `in` percorre a cadeia de
+        // protótipo, e `Object.prototype` TEM `__proto__` e `constructor`. Com
+        // o `in`, um arquivo envenenado com a chave "__proto__" passava na
+        // checagem e a atribuição abaixo disparava o setter de `__proto__`,
+        // trocando o protótipo do objeto de estoque em vez de gravar o item.
+        if (!Object.hasOwn(this.items, id)) continue;
         if (!this.isValidItem(id, value)) {
           throw new Error('Registro inválido para o produto ' + id + '.');
         }
@@ -93,16 +98,30 @@ export class InventoryStore {
     return total;
   }
 
+  /**
+   * Lê um item por id sem atravessar a cadeia de protótipo.
+   *
+   * `this.items[productId]` devolve `Object.prototype.constructor` para o id
+   * "constructor" e o próprio protótipo para "__proto__": são chaves herdadas,
+   * não registradas. Um id digitado na URL, sem esta guarda, virava um item de
+   * estoque fantasma com saldo `NaN` no lugar de "produto não encontrado" — e
+   * no caminho de baixa chegaria a escrever propriedade em `Object`.
+   */
+  private lookup(productId: string): StockItem | undefined {
+    if (!Object.hasOwn(this.items, productId)) return undefined;
+    return this.items[productId];
+  }
+
   /** Unidades realmente vendáveis: estoque gravado menos as pré-reservas ativas. */
   availableQuantity(productId: string, now = Date.now()): number {
-    const item = this.items[productId];
+    const item = this.lookup(productId);
     if (!item) return 0;
     return Math.max(0, item.disponivel - this.heldQuantity(productId, now));
   }
 
   /** Estoque contábil com `disponivel` já líquido das pré-reservas ativas. */
   get(productId: string): StockItem | undefined {
-    const item = this.items[productId];
+    const item = this.lookup(productId);
     return item ? { ...item, disponivel: this.availableQuantity(productId) } : undefined;
   }
 
@@ -124,7 +143,7 @@ export class InventoryStore {
     // unidades passariam separadamente contra 7 em estoque (total 9).
     const pending = new Map<string, number>();
     for (const line of lines) {
-      if (!this.items[line.productId]) {
+      if (!this.lookup(line.productId)) {
         return {
           ok: false, status: 404, productId: line.productId,
           requested: line.quantity, available: 0,
@@ -202,7 +221,7 @@ export class InventoryStore {
     if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity <= 0) {
       return { ok: false, status: 400, error: 'quantidade deve ser um inteiro positivo.' };
     }
-    const current = this.items[productId];
+    const current = this.lookup(productId);
     if (!current) {
       return { ok: false, status: 404, error: 'Produto não encontrado no catálogo.' };
     }

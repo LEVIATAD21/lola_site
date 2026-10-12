@@ -84,6 +84,37 @@ describe('InventoryStore', () => {
     writeFileSync(file, JSON.stringify(data));
     expect(() => new InventoryStore(initial, file)).toThrow(/estoque persistido/);
   });
+
+  it('ignora chave de protótipo vinda do arquivo e não troca o protótipo do estoque', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-proto-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'inventory.json');
+    const store = new InventoryStore(initial, file);
+    store.deduct('brinco-1', 1);
+
+    // `JSON.parse` cria "__proto__" como propriedade própria. Com o `in`, a
+    // checagem era true (Object.prototype TEM essa chave) e a atribuição
+    // disparava o setter: o protótipo do objeto de estoque era trocado e
+    // QUALQUER id desconhecido passava a devolver um item inventado pelo
+    // arquivo, com saldo à escolha do atacante.
+    const hostil = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    Object.defineProperty(hostil, '__proto__', {
+      value: { productId: 'fantasma', total: 999_999, reservado: 0, vendido: 0, disponivel: 999_999 },
+      enumerable: true, writable: true, configurable: true,
+    });
+    hostil['constructor'] = {
+      productId: 'constructor', total: 0, reservado: 0, vendido: 0, disponivel: 0,
+    };
+    writeFileSync(file, JSON.stringify(hostil));
+
+    const restarted = new InventoryStore(initial, file);
+
+    expect(restarted.get('brinco-1')).toMatchObject({ vendido: 3, disponivel: 6 });
+    // O impacto: sem a correção, um id que não existe devolvia um item com
+    // saldo forjado pelo arquivo, em vez de undefined.
+    expect(restarted.get('produto-fantasma')).toBeUndefined();
+    expect(restarted.get('constructor')).toBeUndefined();
+  });
 });
 
 // VUL-03: 12 pré-pedidos de 5 unidades passavam todos contra 7 em estoque,
