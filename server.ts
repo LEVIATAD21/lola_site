@@ -12,7 +12,10 @@ import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { resolveTrustProxy } from './src/server/trustedProxy';
 
-dotenv.config();
+// `quiet` remove o banner de divulgação do dotenv, que poluía o log do servidor
+// a cada reinício — e um anúncio dentro do log de produção é anúncio no lugar
+// errado (VUL-15).
+dotenv.config({ quiet: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
