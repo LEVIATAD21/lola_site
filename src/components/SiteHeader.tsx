@@ -3,7 +3,7 @@ import { Search, User, ShoppingBag, ChevronDown, Menu, X, ArrowRight, Heart } fr
 import { CATEGORIES, FEATURED_PRODUCTS, Product, Category } from '../data/mockData';
 
 interface SiteHeaderProps {
-  currentPageView: 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout';
+  currentPageView: 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
   onNavigateHome: () => void;
   onNavigateEarrings: () => void;
   onNavigateCart?: () => void;
