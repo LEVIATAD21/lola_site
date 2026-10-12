@@ -1,4 +1,6 @@
 import express from 'express';
+import { isIP } from 'node:net';
+import { createHash } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -9,8 +11,9 @@ import { buildOrderDraft, EncryptedOrderStore, toAdminOrder, toPublicOrder } fro
 import { createAdminKeyMiddleware } from './src/server/adminAuth';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
+import { PersistentDailyBudget } from './src/server/dailyBudget';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +49,8 @@ for (const product of CATALOG_INFO) {
 const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
 const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
+const dailyAILimit = Number.parseInt(process.env.LOLA_AI_DAILY_REQUEST_LIMIT || '200', 10);
+const aiBudget = new PersistentDailyBudget(DATA_DIR, Number.isSafeInteger(dailyAILimit) && dailyAILimit > 0 ? dailyAILimit : 200);
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
@@ -60,16 +65,61 @@ SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 - Atendimento: não invente números de telefone, perfis sociais ou canais de contato.
 `;
 
+function parseTrustedProxyEntries(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  const entries = raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+  for (const entry of entries) {
+    const [address, prefix, ...extra] = entry.split('/');
+    const family = isIP(address);
+    const maxPrefix = family === 4 ? 32 : family === 6 ? 128 : 0;
+    if (!family || extra.length > 0 ||
+        (prefix !== undefined && (!Number.isInteger(Number(prefix)) || Number(prefix) < 1 || Number(prefix) > maxPrefix))) {
+      throw new Error('LOLA_TRUST_PROXY aceita somente IPs explícitos ou CIDRs específicos; não use wildcard ou contagem de saltos.');
+    }
+  }
+  return entries;
+}
+
+function clientReference(ip: string): string {
+  return createHash('sha256').update(ip || 'unknown').digest('hex').slice(0, 16);
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
   app.disable('x-powered-by');
+  const trustedProxyEntries = parseTrustedProxyEntries(process.env.LOLA_TRUST_PROXY);
+  if (trustedProxyEntries.length > 0) app.set('trust proxy', trustedProxyEntries);
+  if (process.env.NODE_ENV === 'production' && trustedProxyEntries.length === 0) {
+    console.warn(JSON.stringify({ event: 'configuration_warning', message: 'LOLA_TRUST_PROXY não configurado; rate limits usarão o IP do socket. Configure apenas IPs/CIDRs confiáveis se houver proxy reverso.' }));
+  }
   // Apply headers before body parsing so malformed/oversized JSON also gets protections.
   app.use(createSecurityHeadersMiddleware({
     production: process.env.NODE_ENV === 'production',
-    enableHsts: process.env.LOLA_HSTS_ENABLED === 'true',
+    enableHsts: process.env.NODE_ENV === 'production' && process.env.LOLA_HSTS_ENABLED !== 'false',
   }));
+  // Structured logs: never record bodies, query strings, auth headers, or raw tracking tokens.
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.once('finish', () => {
+      let route = req.path;
+      if (route.toLowerCase().startsWith('/api/rastreio/')) route = '/api/rastreio/:token';
+      else if (route.toLowerCase().startsWith('/api/admin/pre-pedidos/')) route = '/api/admin/pre-pedidos/:orderNumber';
+      if (typeof req.route?.path === 'string') route = ((req.baseUrl || '') + req.route.path).toLowerCase();
+      const ip = req.ip || req.socket.remoteAddress || 'unknown';
+      console.log(JSON.stringify({
+        event: 'http_request',
+        method: req.method,
+        route: route.slice(0, 160),
+        status: res.statusCode,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        clientRef: clientReference(ip),
+      }));
+    });
+    next();
+  });
+
   app.use('/api', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
@@ -82,18 +132,23 @@ async function startServer() {
     maxRequests: 10,
     message: 'Limite temporário de pré-pedidos atingido. Tente novamente em um minuto.',
   });
+  const limitPublicRead = createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: 300,
+    message: 'Muitas consultas ao catálogo. Aguarde um minuto e tente novamente.',
+  });
   const limitAI = createRateLimitMiddleware({
     windowMs: 60_000,
     maxRequests: 20,
     message: 'Limite temporário de consultas atingido. Tente novamente em um minuto.',
   });
 
-  app.get('/api/health', (_req, res) => {
+  app.get('/api/health', limitPublicRead, (_req, res) => {
     res.json({ status: 'ok', service: 'lola-api', timestamp: new Date().toISOString() });
   });
 
   // 1. GET /api/estoque/:productId
-  app.get('/api/estoque/:productId', (req, res) => {
+  app.get('/api/estoque/:productId', limitPublicRead, (req, res) => {
     const stock = inventory.get(req.params.productId);
     if (!stock) return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
     // Storefront clients only need availability, not sales/reservation/inventory accounting.
@@ -142,7 +197,7 @@ async function startServer() {
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)
-  app.get('/api/produtos', (req, res) => {
+  app.get('/api/produtos', limitPublicRead, (req, res) => {
     const { categoria, query } = req.query;
     let list = CATALOG_INFO.map((item) => ({
       ...item,
@@ -167,7 +222,7 @@ async function startServer() {
   });
 
   // 5. GET /api/produto/:productId
-  app.get('/api/produto/:productId', (req, res) => {
+  app.get('/api/produto/:productId', limitPublicRead, (req, res) => {
     const { productId } = req.params;
     const item = CATALOG_INFO.find((p) => p.id === productId);
     if (!item) {
@@ -229,6 +284,14 @@ async function startServer() {
 
     try {
       if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
+        const budget = aiBudget.consume();
+        if (!budget.allowed) {
+          return res.status(aiBudget.ready ? 429 : 503).json({
+            error: aiBudget.ready
+              ? 'Limite diário de consultas ao assistente atingido. Tente novamente amanhã.'
+              : 'Assistente temporariamente indisponível por proteção de orçamento.',
+          });
+        }
         const ai = new GoogleGenAI({ apiKey });
 
         const systemInstruction = `
@@ -266,7 +329,8 @@ ${JSON.stringify(pergunta)}
           contents: promptText,
           config: {
             systemInstruction,
-            temperature: 0.2, // low temperature to ensure strict adherence to facts
+            temperature: 0.2,
+            maxOutputTokens: 350, // bound response size and provider usage per request
           },
         });
 
@@ -383,8 +447,9 @@ ${JSON.stringify(pergunta)}
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Lola Aço Inox server running on http://0.0.0.0:${PORT}`);
+  const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+  app.listen(PORT, host, () => {
+    console.log(JSON.stringify({ event: 'server_started', host, port: PORT, environment: process.env.NODE_ENV || 'development' }));
   });
 }
 
