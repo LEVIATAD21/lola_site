@@ -60,7 +60,28 @@ function envInt(name: string, fallback: number, min: number, max: number): numbe
 // expira e as unidades voltam para a vitrine automaticamente.
 const RESERVATION_TTL_MS = envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000);
 const inventory = new InventoryStore(INITIAL_STOCK, path.join(DATA_DIR, 'inventory.json'));
-const orders = new EncryptedOrderStore(DATA_DIR, process.env.LOLA_ORDERS_ENCRYPTION_KEY, process.env.NODE_ENV === 'production');
+// VUL-17: a chave pode vir de fora do diretório de dados (volume de segredo do
+// Docker/Kubernetes), para não ficar ao lado do próprio ciphertext. Em
+// produção, ou a variável de ambiente ou o arquivo apontado por
+// LOLA_ORDERS_KEY_FILE — sem nenhum dos dois, os pré-pedidos ficam desligados.
+const orders = new EncryptedOrderStore(
+  DATA_DIR,
+  process.env.LOLA_ORDERS_ENCRYPTION_KEY,
+  process.env.NODE_ENV === 'production',
+  process.env.LOLA_ORDERS_KEY_FILE,
+);
+
+// VUL-18: o diagnóstico do armazenamento de pedidos é só de log. Devolver
+// `unavailableReason` na resposta seria um oráculo de configuração para qualquer
+// visitante — a mesma fenda do VUL-11 na rota administrativa: a mensagem diz se a
+// chave está ausente, malformada, com permissão errada ou se o arquivo está
+// corrompido, tudo sem autenticação.
+if (!orders.ready) {
+  log('warn', 'pedidos.desativado', {
+    motivo: orders.unavailableReason ?? 'armazenamento indisponível',
+    acao: 'a rota de pré-pedido responde 503 genérico',
+  });
+}
 
 // Libera reservas vencidas mesmo que nenhum novo pedido chegue.
 const reservationSweep = setInterval(() => {
@@ -188,7 +209,11 @@ async function startServer() {
 
   // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar o cliente.
   app.post('/api/pedidos/rascunho', limitOrderDraft, (req, res) => {
-    if (!orders.ready) return res.status(503).json({ error: orders.unavailableReason || 'Armazenamento seguro de pré-pedidos indisponível.' });
+    // VUL-18: resposta genérica. O motivo real está em `pedidos.desativado`, no
+    // log de subida — aqui dentro ele viraria um oráculo de configuração.
+    if (!orders.ready) {
+      return res.status(503).json({ error: 'O registro de pré-pedidos está temporariamente indisponível. Tente novamente mais tarde ou fale com o atendimento.' });
+    }
     // VUL-10: sem este check, o `false` do teto de 10k virava 500 genérico sem causa.
     if (orders.atCapacity) {
       return res.status(503).json({ error: 'Capacidade de pré-pedidos esgotada. A loja precisa liberar espaço antes de novas solicitações.' });

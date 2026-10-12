@@ -2,7 +2,7 @@ import {
   createCipheriv, createDecipheriv, randomBytes, randomUUID,
 } from 'node:crypto';
 import {
-  chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { VALID_COUPONS } from '../data/coupons';
@@ -275,7 +275,7 @@ export class EncryptedOrderStore {
   readonly ready: boolean;
   readonly unavailableReason: string | null;
 
-  constructor(directory: string, keyHex?: string, production = false) {
+  constructor(directory: string, keyHex?: string, production = false, keyFilePath?: string) {
     this.filePath = join(directory, 'orders.enc.json');
     let key: Buffer | undefined;
     let reason: string | null = null;
@@ -283,8 +283,27 @@ export class EncryptedOrderStore {
     if (keyHex) {
       if (!/^[a-f\d]{64}$/i.test(keyHex)) reason = 'LOLA_ORDERS_ENCRYPTION_KEY deve conter exatamente 64 caracteres hexadecimais.';
       else key = Buffer.from(keyHex, 'hex');
+    } else if (keyFilePath) {
+      // VUL-17: permite guardar a chave FORA do diretório de dados, em vez de
+      // ao lado do próprio ciphertext. É o padrão dos volumes de segredo do
+      // Docker e do Kubernetes, e é o que separa "quem lê o backup" de "quem
+      // tem a chave".
+      try {
+        const text = readFileSync(keyFilePath, 'utf8').trim();
+        if (!/^[a-f\d]{64}$/i.test(text)) reason = 'O arquivo de chave de pedidos (LOLA_ORDERS_KEY_FILE) não contém 64 caracteres hexadecimais.';
+        else key = Buffer.from(text, 'hex');
+        if (production && key) {
+          const mode = statSync(keyFilePath).mode & 0o777;
+          if ((mode & 0o077) !== 0) {
+            key = undefined;
+            reason = 'O arquivo de chave de pedidos em produção precisa de permissão 0600 (sem acesso de grupo ou de outros).';
+          }
+        }
+      } catch {
+        reason = 'Não foi possível ler o arquivo de chave de pedidos (LOLA_ORDERS_KEY_FILE).';
+      }
     } else if (production) {
-      reason = 'Configure LOLA_ORDERS_ENCRYPTION_KEY (32 bytes em hexadecimal) para habilitar pré-pedidos em produção.';
+      reason = 'Configure LOLA_ORDERS_ENCRYPTION_KEY ou LOLA_ORDERS_KEY_FILE (32 bytes em hexadecimal) para habilitar pré-pedidos em produção.';
     } else {
       try {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -309,6 +328,13 @@ export class EncryptedOrderStore {
         }
         // Permissões restritas são desejáveis, mas uma falha aqui não pode impedir o boot.
         try { if (existsSync(keyPath)) chmodSync(keyPath, 0o600); } catch { /* best effort */ }
+        // VUL-17: em desenvolvimento a chave é criada DENTRO do diretório de
+        // dados, na mesma pasta do ciphertext. Qualquer cópia de backup do
+        // diretório leva os dois juntos, e qualquer leitura de arquivo resolve
+        // a cifra. Aceitável só em dev; em produção a chave vem de fora.
+        console.warn('[pedidos] Chave local ao lado dos dados cifrados: ' + keyPath
+          + ' — aceitavel apenas em desenvolvimento. Em producao use LOLA_ORDERS_ENCRYPTION_KEY'
+          + ' ou LOLA_ORDERS_KEY_FILE apontando para fora do diretorio de dados.');
       } catch (error) {
         // VUL-05: erro de E/S no diretório local também reiniciava o processo em loop.
         // Motivo fica genérico porque ele é devolvido ao cliente via 503.
@@ -341,7 +367,7 @@ export class EncryptedOrderStore {
         // indisponível para pré-pedidos e o operador conserta a chave.
         records = [];
         reason = 'Não foi possível decifrar o arquivo de pré-pedidos (.data/orders.enc.json). '
-          + 'Verifique LOLA_ORDERS_ENCRYPTION_KEY ou restaure o backup do arquivo. '
+          + 'Verifique LOLA_ORDERS_ENCRYPTION_KEY / LOLA_ORDERS_KEY_FILE ou restaure o backup do arquivo. '
           + 'O arquivo não foi alterado.';
         console.error('[pedidos] Falha ao decifrar orders.enc.json:', (error as Error)?.message);
       }

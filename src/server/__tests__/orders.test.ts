@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildOrderDraft, EncryptedOrderStore, type StoredOrderDraft, type OrderCatalogProduct } from '../orders';
@@ -166,11 +166,74 @@ describe('EncryptedOrderStore', () => {
     expect(store.ready).toBe(false);
     expect(store.save(builtOrder())).toBe(false);
     expect(store.unavailableReason).toMatch(/LOLA_ORDERS_ENCRYPTION_KEY/);
+    expect(store.unavailableReason).toMatch(/LOLA_ORDERS_KEY_FILE/);
   });
   it('aceita chave de 32 bytes em hexadecimal', () => {
     const store = new EncryptedOrderStore(tempDirectory(), 'ab'.repeat(32), true);
     expect(store.ready).toBe(true);
     expect(store.save(builtOrder())).toBe(true);
+  });
+
+  // VUL-17: uma chave criada ao lado do ciphertext faz com que qualquer cópia de
+  // backup de .data/ leve os dois juntos. LOLA_ORDERS_KEY_FILE permite guardar a
+  // chave fora, em volume de segredo montado só-leitura.
+  describe('LOLA_ORDERS_KEY_FILE (chave fora do diretório de dados)', () => {
+    it('carrega a chave de um arquivo externo sem materializá-la em .data', () => {
+      const data = tempDirectory();
+      const keyFile = join(tempDirectory(), 'segredo.key');
+      writeFileSync(keyFile, 'ab'.repeat(32) + '\n', { mode: 0o600 });
+      chmodSync(keyFile, 0o600);
+
+      const store = new EncryptedOrderStore(data, undefined, true, keyFile);
+      expect(store.ready).toBe(true);
+      expect(store.save(builtOrder())).toBe(true);
+      expect(existsSync(join(data, 'orders.key'))).toBe(false);
+
+      const reopened = new EncryptedOrderStore(data, undefined, true, keyFile);
+      expect(reopened.ready).toBe(true);
+      expect(reopened.size).toBe(1);
+    });
+
+    it('recusa arquivo de chave com permissão aberta em produção', () => {
+      const keyFile = join(tempDirectory(), 'segredo.key');
+      writeFileSync(keyFile, 'ab'.repeat(32), { mode: 0o644 });
+      chmodSync(keyFile, 0o644);
+      const store = new EncryptedOrderStore(tempDirectory(), undefined, true, keyFile);
+      expect(store.ready).toBe(false);
+      expect(store.unavailableReason).toMatch(/0600/);
+      expect(store.save(builtOrder())).toBe(false);
+    });
+
+    it('recusa arquivo de chave ausente ou malformado', () => {
+      const ausente = new EncryptedOrderStore(
+        tempDirectory(), undefined, true, join(tempDirectory(), 'nao-existe.key'),
+      );
+      expect(ausente.ready).toBe(false);
+      expect(ausente.save(builtOrder())).toBe(false);
+
+      const ruim = join(tempDirectory(), 'segredo.key');
+      writeFileSync(ruim, 'não é hexadecimal', { mode: 0o600 });
+      const malformado = new EncryptedOrderStore(tempDirectory(), undefined, true, ruim);
+      expect(malformado.ready).toBe(false);
+      expect(malformado.unavailableReason).toMatch(/64 caracteres/);
+    });
+
+    it('a variável de ambiente tem precedência sobre o arquivo', () => {
+      const data = tempDirectory();
+      const keyFile = join(tempDirectory(), 'segredo.key');
+      writeFileSync(keyFile, 'cd'.repeat(32), { mode: 0o600 });
+      chmodSync(keyFile, 0o600);
+
+      const store = new EncryptedOrderStore(data, 'ab'.repeat(32), true, keyFile);
+      expect(store.ready).toBe(true);
+      expect(store.save(builtOrder())).toBe(true);
+
+      // Se o arquivo tivesse sido usado, o reabrir com a mesma chave externa
+      // decifraria. Como quem cifrou foi a env, o arquivo não serve.
+      const reopened = new EncryptedOrderStore(data, undefined, true, keyFile);
+      expect(reopened.ready).toBe(false);
+      expect(reopened.unavailableReason).toMatch(/decifrar/);
+    });
   });
 
   // VUL-05: a exceção saía do construtor, o processo morria e o PM2/systemd reiniciava
