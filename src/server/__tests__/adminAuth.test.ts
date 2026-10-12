@@ -41,7 +41,7 @@ describe('createAdminKeyMiddleware', () => {
     const endpoint = await startProtectedEndpoint(() => undefined);
     const response = await fetch(endpoint.url, { method: 'POST' });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(401);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(endpoint.mutations()).toBe(0);
   });
@@ -56,6 +56,7 @@ describe('createAdminKeyMiddleware', () => {
 
     expect(missing.status).toBe(401);
     expect(incorrect.status).toBe(401);
+    expect(await missing.json()).toEqual(await incorrect.json());
     expect(endpoint.mutations()).toBe(0);
   });
 
@@ -78,7 +79,7 @@ describe('createAdminKeyMiddleware', () => {
       headers: { 'x-admin-key': 'short' },
     });
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(401);
     expect(endpoint.mutations()).toBe(0);
   });
 });
