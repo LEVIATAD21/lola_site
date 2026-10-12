@@ -5,8 +5,63 @@ export interface RateLimitOptions {
   maxRequests: number;
   maxBuckets?: number;
   message?: string;
-  /** Defaults to socket IP + route path. Do not use untrusted forwarding headers here. */
+  /** Defaults to proxy-aware client IP + canonical route path. Do not use untrusted forwarding headers here. */
   keyGenerator?: (req: Request) => string;
+}
+
+/**
+ * Collapse every Express-compatible spelling of a path onto one canonical form.
+ *
+ * Express matches `/api/pedidos/rascunho`, `/API/PEDIDOS/RASCUNHO` and
+ * `/api/pedidos/rascunho/` to the same handler (routing is case-insensitive and
+ * non-strict by default), so a key built from the raw `req.path` hands an
+ * attacker one fresh bucket per spelling. Canonicalizing removes that bypass.
+ */
+export function canonicalPath(rawPath: string): string {
+  let value = typeof rawPath === 'string' ? rawPath.split('?')[0] ?? '' : '';
+  try {
+    // %2f, %41, ... must collapse with their literal counterparts.
+    value = decodeURIComponent(value);
+  } catch {
+    // Malformed percent-encoding: keep the raw bytes; they still map consistently.
+  }
+  value = value.replace(/\\/g, '/');
+  const segments: string[] = [];
+  for (const segment of value.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  // Express matches routes case-insensitively by default, so `/API/x` and `/api/x`
+  // are the same handler and must share one bucket.
+  return ('/' + segments.join('/')).toLowerCase();
+}
+
+/** Route pattern actually matched by Express, or the raw path when used as `app.use` middleware. */
+function routePattern(req: Request): string {
+  const route = req.route as { path?: unknown } | undefined;
+  const raw = route?.path;
+  const pattern = typeof raw === 'string'
+    ? raw
+    : Array.isArray(raw) && typeof raw[0] === 'string' ? raw[0] : '';
+  if (pattern) return canonicalPath((req.baseUrl || '') + pattern);
+  return canonicalPath(req.path);
+}
+
+/**
+ * `req.ip` honours `trust proxy` only when it is explicitly configured, so a
+ * forged `X-Forwarded-For` cannot mint a new bucket per request by default.
+ */
+function clientKey(req: Request): string {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+/** Shared default: one bucket per client per matched route, immune to path spelling tricks. */
+export function defaultKeyGenerator(req: Request): string {
+  return clientKey(req) + '|' + routePattern(req);
 }
 
 /** Per-process limiter for a single Node instance. Add shared WAF/Redis limits for multi-instance production. */
@@ -15,8 +70,7 @@ export function createRateLimitMiddleware(options: RateLimitOptions): RequestHan
   const maxRequests = Math.max(1, Math.floor(options.maxRequests));
   const maxBuckets = Math.max(100, Math.floor(options.maxBuckets ?? 10_000));
   const message = options.message ?? 'Limite temporário atingido. Tente novamente mais tarde.';
-  const keyGenerator = options.keyGenerator ?? ((req: Request) =>
-    (req.socket.remoteAddress || 'unknown') + ':' + req.path);
+  const keyGenerator = options.keyGenerator ?? defaultKeyGenerator;
   const buckets = new Map<string, { count: number; resetAt: number }>();
   let lastSweepAt = 0;
 
