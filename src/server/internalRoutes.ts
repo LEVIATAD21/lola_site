@@ -30,11 +30,17 @@ export function createInternalRouter(options: InternalRouterOptions): Router {
 
   // Chave sempre pelo endereço do socket: o servidor de dados não fica atrás de
   // proxy nenhum, e confiar em X-Forwarded-For aqui daria balde novo por requisição.
+  //
+  // Sem o caminho na chave. Este router tem duas rotas fixas, mas o middleware
+  // roda em `router.use`, ou seja, alcança QUALQUER caminho sob /internal — e
+  // um atacante na rede privada inventando caminhos multiplicaria a permissão
+  // de 10.000/min por rota nova e inflaria o mapa de baldes. O teto passa a ser
+  // por origem, inteiro.
   router.use(createRateLimitMiddleware({
     windowMs: 60_000,
     maxRequests: options.perMinute ?? 10_000,
     maxBuckets: 20_000,
-    keyGenerator: (req) => (req.socket.remoteAddress || 'unknown') + '|' + req.path,
+    keyGenerator: (req) => req.socket.remoteAddress || 'unknown',
     message: 'Limite temporário de chamadas internas atingido.',
   }));
 
