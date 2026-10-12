@@ -122,6 +122,10 @@ async function startServer() {
   // 3. POST /api/pedidos/rascunho — registra uma solicitação cifrada, sem cobrar ou reservar estoque.
   app.post('/api/pedidos/rascunho', limitOrderDraft, (req, res) => {
     if (!orders.ready) return res.status(503).json({ error: orders.unavailableReason || 'Armazenamento seguro de pré-pedidos indisponível.' });
+    // VUL-10: sem este check, o `false` do teto de 10k virava 500 genérico sem causa.
+    if (orders.atCapacity) {
+      return res.status(503).json({ error: 'Capacidade de pré-pedidos esgotada. A loja precisa liberar espaço antes de novas solicitações.' });
+    }
     const result = buildOrderDraft(req.body, CATALOG_INFO, inventory);
     if (!result.ok) return res.status(result.status).json({ error: result.error });
     if (!orders.save(result.order)) return res.status(500).json({ error: 'Não foi possível salvar a solicitação com segurança. Tente novamente.' });

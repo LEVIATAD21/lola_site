@@ -98,6 +98,38 @@ describe('buildOrderDraft', () => {
     expect(JSON.stringify(result.order)).not.toContain('cardCvv');
     expect(JSON.stringify(result.order)).not.toContain('cardExpiry');
   });
+
+  // VUL-09: XSS armazenado latente — o nome do cliente é persistido e reexibido
+  // ao administrador. A rejeição acontece na entrada, em todos os campos de texto.
+  it('rejeita marcação HTML em qualquer campo de texto do cliente', () => {
+    const base = validInput().customer as Record<string, string>;
+    const attacks: Array<Record<string, string>> = [
+      { fullName: '<img src=x onerror=alert(1)>' },
+      { street: 'Rua das Flores <script>alert(document.cookie)</script>' },
+      { number: '123<b>' },
+      { neighborhood: 'Centro<svg onload=alert(1)>' },
+      { city: 'Queimados"><iframe>' },
+      { complement: '"><svg onload=alert(1)>' },
+      { state: 'RJ<' },
+    ];
+    for (const override of attacks) {
+      const result = buildOrderDraft(validInput({ customer: { ...base, ...override } }), catalog, inventory());
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(400);
+        expect(result.error).toMatch(/marcação/);
+      }
+    }
+  });
+
+  it('rejeita marcação HTML na variação de produto', () => {
+    const result = buildOrderDraft(
+      validInput({ items: [{ productId: 'brinco-1', quantity: 1, variant: '<script>alert(1)</script>' }] }),
+      catalog, inventory(),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
 });
 
 describe('EncryptedOrderStore', () => {
@@ -170,5 +202,23 @@ describe('EncryptedOrderStore', () => {
     mkdirSync(join(unreadable, 'orders.enc.json'), { recursive: true });
     expect(() => new EncryptedOrderStore(unreadable, 'ab'.repeat(32), true)).not.toThrow();
     expect(new EncryptedOrderStore(unreadable, 'ab'.repeat(32), true).ready).toBe(false);
+  });
+
+  // VUL-10: o teto de 10k retornava `false` sem distinção e o endpoint respondia
+  // 500 permanente, sem log nem indicador de que era capacidade e não erro de disco.
+  it('sinaliza atCapacity quando o teto é atingido e recusa novas escritas', () => {
+    const store = new EncryptedOrderStore(tempDirectory(), 'ab'.repeat(32), true);
+    expect(store.ready).toBe(true);
+    expect(store.atCapacity).toBe(false);
+    expect(store.save(builtOrder())).toBe(true);
+
+    const internal = store as unknown as { records: StoredOrderDraft[] };
+    const seed = builtOrder();
+    internal.records = Array.from({ length: EncryptedOrderStore.MAX_RECORDS }, () => ({ ...seed }));
+
+    expect(store.atCapacity).toBe(true);
+    expect(store.save(builtOrder())).toBe(false);
+    // Nada foi adicionado: a recusa acontece antes do push.
+    expect(store.size).toBe(EncryptedOrderStore.MAX_RECORDS);
   });
 });

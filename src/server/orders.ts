@@ -49,7 +49,15 @@ const SHIPPING_OPTIONS = new Set<ShippingOptionId>(['pac', 'sedex', 'transportad
 function cleanText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const text = value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  // VUL-09: nenhum campo de texto livre aceita marcação HTML/JS. Os dados do
+  // cliente são persistidos e reexibidos no painel administrativo; rejeitar na
+  // entrada fecha o XSS armazenado sem precisar escapar na saída.
+  if (/[<>]/.test(text)) return null;
   return text.length <= maxLength ? text : null;
+}
+/** Detecção separada só para devolver uma mensagem de erro honesta ao cliente. */
+function containsMarkup(value: unknown): boolean {
+  return typeof value === 'string' && /[<>]/.test(value);
 }
 function requiredText(value: unknown, minLength: number, maxLength: number): string | null {
   const text = cleanText(value, maxLength);
@@ -70,6 +78,9 @@ export function buildOrderDraft(
   if (!isObject(raw.customer)) return { ok: false, status: 400, error: 'Preencha os dados de entrega.' };
 
   const inputCustomer = raw.customer;
+  if (Object.values(inputCustomer).some(containsMarkup)) {
+    return { ok: false, status: 400, error: 'Os campos de endereço não podem conter caracteres de marcação (< ou >).' };
+  }
   const fullName = requiredText(inputCustomer.fullName, 3, 120);
   const street = requiredText(inputCustomer.street, 5, 180);
   const number = requiredText(inputCustomer.number, 1, 20);
@@ -252,9 +263,15 @@ interface EncryptedEnvelope { version: 1; iv: string; tag: string; ciphertext: s
  * come from the environment; missing/invalid keys disable order registration.
  */
 export class EncryptedOrderStore {
+  /** Teto do arquivo único em disco; acima disso a escrita falharia silenciosamente. */
+  static readonly MAX_RECORDS = 10_000;
+  /** 90% do teto: ponto em que o operador precisa rolar o arquivo antes de chegar no limite. */
+  private static readonly CAPACITY_WARNING = Math.floor(EncryptedOrderStore.MAX_RECORDS * 0.9);
+
   private readonly filePath: string;
   private readonly key?: Buffer;
   private records: StoredOrderDraft[] = [];
+  private capacityWarned = false;
   readonly ready: boolean;
   readonly unavailableReason: string | null;
 
@@ -352,10 +369,38 @@ export class EncryptedOrderStore {
   }
 
   save(order: StoredOrderDraft): boolean {
-    if (!this.ready || this.records.length >= 10000) return false;
+    if (!this.ready) return false;
+    if (this.atCapacity) {
+      console.error(
+        `[pedidos] Pré-pedido recusado: teto de ${EncryptedOrderStore.MAX_RECORDS} registros atingido. `
+        + 'Rotacione o arquivo ou migre o armazenamento.',
+      );
+      return false;
+    }
     this.records.push(order);
-    try { this.persist(); return true; }
-    catch { this.records.pop(); return false; }
+    try {
+      this.persist();
+      if (!this.capacityWarned && this.records.length >= EncryptedOrderStore.CAPACITY_WARNING) {
+        this.capacityWarned = true;
+        console.warn(
+          `[pedidos] ${this.records.length}/${EncryptedOrderStore.MAX_RECORDS} pré-pedidos armazenados. `
+          + 'Programe a rotação antes de esgotar a capacidade.',
+        );
+      }
+      return true;
+    } catch (error) {
+      this.records.pop();
+      console.error('[pedidos] Falha ao persistir pré-pedido:', (error as Error)?.message);
+      return false;
+    }
+  }
+
+  /**
+   * Capacidade esgotada. O chamador deve responder 503 (recuperável) em vez de
+   * deixar o `false` genérico virar um 500 permanente sem causa identificável.
+   */
+  get atCapacity(): boolean {
+    return this.records.length >= EncryptedOrderStore.MAX_RECORDS;
   }
 
   hasOrder(orderNumber: string): boolean {
