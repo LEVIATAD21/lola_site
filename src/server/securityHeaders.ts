@@ -3,12 +3,19 @@ import type { RequestHandler } from 'express';
 export interface SecurityHeadersOptions {
   production?: boolean;
   enableHsts?: boolean;
+  /** Arrasta subdomínios junto. Só use se TODOS eles já estiverem em HTTPS. */
+  includeSubDomains?: boolean;
+  hstsMaxAgeSeconds?: number;
 }
 
 /** Security headers for APIs and the storefront without adding a runtime dependency. */
 export function createSecurityHeadersMiddleware(
   options: SecurityHeadersOptions = {},
 ): RequestHandler {
+  // 180 dias por padrão. Um max-age enorme tranca o hostname por anos se algo
+  // der errado; um curto demais não vale a visita. Faixa limitada de propósito.
+  const maxAge = Math.min(Math.max(Math.floor(options.hstsMaxAgeSeconds ?? 15_552_000), 300), 31_536_000);
+
   return (req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -33,8 +40,15 @@ export function createSecurityHeadersMiddleware(
         "manifest-src 'self'",
         "worker-src 'self' blob:",
       ].join('; '));
-      // Enable only when the production hostname always serves HTTPS.
-      if (options.enableHsts) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+      // Navegadores ignoram HSTS recebido por HTTP simples, então ligar por
+      // padrão só protege; includeSubDomains fica explícito porque quebra
+      // subdomínios ainda em HTTP pelo período inteiro do max-age.
+      if (options.enableHsts) {
+        res.setHeader(
+          'Strict-Transport-Security',
+          `max-age=${maxAge}${options.includeSubDomains ? '; includeSubDomains' : ''}`,
+        );
+      }
     }
 
     return next();

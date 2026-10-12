@@ -101,7 +101,12 @@ async function startServer() {
   // Apply headers before body parsing so malformed/oversized JSON also gets protections.
   app.use(createSecurityHeadersMiddleware({
     production: process.env.NODE_ENV === 'production',
-    enableHsts: process.env.LOLA_HSTS_ENABLED === 'true',
+    // VUL-12: HSTS passa a vir ligado por padrão em produção. Navegadores ignoram
+    // o cabeçalho recebido por HTTP simples, então o padrão só protege. Desligue
+    // com LOLA_HSTS_ENABLED=false apenas se o hostname ainda precisar atender
+    // por HTTP. includeSubDomains é explícito porque quebra subdomínio em HTTP.
+    enableHsts: process.env.LOLA_HSTS_ENABLED !== 'false',
+    includeSubDomains: process.env.LOLA_HSTS_INCLUDE_SUBDOMAINS === 'true',
   }));
   app.use('/api', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -139,13 +144,25 @@ async function startServer() {
   // Trava dura contra chamada pendurada: uma requisição presa segura um socket e
   // um slot de rate limit até o provedor responder.
   const AI_TIMEOUT_MS = envInt('LOLA_AI_TIMEOUT_MS', 20_000, 5_000, 120_000);
+  // VUL-16: as rotas GET de catálogo não tinham limite nenhum — permitiam
+  // raspagem completa do catálogo, exaustão de CPU com filtros e inundação do
+  // log de requisições. O teto é generoso de propósito: a vitrine legítima
+  // passa longe disso.
+  const limitRead = createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: envInt('LOLA_READ_PER_MINUTE', 300, 10, 100_000),
+    maxBuckets: 20_000,
+    message: 'Limite temporário de consultas atingido. Aguarde um instante e tente novamente.',
+  });
 
+  // Health fica fora do limite de leitura de propósito: monitor de uptime e
+  // balanceador consultam com frequência e a rota é O(1).
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'lola-api', timestamp: new Date().toISOString() });
   });
 
   // 1. GET /api/estoque/:productId
-  app.get('/api/estoque/:productId', (req, res) => {
+  app.get('/api/estoque/:productId', limitRead, (req, res) => {
     const stock = inventory.get(req.params.productId);
     if (!stock) return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
     // Storefront clients only need availability, not sales/reservation/inventory accounting.
@@ -222,7 +239,7 @@ async function startServer() {
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)
-  app.get('/api/produtos', (req, res) => {
+  app.get('/api/produtos', limitRead, (req, res) => {
     const { categoria, query } = req.query;
     let list = CATALOG_INFO.map((item) => ({
       ...item,
@@ -247,7 +264,7 @@ async function startServer() {
   });
 
   // 5. GET /api/produto/:productId
-  app.get('/api/produto/:productId', (req, res) => {
+  app.get('/api/produto/:productId', limitRead, (req, res) => {
     const { productId } = req.params;
     const item = CATALOG_INFO.find((p) => p.id === productId);
     if (!item) {

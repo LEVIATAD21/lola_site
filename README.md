@@ -211,9 +211,10 @@ O visual aprovado deve evoluir sem redesenho desnecessário: **corrigir primeiro
 ## Cabeçalhos e limites HTTP
 
 - O backend aplica `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` e políticas de isolamento de origem. Em produção, adiciona uma Content Security Policy compatível com os recursos da loja.
-- O parser JSON aceita corpos de no máximo 16 KiB. As consultas à assistente, os pré-pedidos e as rotas administrativas têm limites de frequência.
+- O parser JSON aceita corpos de no máximo 16 KiB. As consultas à assistente, os pré-pedidos, as rotas administrativas e as consultas GET de catálogo têm limites de frequência.
+- `GET /api/produtos`, `GET /api/produto/:id` e `GET /api/estoque/:id` têm teto de 300 req/min por IP (`LOLA_READ_PER_MINUTE`). Antes não havia limite nenhum, o que permitia raspagem completa do catálogo e inundação do log. `GET /api/health` fica fora de propósito: monitor de uptime e balanceador consultam com frequência e a rota é O(1).
 - `POST /api/ai/consulta` tem três camadas por IP (20/min, 120/h e 400/dia) e aborta a chamada ao modelo após `LOLA_AI_TIMEOUT_MS` (padrão 20 s), caindo no motor local de regras. Sem essas camadas, um atacante dispara centenas de milhares de chamadas pagas por dia em nome da loja. Em produção com tráfego real, ajuste os tetos conforme o orçamento da conta Gemini.
-- Se o domínio estiver sempre servido por HTTPS, configure `LOLA_HSTS_ENABLED=true` no ambiente de produção para ativar HSTS. Não habilite essa opção se o mesmo hostname ainda precisar atender por HTTP.
+- **HSTS vem ligado por padrão em produção** e os navegadores ignoram o cabeçalho recebido por HTTP simples, então o padrão só protege. Desligue com `LOLA_HSTS_ENABLED=false` apenas se o hostname ainda precisar atender por HTTP. `LOLA_HSTS_INCLUDE_SUBDOMAINS=true` arrasta subdomínios junto — só ligue se todos já estiverem em HTTPS, porque quebra subdomínio em HTTP pelo período inteiro do max-age (180 dias).
 - A API administrativa e as respostas da API não são armazenadas em cache pelo navegador.
 - Os códigos de pré-pedido agora usam 12 caracteres aleatórios. Eles são identificadores, não substitutos da autenticação administrativa.
 

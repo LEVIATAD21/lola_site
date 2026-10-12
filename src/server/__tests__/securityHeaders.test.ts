@@ -2,11 +2,11 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSecurityHeadersMiddleware } from '../securityHeaders';
+import { createSecurityHeadersMiddleware, type SecurityHeadersOptions } from '../securityHeaders';
 
 const servers: Server[] = [];
 
-async function startEndpoint(options: { production?: boolean; enableHsts?: boolean } = {}) {
+async function startEndpoint(options: SecurityHeadersOptions = {}) {
   const app = express();
   app.use(createSecurityHeadersMiddleware(options));
   app.get('/', (_req, res) => res.send('ok'));
@@ -46,5 +46,34 @@ describe('security headers', () => {
   it('enables HSTS only when explicitly requested for production HTTPS', async () => {
     const response = await fetch(await startEndpoint({ production: true, enableHsts: true }));
     expect(response.headers.get('strict-transport-security')).toBe('max-age=15552000');
+  });
+
+  // VUL-12: includeSubDomains tranca também os subdomínios pelo período inteiro
+  // do max-age, então precisa ser pedido explicitamente.
+  it('só inclui subdomínios quando pedido explicitamente', async () => {
+    const semSub = await fetch(await startEndpoint({ production: true, enableHsts: true }));
+    expect(semSub.headers.get('strict-transport-security')).toBe('max-age=15552000');
+
+    const comSub = await fetch(await startEndpoint({
+      production: true, enableHsts: true, includeSubDomains: true,
+    }));
+    expect(comSub.headers.get('strict-transport-security')).toBe('max-age=15552000; includeSubDomains');
+  });
+
+  it('limita o max-age a uma faixa razoável mesmo se vier lixo do ambiente', async () => {
+    const baixo = await fetch(await startEndpoint({
+      production: true, enableHsts: true, hstsMaxAgeSeconds: 1,
+    }));
+    expect(baixo.headers.get('strict-transport-security')).toBe('max-age=300');
+
+    const alto = await fetch(await startEndpoint({
+      production: true, enableHsts: true, hstsMaxAgeSeconds: Number.MAX_SAFE_INTEGER,
+    }));
+    expect(alto.headers.get('strict-transport-security')).toBe('max-age=31536000');
+  });
+
+  it('não envia HSTS fora de produção mesmo quando habilitado', async () => {
+    const response = await fetch(await startEndpoint({ enableHsts: true }));
+    expect(response.headers.get('strict-transport-security')).toBeNull();
   });
 });
