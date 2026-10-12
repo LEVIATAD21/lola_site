@@ -1,10 +1,11 @@
 import {
-  createCipheriv, createDecipheriv, randomBytes, randomUUID,
+  createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID,
 } from 'node:crypto';
 import {
   chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { VALID_COUPONS } from '../data/coupons';
 
 export type PaymentMethod = 'pix' | 'boleto';
@@ -27,6 +28,7 @@ export interface StoredOrderDraft {
   itemCount: number; subtotalCents: number; discountCents: number;
   shippingCents: number; giftWrapCents: number; totalCents: number;
   couponCode: string | null;
+  reservationExpiresAt: string;
 }
 export interface PublicOrderDraft {
   orderNumber: string; createdAt: string;
@@ -34,6 +36,7 @@ export interface PublicOrderDraft {
   paymentMethod: PaymentMethod; shippingOptionId: ShippingOptionId;
   itemCount: number; subtotal: number; discount: number;
   shipping: number; giftWrap: number; total: number;
+  reservationExpiresAt: string;
 }
 export type BuildOrderResult =
   | { ok: true; order: StoredOrderDraft }
@@ -49,6 +52,8 @@ const SHIPPING_OPTIONS = new Set<ShippingOptionId>(['pac', 'sedex', 'transportad
 function cleanText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const text = value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Customer-provided strings must not contain markup. Renderers must still use normal text escaping.
+  if (/[<>]/.test(text)) return null;
   return text.length <= maxLength ? text : null;
 }
 function requiredText(value: unknown, minLength: number, maxLength: number): string | null {
@@ -175,6 +180,7 @@ export function buildOrderDraft(
       id,
       orderNumber: 'LOLA-' + createdAt.slice(0, 10).replace(/-/g, '') + '-' + id.replace(/-/g, '').slice(0, 12).toUpperCase(),
       createdAt,
+      reservationExpiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
       status: 'awaiting_payment_setup',
       paymentStatus: 'not_configured',
       paymentMethod: raw.paymentMethod as PaymentMethod,
@@ -212,6 +218,7 @@ export function toAdminOrder(order: StoredOrderDraft): AdminOrderView {
   return {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
+    reservationExpiresAt: order.reservationExpiresAt,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -232,6 +239,7 @@ export function toPublicOrder(order: StoredOrderDraft): PublicOrderDraft {
   return {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
+    reservationExpiresAt: order.reservationExpiresAt,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -248,18 +256,21 @@ export function toPublicOrder(order: StoredOrderDraft): PublicOrderDraft {
 interface EncryptedEnvelope { version: 1; iv: string; tag: string; ciphertext: string; }
 
 /**
- * Encrypted JSON storage for a single Node process. In production, the key must
- * come from the environment; missing/invalid keys disable order registration.
+ * Encrypted order store for one Node process. Archives older records so the active
+ * file can remain bounded. Production must use a stable environment-managed key.
  */
 export class EncryptedOrderStore {
   private readonly filePath: string;
+  private readonly archivePath: string;
   private readonly key?: Buffer;
   private records: StoredOrderDraft[] = [];
+  private archivedCount = 0;
   readonly ready: boolean;
   readonly unavailableReason: string | null;
 
   constructor(directory: string, keyHex?: string, production = false) {
     this.filePath = join(directory, 'orders.enc.json');
+    this.archivePath = join(directory, 'orders.archive.enc.json');
     let key: Buffer | undefined;
     let reason: string | null = null;
 
@@ -269,8 +280,11 @@ export class EncryptedOrderStore {
     } else if (production) {
       reason = 'Configure LOLA_ORDERS_ENCRYPTION_KEY (32 bytes em hexadecimal) para habilitar pré-pedidos em produção.';
     } else {
-      mkdirSync(directory, { recursive: true, mode: 0o700 });
-      const keyPath = join(directory, 'orders.key');
+      // Keep the local development key outside the data directory, so backing up
+      // or exposing encrypted records does not automatically expose the key.
+      mkdirSync(join(homedir(), '.config', 'lola-site', 'secrets'), { recursive: true, mode: 0o700 });
+      const keyName = createHash('sha256').update(resolve(directory)).digest('hex').slice(0, 24);
+      const keyPath = join(homedir(), '.config', 'lola-site', 'secrets', keyName + '.orders.key');
       if (existsSync(keyPath)) {
         const text = readFileSync(keyPath, 'utf8').trim();
         if (/^[a-f\d]{64}$/i.test(text)) key = Buffer.from(text, 'hex');
@@ -293,54 +307,106 @@ export class EncryptedOrderStore {
     }
 
     this.key = key;
+    if (key && !reason) {
+      try {
+        mkdirSync(directory, { recursive: true, mode: 0o700 });
+        if (existsSync(this.filePath)) this.records = this.readEncryptedArray(this.filePath);
+        if (existsSync(this.archivePath)) this.archivedCount = this.readEncryptedArray(this.archivePath).length;
+      } catch {
+        reason = 'Armazenamento cifrado de pré-pedidos ilegível; confira a chave e restaure um backup válido. O servidor continuará no ar em modo seguro.';
+        this.records = [];
+        this.archivedCount = 0;
+      }
+    }
     this.unavailableReason = reason;
     this.ready = Boolean(key) && !reason;
-    if (!this.ready || !this.key) return;
-
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
-    if (existsSync(this.filePath)) {
-      const envelope = JSON.parse(readFileSync(this.filePath, 'utf8')) as EncryptedEnvelope;
-      if (envelope.version !== 1) throw new Error('Versão desconhecida no arquivo cifrado de pedidos.');
-      const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(envelope.iv, 'hex'));
-      decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
-      const plaintext = Buffer.concat([
-        decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final(),
-      ]).toString('utf8');
-      const parsed: unknown = JSON.parse(plaintext);
-      if (!Array.isArray(parsed)) throw new Error('Arquivo cifrado de pedidos inválido.');
-      this.records = parsed as StoredOrderDraft[];
-    }
   }
 
-  private persist() {
+  private readEncryptedArray(filePath: string): StoredOrderDraft[] {
+    if (!this.key) throw new Error('Chave de criptografia indisponível.');
+    const envelope = JSON.parse(readFileSync(filePath, 'utf8')) as EncryptedEnvelope;
+    if (envelope.version !== 1 || typeof envelope.iv !== 'string' ||
+        typeof envelope.tag !== 'string' || typeof envelope.ciphertext !== 'string') {
+      throw new Error('Envelope cifrado de pedidos inválido.');
+    }
+    const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(envelope.iv, 'hex'));
+    decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final(),
+    ]).toString('utf8');
+    const parsed: unknown = JSON.parse(plaintext);
+    if (!Array.isArray(parsed)) throw new Error('Arquivo cifrado de pedidos inválido.');
+    return parsed as StoredOrderDraft[];
+  }
+
+  private persistEncryptedArray(filePath: string, records: StoredOrderDraft[]) {
     if (!this.key) throw new Error('Criptografia de pedidos indisponível.');
-    mkdirSync(join(this.filePath, '..'), { recursive: true, mode: 0o700 });
+    mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.key, iv);
-    const encrypted = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(this.records), 'utf8')), cipher.final()]);
+    const encrypted = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(records), 'utf8')), cipher.final()]);
     const envelope: EncryptedEnvelope = {
       version: 1, iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'),
       ciphertext: encrypted.toString('hex'),
     };
-    const temp = this.filePath + '.' + process.pid + '.tmp';
+    const temp = filePath + '.' + process.pid + '.tmp';
     writeFileSync(temp, JSON.stringify(envelope) + '\n', { mode: 0o600 });
     chmodSync(temp, 0o600);
-    renameSync(temp, this.filePath);
+    renameSync(temp, filePath);
+  }
+
+  private persist() {
+    this.persistEncryptedArray(this.filePath, this.records);
+  }
+
+  private archiveOldestBatch(): boolean {
+    if (this.records.length < 10_000) return true;
+    let oldArchive: StoredOrderDraft[];
+    try { oldArchive = existsSync(this.archivePath) ? this.readEncryptedArray(this.archivePath) : []; }
+    catch { return false; }
+    const count = Math.max(1_000, this.records.length - 9_000);
+    const batch = this.records.slice(0, count);
+    const oldRecords = this.records;
+    const merged = new Map<string, StoredOrderDraft>();
+    for (const record of oldArchive) merged.set(record.orderNumber, record);
+    for (const record of batch) merged.set(record.orderNumber, record);
+    try {
+      this.persistEncryptedArray(this.archivePath, [...merged.values()]);
+      this.records = oldRecords.slice(count);
+      try { this.persist(); }
+      catch {
+        this.records = oldRecords;
+        this.persistEncryptedArray(this.archivePath, oldArchive);
+        return false;
+      }
+      this.archivedCount = merged.size;
+      return true;
+    } catch {
+      this.records = oldRecords;
+      return false;
+    }
   }
 
   save(order: StoredOrderDraft): boolean {
-    if (!this.ready || this.records.length >= 10000) return false;
+    if (!this.ready) return false;
+    if (this.records.length >= 10_000 && !this.archiveOldestBatch()) return false;
     this.records.push(order);
     try { this.persist(); return true; }
     catch { this.records.pop(); return false; }
   }
 
   hasOrder(orderNumber: string): boolean {
-    return this.records.some((record) => record.orderNumber === orderNumber);
+    if (this.records.some((record) => record.orderNumber === orderNumber)) return true;
+    if (!this.ready || !existsSync(this.archivePath)) return false;
+    try { return this.readEncryptedArray(this.archivePath).some((record) => record.orderNumber === orderNumber); }
+    catch { return false; }
   }
 
   findByOrderNumber(orderNumber: string): StoredOrderDraft | undefined {
-    const record = this.records.find((item) => item.orderNumber === orderNumber);
+    const active = this.records.find((item) => item.orderNumber === orderNumber);
+    const record = active || (this.ready && existsSync(this.archivePath)
+      ? this.readEncryptedArray(this.archivePath).find((item) => item.orderNumber === orderNumber)
+      : undefined);
     return record ? JSON.parse(JSON.stringify(record)) as StoredOrderDraft : undefined;
   }
 
@@ -351,5 +417,5 @@ export class EncryptedOrderStore {
     );
   }
 
-  get size(): number { return this.records.length; }
+  get size(): number { return this.records.length + this.archivedCount; }
 }
