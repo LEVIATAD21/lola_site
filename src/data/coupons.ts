@@ -82,9 +82,23 @@ export function checkCoupon(options: {
   return { ok: true, percentage: rule.percentage };
 }
 
+/** Teto de tamanho para um código digitado/recebido de fora. */
+export const COUPON_CODE_MAX_LENGTH = 24;
+
 export function getCouponPercentage(code: string | null | undefined): number {
-  if (!code) return 0;
-  return VALID_COUPONS[code.trim().toUpperCase()] ?? 0;
+  if (!code || typeof code !== 'string') return 0;
+  const normalized = code.trim().toUpperCase();
+  if (!normalized || normalized.length > COUPON_CODE_MAX_LENGTH) return 0;
+  // Só propriedade PRÓPRIA da tabela: sem este guard, códigos como
+  // "constructor" ou "toString" casariam com membros herdados do protótipo de
+  // Object (truthy) e aplicariam um "percentual" que não é número, contaminando
+  // os totais com NaN. O `.toUpperCase()` acidentalmente cobre os casos comuns,
+  // mas a regra explícita não depende desse acidente.
+  if (!Object.prototype.hasOwnProperty.call(VALID_COUPONS, normalized)) return 0;
+  const percentage = VALID_COUPONS[normalized];
+  return typeof percentage === 'number' && Number.isFinite(percentage) && percentage > 0 && percentage <= 100
+    ? percentage
+    : 0;
 }
 
 export function getCouponDiscount(code: string | null | undefined, subtotal: number): number {

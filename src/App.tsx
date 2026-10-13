@@ -24,7 +24,8 @@ import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
 import { parseStoredCart } from './utils/cartStorage';
-import { ShippingOption } from './components/cart/ShippingCalculatorModal';
+import { parseStoredCoupon, parseStoredFavorites, parseStoredShipping } from './utils/checkoutStorage';
+import type { ShippingOption } from './data/shippingOptions';
 
 export default function App() {
   const findProductById = (id: string): Product | undefined =>
@@ -59,18 +60,9 @@ export default function App() {
   const [activeProduct, setActiveProduct] = useState<Product>(getInitialProduct);
 
   // Favorites State (stored in localStorage) - starts empty if none saved
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('lola_favorites');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {
-      // fallback
-    }
-    return [];
-  });
+  const [favorites, setFavorites] = useState<string[]>(() =>
+    parseStoredFavorites(localStorage.getItem('lola_favorites'))
+  );
 
   // Cart State (stored in localStorage) - starts empty if none saved.
   // Itens são validados por forma e o seed antigo de demonstração é descartado.
@@ -80,33 +72,15 @@ export default function App() {
 
   // Estado compartilhado do fluxo de compra: cupom e frete aplicados no carrinho
   // permanecem coerentes ao seguir para o checkout (persistidos localmente).
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentage: number } | null>(() => {
-    try {
-      const raw = localStorage.getItem('lola_coupon');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.code === 'string' && typeof parsed.percentage === 'number' && parsed.percentage > 0) {
-        return parsed;
-      }
-    } catch {
-      // fallback: sem cupom
-    }
-    return null;
-  });
+  // O armazenamento só informa a ESCOLHA (código/id); percentual, nome e preço
+  // são reconstruídos das tabelas oficiais — nunca se confia no valor gravado.
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentage: number } | null>(() =>
+    parseStoredCoupon(localStorage.getItem('lola_coupon'))
+  );
 
-  const [appliedShipping, setAppliedShipping] = useState<ShippingOption | null>(() => {
-    try {
-      const raw = localStorage.getItem('lola_shipping');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.id === 'string' && typeof parsed.name === 'string' && typeof parsed.price === 'number') {
-        return parsed;
-      }
-    } catch {
-      // fallback: sem frete escolhido
-    }
-    return null;
-  });
+  const [appliedShipping, setAppliedShipping] = useState<ShippingOption | null>(() =>
+    parseStoredShipping(localStorage.getItem('lola_shipping'))
+  );
 
   // Modal & Drawer visibility states
   const [isCartOpen, setIsCartOpen] = useState(false);

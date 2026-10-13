@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShoppingBag, MessageCircle, ShieldCheck, ChevronUp, ChevronDown, Trash2, Tag, Gift, Check } from 'lucide-react';
 import { CartItem } from '../../types';
+import { COUPON_CODE_MAX_LENGTH } from '../../data/coupons';
 
 interface CheckoutOrderSummaryProps {
   items: CartItem[];
@@ -194,6 +195,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
                 type="text"
                 placeholder="Digite seu código (ex: LOLA10)"
                 value={couponInput}
+                maxLength={COUPON_CODE_MAX_LENGTH}
                 onChange={(e) => setCouponInput(e.target.value)}
                 className="w-full h-10 px-3 pl-8 rounded-xl border border-[#E7DED3] text-xs text-[#241F1B] uppercase tracking-wide focus:outline-none focus:border-[#C49A5A]"
               />
