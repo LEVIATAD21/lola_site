@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Sparkles, Instagram, Heart } from 'lucide-react';
 import { InstagramPost } from '../data/mockData';
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from '../data/siteConfig';
 
 interface InfoModalProps {
   isOpen: boolean;
@@ -60,7 +61,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-[#766D64]">
-                    <span className="font-semibold text-[#2A211B]">@lolaacessorios</span>
+                    <span className="font-semibold text-[#2A211B]">@{INSTAGRAM_HANDLE}</span>
                     <span className="flex items-center gap-1 text-[#C49A5A]">
                       <Heart className="w-3.5 h-3.5 fill-[#C49A5A]" />
                       Publicação de demonstração
@@ -72,7 +73,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                 </div>
                 <div className="pt-2">
                   <a
-                    href="https://instagram.com"
+                    href={INSTAGRAM_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full py-2.5 px-4 rounded-full bg-[#2A211B] hover:bg-[#C49A5A] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"

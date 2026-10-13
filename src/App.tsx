@@ -20,6 +20,7 @@ import { ChatbotAssistente } from './components/ChatbotAssistente';
 import { ReportModal } from './components/ReportModal';
 import { FileText } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
+import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
 import { parseStoredCart } from './utils/cartStorage';
@@ -445,7 +446,7 @@ export default function App() {
 
   const handleOpenPost = (post: InstagramPost) => {
     setSelectedPost(post);
-    setInfoModalTitle('Instagram @lolaacessorios');
+    setInfoModalTitle(`Instagram @${INSTAGRAM_HANDLE}`);
     setInfoModalContent(post.caption);
     setIsInfoModalOpen(true);
   };

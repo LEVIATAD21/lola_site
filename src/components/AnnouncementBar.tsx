@@ -1,5 +1,6 @@
 import React from 'react';
 import { Truck, ShieldCheck, Sparkles, Instagram } from 'lucide-react';
+import { INSTAGRAM_HANDLE, INSTAGRAM_URL, SOCIAL_EM_BREVE } from '../data/siteConfig';
 
 interface AnnouncementBarProps {
   onOpenInfo: (title: string, content: string) => void;
@@ -34,29 +35,20 @@ export const AnnouncementBar: React.FC<AnnouncementBarProps> = ({ onOpenInfo }) 
             <span>Ambiente seguro</span>
           </button>
 
-          {/* Social shortcuts — perfis oficiais ainda não publicados */}
+          {/* Social shortcuts — Instagram já publicado; TikTok pendente */}
           <div className="hidden sm:flex items-center gap-2.5 text-[#E7DED3]/80 border-l border-white/20 pl-3">
-            <button
-              type="button"
-              onClick={() =>
-                onOpenInfo(
-                  'Instagram da LOLA',
-                  'Os perfis oficiais da LOLA Aço Inox & Acessórios serão divulgados no lançamento da loja. Até lá, siga o atendimento pelos canais oficiais informados no rodapé.'
-                )
-              }
-              aria-label="Instagram da LOLA Aço Inox — perfil em breve"
-              className="hover:text-[#C49A5A] transition-colors cursor-pointer"
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Instagram da LOLA Aço Inox — @${INSTAGRAM_HANDLE} (abre em nova aba)`}
+              className="hover:text-[#C49A5A] transition-colors"
             >
               <Instagram className="w-3.5 h-3.5" />
-            </button>
+            </a>
             <button
               type="button"
-              onClick={() =>
-                onOpenInfo(
-                  'TikTok da LOLA',
-                  'Os perfis oficiais da LOLA Aço Inox & Acessórios serão divulgados no lançamento da loja. Até lá, siga o atendimento pelos canais oficiais informados no rodapé.'
-                )
-              }
+              onClick={() => onOpenInfo('TikTok da LOLA', SOCIAL_EM_BREVE)}
               aria-label="TikTok da LOLA Aço Inox — perfil em breve"
               className="hover:text-[#C49A5A] transition-colors cursor-pointer text-[10px] font-bold"
             >

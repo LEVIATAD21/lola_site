@@ -1,6 +1,7 @@
 import React from 'react';
 import { Instagram, ExternalLink } from 'lucide-react';
 import { INSTAGRAM_POSTS, InstagramPost } from '../data/mockData';
+import { INSTAGRAM_URL } from '../data/siteConfig';
 
 interface SocialSectionProps {
   onOpenPost: (post: InstagramPost) => void;
@@ -31,7 +32,7 @@ export const SocialSection: React.FC<SocialSectionProps> = ({ onOpenPost }) => {
 
             <div className="pt-2">
               <a
-                href="https://instagram.com"
+                href={INSTAGRAM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full border border-white/40 hover:border-white text-xs sm:text-sm font-medium text-white hover:bg-white hover:text-[#2A211B] transition-all duration-200 cursor-pointer group"
