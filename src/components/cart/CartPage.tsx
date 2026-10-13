@@ -10,6 +10,7 @@ import { CouponModal } from './CouponModal';
 import { WhatsAppModal } from '../product/WhatsAppModal';
 import { CartItem, AppliedCoupon } from '../../types';
 import { Product, CART_RECOMMENDED_PRODUCTS, ALL_PRODUCTS } from '../../data/mockData';
+import { getCouponDiscount } from '../../data/coupons';
 
 interface CartPageProps {
   items: CartItem[];
@@ -53,7 +54,10 @@ export const CartPage: React.FC<CartPageProps> = ({
 
   const totalItemsCount = items.reduce((acc, i) => acc + i.quantity, 0);
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const discountAmount = coupon ? (subtotal * coupon.percentage) / 100 : 0;
+  // Desconto SEMPRE recalculado a partir do código na tabela oficial — o
+  // percentual gravado no navegador não é fonte de verdade (mesma regra do
+  // checkout), e um percentual inflado não derruba o total para negativo.
+  const discountAmount = getCouponDiscount(coupon?.code, subtotal);
   // Frete escolhido é recalculado para o subtotal atual — mesmo valor exibido no checkout
   const shippingPrice = shipping ? quoteShipping(shipping.id, subtotal) : null;
 
@@ -293,7 +297,7 @@ export const CartPage: React.FC<CartPageProps> = ({
           id: 'cart-summary',
           name: `Sacola Lola (${totalItemsCount} itens)`,
           category: 'Brincos',
-          price: subtotal + (shippingPrice || 0) - discountAmount,
+          price: Math.max(0, subtotal + (shippingPrice || 0) - discountAmount),
           image: items[0].image,
           description: '',
           isFeatured: false,

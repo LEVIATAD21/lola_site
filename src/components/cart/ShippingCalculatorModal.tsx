@@ -1,30 +1,11 @@
 import React, { useState } from 'react';
 import { Truck, X, Check, MapPin } from 'lucide-react';
+import { listShippingOptions, quoteShipping } from '../../data/shippingOptions';
+import type { ShippingOption } from '../../data/shippingOptions';
 
-export interface ShippingOption {
-  id: string;
-  name: string;
-  time: string;
-  price: number;
-}
-
-/**
- * Recalcula o preço da modalidade escolhida para o subtotal atual.
- * Mesma regra demonstrativa usada pelo modal — mantém carrinho e checkout coerentes.
- */
-export function quoteShipping(optionId: string, subtotal: number): number {
-  const isFreeShipping = subtotal >= 150.0;
-  switch (optionId) {
-    case 'pac':
-      return isFreeShipping ? 0 : 19.9;
-    case 'sedex':
-      return isFreeShipping ? 12.9 : 28.9;
-    case 'transportadora':
-      return isFreeShipping ? 0 : 22.5;
-    default:
-      return isFreeShipping ? 0 : 19.9;
-  }
-}
+// Reexportados para os consumidores históricos do modal (carrinho/checkout).
+export type { ShippingOption };
+export { quoteShipping };
 
 interface ShippingCalculatorModalProps {
   isOpen: boolean;
@@ -47,26 +28,8 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
 
   if (!isOpen) return null;
 
-  const options: ShippingOption[] = [
-    {
-      id: 'pac',
-      name: 'PAC Correios',
-      time: '4 a 7 dias úteis',
-      price: quoteShipping('pac', subtotal),
-    },
-    {
-      id: 'sedex',
-      name: 'SEDEX Expresso',
-      time: '1 a 3 dias úteis',
-      price: quoteShipping('sedex', subtotal),
-    },
-    {
-      id: 'transportadora',
-      name: 'Jadlog Transportadora',
-      time: '2 a 5 dias úteis',
-      price: quoteShipping('transportadora', subtotal),
-    },
-  ];
+  // Tabela canônica (id/nome/prazo) com preço cotado para o subtotal atual.
+  const options: ShippingOption[] = listShippingOptions(subtotal);
 
   const handleCalculate = (e: React.FormEvent) => {
     e.preventDefault();

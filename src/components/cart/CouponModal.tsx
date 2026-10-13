@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tag, X, Check, AlertCircle } from 'lucide-react';
-import { VALID_COUPONS, COUPON_LIST } from '../../data/coupons';
+import { COUPON_LIST, getCouponPercentage, COUPON_CODE_MAX_LENGTH } from '../../data/coupons';
 
 interface CouponModalProps {
   isOpen: boolean;
@@ -29,8 +29,10 @@ export const CouponModal: React.FC<CouponModalProps> = ({
       return;
     }
 
-    const percentage = VALID_COUPONS[cleanCode];
-    if (percentage) {
+    // A autoridade é a tabela oficial (checando propriedade própria); o valor
+    // digitado pelo cliente nunca vira percentual direto.
+    const percentage = getCouponPercentage(cleanCode);
+    if (percentage > 0) {
       setError('');
       onApplyCoupon(cleanCode, percentage);
       onClose();
@@ -74,6 +76,7 @@ export const CouponModal: React.FC<CouponModalProps> = ({
                 type="text"
                 placeholder="Ex: LOLA10"
                 value={code}
+                maxLength={COUPON_CODE_MAX_LENGTH}
                 onChange={(e) => {
                   setCode(e.target.value.toUpperCase());
                   setError('');
