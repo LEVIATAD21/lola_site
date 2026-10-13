@@ -1,6 +1,6 @@
 import { InternalClient } from './internalClient';
 import { type DataPlane, type DataPlaneResult, PEDIDOS_INDISPONIVEL } from './dataPlane';
-import { log } from './logger';
+import { log, loggableIp } from './logger';
 
 /**
  * Plano de dados do site público: fala com o servidor de dados por HTTP
@@ -183,7 +183,7 @@ export class HttpDataPlane implements DataPlane {
     const result = await this.client.call('POST', '/internal/pedidos', body);
     if (!result.ok || !result.body) {
       this.throttleLog('pedido', 'plano.pedido_falhou', {
-        alvo: this.client.target, status: result.status, ip: meta.ip,
+        alvo: this.client.target, status: result.status, ip: loggableIp(meta.ip),
         motivo: result.failure ?? 'desconhecido',
       });
       // Falha fechada: sem resposta utilizável não há pedido. Nada aqui

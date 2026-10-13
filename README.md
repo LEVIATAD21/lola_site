@@ -254,6 +254,7 @@ Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (
 - **Sem CORS**: o painel precisa falar com o próprio backend, que carrega a chave. Colocar `LOLA_ADMIN_API_KEY` em JavaScript de navegador seria entregá-la a qualquer visitante.
 - **Sem `trust proxy`**: a allowlist e o rate limit leem `req.socket.remoteAddress`. `X-Forwarded-For` forjado não abre porta nem balde novo.
 - **Allowlist de origem por CIDR** (`LOLA_ADMIN_ALLOWED_IPS`), com padrão loopback + faixa privada. A verificação da chave vem **antes** da da origem, para que um atacante com chave errada não aprenda nada sobre como a rede está fatiada.
+- **TLS opcional mas lembrado** (`LOLA_TLS_CERT_FILE` + `LOLA_TLS_KEY_FILE`, os dois ou nenhum). Sem ele, `x-admin-key` e o PII dos pedidos atravessam a rede privada em claro. Bind fora de loopback sem TLS gera aviso explícito no log de subida.
 
 ### Recusas na largada
 
@@ -266,6 +267,7 @@ Nenhuma dessas situações vira um servidor rodando "mais fraco do que o esperad
 | `http://` fora de loopback sem `LOLA_INTERNAL_PLAINTEXT=true` | `server.ts` não inicia. |
 | `LOLA_ORDERS_ENCRYPTION_KEY` com permissão aberta em produção | Pré-pedidos desligados (não grava dado pessoal sem chave segura). |
 | Bind coringa em produção sem `LOLA_ALLOW_WILDCARD_BIND=true` | `data-server.ts` não inicia. |
+| `LOLA_TLS_CERT_FILE` e `LOLA_TLS_KEY_FILE` declarados só um dos dois, ou apontando para o mesmo arquivo | `data-server.ts` não inicia. |
 
 ### Comportamento degradado
 
@@ -288,6 +290,8 @@ O estoque do modo embutido reserva em memória por 30 minutos; no modo dividido 
 ## Pré-pedido e proteção de dados
 
 - `POST /api/pedidos/rascunho` valida endereço, termos, itens, estoque, cupom e modalidade de frete, usando preços do catálogo no servidor. Preços enviados pelo cliente são ignorados.
+- **Cupom é regra de servidor, não de vitrine.** Os códigos ficam visíveis no bundle (o desconto de campanha é informação de prateleira, não segredo), mas `checkCoupon` só concede se o cupom existir, estiver dentro da validade (`COUPON_RULES[code].validUntil`), atingir o subtotal mínimo e não ter estourado o teto de usos — contado sobre os pré-pedidos gravados. Antes, os três códigos eram reutilizáveis para sempre, sem mínimo e sem fim.
+- **CEP precisa ser plausível**, não apenas ter 8 dígitos: fora da faixa real (`01000-000` a `99999-999`) ou sequência degenerada (`00000000`, `11111111`) é recusado. O endereço ainda não é reconciliado com o ViaCEP — isso recusaria pedido de CEP não consultável e é decisão comercial.
 - A solicitação fica com status `awaiting_payment_setup` e pagamento `not_configured`: não há cobrança real, Pix/boletos emitidos ou confirmação final de venda nesta versão.
 - Ao registrar o pré-pedido, o backend **reserva as unidades por `LOLA_RESERVATION_TTL_MS` (padrão 30 minutos)**, sem gravar nada no arquivo de estoque: `disponivel` devolvido à vitrine já vem líquido das reservas ativas. Assim, pedidos simultâneos não vendem o mesmo exemplar duas vezes. Ao expirar, o estoque volta sozinho. As reservas vivem em memória, então reiniciar o processo libera as reservas ativas.
 - A baixa administrativa em `POST /api/estoque/atualizar` consome primeiro as unidades pré-reservadas (ordem de chegada) e só depois as livres; uma baixa acima do saldo restaura as reservas intactas.
@@ -347,5 +351,6 @@ Regras fixas do registro:
 - A query string fica de fora por padrão (`req.path`, sem `?...`), porque filtros de busca podem conter dados digitados pela cliente.
 - As linhas de log são limitadas a 600 por minuto; acima disso elas são suprimidas e a contagem de supressão vira um evento `http.logs_suppressed`. Sem esse teto, um flood de requisições encheria o disco da máquina com logs.
 - Falhas 500 gravam o motivo real do lado do servidor, enquanto a resposta HTTP continua genérica — antes, `console.error('Erro interno na API.')` descartava o motivo e tornava incidente inexplicável.
-- As rotas administrativas registram cada tentativa com IP, caminho e desfecho (`allow`/`denied`/`not_configured`), sem a chave em si.
-- Em produção, direcione a saída para o coletor do sistema (journald, CloudWatch, Loki) e configure rotação de arquivos; o log em si contém endereço IP e identificador de pedido, então trate como dado de operação sujeito à LGPD.
+- As rotas administrativas registram cada tentativa com origem, caminho e desfecho (`allow`/`denied`/`not_configured`), sem a chave em si.
+- **O IP é mascarado antes de virar linha** (`LOLA_LOG_IP_MODE=mask`, padrão): `189.45.10.203` é gravado como `189.45.x.x`. IP endereçável é dado pessoal (LGPD, art. 5º, I), e o logger o registrava em três eventos — requisição, acesso administrativo e pedido. O agregado do provedor basta para reconhecer padrão de tráfego sem guardar o assinante. `hash` troca por um token HMAC (só agrupa, não identifica), `full` devolve o endereço inteiro para investigação pontual e `off` remove o campo.
+- Em produção, direcione a saída para o coletor do sistema (journald, CloudWatch, Loki) e configure rotação de arquivos; mesmo mascarado, o log contém identificador de pedido e agregado de rede, então trate como dado de operação sujeito à LGPD.

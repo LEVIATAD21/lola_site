@@ -381,3 +381,127 @@ describe('EncryptedOrderStore — AAD do envelope (VUL-J)', () => {
     expect(new EncryptedOrderStore(dir).ready).toBe(false);
   });
 });
+
+describe('CEP no servidor', () => {
+  const customer = validInput().customer;
+  const withCep = (cep: string) => buildOrderDraft(validInput({ customer: { ...customer, cep } }), catalog, inventory());
+
+  it('aceita CEP real, com ou sem máscara', () => {
+    expect(withCep('01310-100').ok).toBe(true);
+    expect(withCep('01310100').ok).toBe(true);
+    expect(withCep('26300-000').ok).toBe(true);
+    expect(withCep('20040-020').ok).toBe(true);
+  });
+
+  // VUL-CEP: só o tamanho era conferido, então `00000000` e `11111111` — o
+  // preenchimento de quem está passando pela validação — passavam direto.
+  it('recusa sequências degeneradas que nunca foram CEP', () => {
+    for (const cep of ['00000-000', '11111-111', '55555-555', '99999-999']) {
+      const result = withCep(cep);
+      expect(result.ok, cep).toBe(false);
+      if (!result.ok) expect(result.error).toMatch(/CEP brasileiro válido/);
+    }
+  });
+
+  it('recusa CEP fora da faixa real brasileira (abaixo de 01000-000)', () => {
+    const result = withCep('00123-456');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/CEP brasileiro válido/);
+  });
+
+  it('recusa tamanhos errados', () => {
+    expect(withCep('1234').ok).toBe(false);
+    expect(withCep('').ok).toBe(false);
+    expect(withCep('123456789').ok).toBe(false);
+    expect(withCep('abcdefgh').ok).toBe(false);
+  });
+});
+
+describe('regras de cupom aplicadas pelo servidor', () => {
+  const dentroDaValidade = new Date('2026-11-15T12:00:00.000Z');
+  const noPedido = (overrides: Record<string, unknown>, now = dentroDaValidade, couponUses?: (code: string) => number) =>
+    buildOrderDraft(validInput(overrides), catalog, inventory(), now, couponUses);
+
+  it('concede o desconto quando a regra passa', () => {
+    const result = noPedido({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.order.couponCode).toBe('LOLA10');
+    expect(result.order.discountCents).toBe(998);
+  });
+
+  it('recusa cupom vencido mesmo com subtotal cheio', () => {
+    const result = noPedido({}, new Date('2027-06-01T12:00:00.000Z'));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/expirou/);
+  });
+
+  it('recusa BEMVINDA abaixo do subtotal mínimo', () => {
+    // 2 brincos = R$ 99,80, abaixo do mínimo de R$ 150,00 do BEMVINDA.
+    const result = noPedido({ couponCode: 'bemvinda' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/a partir de R\$/);
+  });
+
+  it('aceita BEMVINDA quando o subtotal alcança o mínimo', () => {
+    // 4 brincos = R$ 199,60, acima de R$ 150,00.
+    const result = noPedido({ couponCode: 'bemvinda', items: [{ productId: 'brinco-1', quantity: 4 }] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.order.discountCents).toBe(Math.round(19960 * 15 / 100));
+  });
+
+  it('recusa o cupom quando o teto de usos foi atingido', () => {
+    const result = noPedido({}, dentroDaValidade, (code) => (code === 'LOLA10' ? 200 : 0));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/limite de usos/);
+  });
+
+  it('concede quando ainda há uso sobrando', () => {
+    expect(noPedido({}, dentroDaValidade, () => 199).ok).toBe(true);
+  });
+
+  it('não exige quem conte usos para validar validade e mínimo', () => {
+    expect(noPedido({ couponCode: 'bemvinda' }, dentroDaValidade, undefined).ok).toBe(false);
+    expect(noPedido({}, dentroDaValidade, undefined).ok).toBe(true);
+  });
+
+  it('recusa código desconhecido sem contar como uso', () => {
+    let consultas = 0;
+    const result = noPedido({ couponCode: 'GRATIS100' }, dentroDaValidade, () => { consultas += 1; return 0; });
+    expect(result.ok).toBe(false);
+    // A existência é conferida antes de consultar o armazenamento.
+    expect(consultas).toBe(0);
+    if (!result.ok) expect(result.error).toMatch(/não é válido/);
+  });
+});
+
+describe('couponUseCount', () => {
+  it('conta os pré-pedidos gravados por este cupom, ignorando caixa', () => {
+    const dir = tempDirectory();
+    const key = 'ab'.repeat(32);
+    writeFileSync(join(dir, 'orders.key'), key + '\n');
+    const store = new EncryptedOrderStore(dir);
+    expect(store.ready).toBe(true);
+
+    const noCupom = () => buildOrderDraft(validInput({ couponCode: null }), catalog, inventory());
+
+    const semCupom = noCupom();
+    if (!semCupom.ok) throw new Error(semCupom.error);
+
+    expect(store.save({ ...builtOrder(), couponCode: 'LOLA10' })).toBe(true);
+    expect(store.save({ ...builtOrder(), couponCode: 'lola10' })).toBe(true);
+    expect(store.save(semCupom.order)).toBe(true);
+
+    expect(store.couponUseCount('LOLA10')).toBe(2);
+    expect(store.couponUseCount('lola10')).toBe(2);
+    expect(store.couponUseCount('  lola10  ')).toBe(2);
+    expect(store.couponUseCount('BEMVINDA')).toBe(0);
+    expect(store.couponUseCount('inexistente')).toBe(0);
+  });
+
+  it('conta sempre do zero num armazenamento vazio', () => {
+    const dir = tempDirectory();
+    writeFileSync(join(dir, 'orders.key'), 'cd'.repeat(32) + '\n');
+    expect(new EncryptedOrderStore(dir).couponUseCount('LOLA10')).toBe(0);
+  });
+});

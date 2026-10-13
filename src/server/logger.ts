@@ -1,6 +1,61 @@
+import { createHmac } from 'node:crypto';
 import type { Request, RequestHandler } from 'express';
 
 export type LogLevel = 'info' | 'warn' | 'error';
+
+/**
+ * Como o IP aparece nos logs.
+ *
+ * IP endereçável é dado pessoal (LGPD, art. 5º, I — identifica pessoa natural
+ * quando combinado com outros dados), e o logger registra IP em três eventos.
+ * O padrão mascara: preserva o suficiente para reconhecer padrão de tráfego e
+ * investigar incidente, sem guardar o endereço completo nem precisar de base
+ * legal para retenção.
+ */
+export type IpLogMode = 'full' | 'mask' | 'hash' | 'off';
+
+let ipLogMode: IpLogMode = 'mask';
+let ipHashKey: Buffer | undefined;
+
+/** Lê `LOLA_LOG_IP_MODE`. Valor fora da lista cai no padrão mascarado. */
+export function resolveIpLogMode(value: string | undefined): IpLogMode {
+  return value === 'full' || value === 'hash' || value === 'off' || value === 'mask'
+    ? value
+    : 'mask';
+}
+
+export function configureIpLogging(mode: IpLogMode, secret?: string): void {
+  ipLogMode = mode;
+  ipHashKey = mode === 'hash'
+    ? createHmac('sha256', secret || 'lola-log-ip-salt')
+      .update('ip-log-v1').digest()
+    : undefined;
+}
+
+function maskIp(ip: string): string {
+  // IPv4: mantém a rede, esconde o host. `189.45.x.x` continua mostrando se o
+  // tráfego vem do mesmo provedor, sem apontar o assinante.
+  const v4 = ip.match(/^(\d{1,3}\.){3}\d{1,3}$/);
+  if (v4) return ip.split('.').slice(0, 2).join('.') + '.x.x';
+  // IPv6: mantém os 4 primeiros grupos (geralmente o agregado do provedor).
+  const groups = ip.split(':');
+  if (groups.length > 2) return groups.slice(0, 4).join(':') + '::x';
+  return 'x';
+}
+
+/** Endereço tratado para log. `undefined` remove o campo da linha. */
+export function loggableIp(ip: string | undefined): string | undefined {
+  if (!ip) return undefined;
+  switch (ipLogMode) {
+    case 'off': return undefined;
+    case 'mask': return maskIp(ip);
+    case 'hash':
+      // HMAC e não hash puro: sem a chave, um dicionário de IPs candidatos não
+      // confirma nada. 12 hex bastam para agrupar sem identificar.
+      return 'ip:' + createHmac('sha256', ipHashKey!).update(ip).digest('hex').slice(0, 12);
+    default: return ip;
+  }
+}
 
 /**
  * Log estruturado sem dependência externa.
@@ -84,7 +139,7 @@ export function createRequestLogger(options: RequestLoggerOptions = {}): Request
       }
       written += 1;
       emit('info', 'http.request', {
-        ip: req.ip,
+        ip: loggableIp(req.ip),
         method: req.method,
         path: requestPath,
         status: res.statusCode,
@@ -106,7 +161,7 @@ export function safePath(req: Pick<Request, 'originalUrl'>): string {
 
 export function auditAdminAccess(req: Request, outcome: AdminAccessOutcome, reason?: string) {
   emit(outcome === 'allow' ? 'info' : 'warn', 'admin.access', {
-    ip: req.ip,
+    ip: loggableIp(req.ip),
     method: req.method,
     path: safePath(req),
     outcome,

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import express from 'express';
 import dotenv from 'dotenv';
 import { isIP } from 'node:net';
@@ -7,7 +10,7 @@ import { createLocalDataPlane } from './src/server/dataPlane';
 import { createInternalRouter } from './src/server/internalRoutes';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { createRequestLogger, log, safePath } from './src/server/logger';
+import { configureIpLogging, createRequestLogger, log, loggableIp, resolveIpLogMode, safePath } from './src/server/logger';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
 
@@ -73,6 +76,10 @@ async function startDataService(): Promise<void> {
   }
 
   const PORT = envInt('PORT', 4100, 1, 65_535);
+  configureIpLogging(
+    resolveIpLogMode(process.env.LOLA_LOG_IP_MODE),
+    process.env.LOLA_LOG_IP_SECRET,
+  );
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 
@@ -148,7 +155,7 @@ async function startDataService(): Promise<void> {
     const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
     if (status === 500) {
       log('error', 'http.erro_nao_tratado', {
-        ip: req.ip, method: req.method, path: safePath(req),
+        ip: loggableIp(req.ip), method: req.method, path: safePath(req),
         motivo: error instanceof Error ? error.message : String(error),
       });
     }
@@ -158,17 +165,54 @@ async function startDataService(): Promise<void> {
     });
   });
 
-  app.listen(PORT, bindHost, () => {
+  // TLS opcional. Sem ele, `x-admin-key` (adminAuth.ts) e o PII completo dos
+  // pedidos — nome, telefone, endereço — atravessam a rede privada em claro.
+  // Loopback não precisa; qualquer outro destino, inclusive outro host da mesma
+  // máquina, precisa. Configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
+  const tlsCertFile = (process.env.LOLA_TLS_CERT_FILE || '').trim();
+  const tlsKeyFile = (process.env.LOLA_TLS_KEY_FILE || '').trim();
+  if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
+    throw new Error(
+      'LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE precisam ser configurados juntos: um sem o outro não sobe TLS.',
+    );
+  }
+  if (tlsCertFile && tlsCertFile === tlsKeyFile) {
+    throw new Error('LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE não podem apontar para o mesmo arquivo.');
+  }
+  const tlsEnabled = Boolean(tlsCertFile);
+
+  if (!tlsEnabled && !bindHost.startsWith('127.') && bindHost !== '::1') {
+    log('warn', 'dados.sem_tls_em_endereco_publico', {
+      bind: bindHost,
+      aviso: 'a_chave_administrativa_e_os_dados_dos_clientes_transitam_em_claro',
+      acao: 'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE ou restrinja o bind a 127.0.0.1',
+    });
+  }
+
+  const onListening = () => {
     log('info', 'dados.servidor_iniciado', {
       porta: PORT,
       bind: bindHost,
+      tls: tlsEnabled ? 'ativo' : 'inativo',
       ambiente: production ? 'production' : 'development',
       canalInterno: 'ativo',
       origemAdministrativa: allowlist.allowAny ? 'qualquer' : 'restrita',
       pedidosCifrados: plane.orders.ready ? 'ativo' : 'desativado',
       dados: DATA_DIR,
     });
-  });
+  };
+
+  // `app.listen({ cert, key })` NÃO liga TLS: o Express sempre monta um
+  // `http.Server`, e `cert`/`key` não são opção de `listen` — seriam ignorados,
+  // o tráfego seguiria em claro e o log continuaria dizendo `tls=ativo`. O
+  // servidor tem que ser criado à mão para o socket falar TLS de verdade.
+  const server = tlsEnabled
+    ? createHttpsServer(
+      { cert: readFileSync(tlsCertFile), key: readFileSync(tlsKeyFile), minVersion: 'TLSv1.2' },
+      app,
+    )
+    : createHttpServer(app);
+  server.listen(PORT, bindHost, onListening);
 }
 
 startDataService().catch((error: unknown) => {

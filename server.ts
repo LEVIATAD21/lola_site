@@ -11,7 +11,7 @@ import { HttpDataPlane } from './src/server/httpDataPlane';
 import { InternalClient } from './src/server/internalClient';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { createRequestLogger, log, safePath } from './src/server/logger';
+import { configureIpLogging, createRequestLogger, log, loggableIp, resolveIpLogMode, safePath } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createCrossSiteWriteGuard } from './src/server/requestGuard';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
@@ -95,6 +95,13 @@ SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 `;
 
 async function startServer() {
+  // LGPD: o IP endereçável é dado pessoal, e o logger o registra em três
+  // eventos. O padrão mascara antes de gravar; `full` volta ao endereço cheio.
+  configureIpLogging(
+    resolveIpLogMode(process.env.LOLA_LOG_IP_MODE),
+    process.env.LOLA_LOG_IP_SECRET,
+  );
+
   const app = express();
   // Clamp de porta, como o data-server.ts já fazia: `PORT=99999` derrubava a
   // subida no meio do `listen`, depois de todo o resto já ter sido inicializado.
@@ -574,7 +581,7 @@ ${JSON.stringify(pergunta)}
     // Ele só vai para o log do servidor; a resposta continua genérica.
     if (status === 500) {
       log('error', 'http.erro_nao_tratado', {
-        ip: req.ip, method: req.method, path: safePath(req),
+        ip: loggableIp(req.ip), method: req.method, path: safePath(req),
         motivo: error instanceof Error ? error.message : String(error),
       });
     }

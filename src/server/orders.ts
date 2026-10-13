@@ -5,7 +5,7 @@ import {
   chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { VALID_COUPONS } from '../data/coupons';
+import { VALID_COUPONS, checkCoupon } from '../data/coupons';
 
 export type PaymentMethod = 'pix' | 'boleto';
 export type ShippingOptionId = 'pac' | 'sedex' | 'transportadora';
@@ -46,6 +46,24 @@ const STATES = new Set([
 const PAYMENT_METHODS = new Set<PaymentMethod>(['pix', 'boleto']);
 const SHIPPING_OPTIONS = new Set<ShippingOptionId>(['pac', 'sedex', 'transportadora']);
 
+/**
+ * CEP com sanidade mínima.
+ *
+ * O CEP brasileiro não tem dígito verificador, então não há checagem exata sem
+ * base de dados. Dá, porém, para recusar o que nunca foi CEP: fora da faixa
+ * real (01000-000 a 99999-999) e as sequências degeneradas `00000000`,
+ * `11111111`... que são o preenchimento de gente passando pela validação.
+ *
+ * Endereço ainda não é reconciliado com o ViaCEP: isso recusaria pedidos de CEP
+ * não consultável e é decisão comercial, não correção de segurança.
+ */
+function isValidCep(digits: string): boolean {
+  if (digits.length !== 8 || !/^\d{8}$/.test(digits)) return false;
+  const value = Number(digits);
+  if (value < 1_000_000 || value > 99_999_999) return false;
+  return !/^(\d)\1{7}$/.test(digits);
+}
+
 function cleanText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const text = value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -73,6 +91,8 @@ export function buildOrderDraft(
   catalog: OrderCatalogProduct[],
   inventory: StockLookup,
   now = new Date(),
+  /** Contagem de usos de um cupom, vinda de quem tem os pré-pedidos gravados. */
+  couponUses?: (code: string) => number,
 ): BuildOrderResult {
   if (!isObject(raw)) return { ok: false, status: 400, error: 'Dados do pré-pedido inválidos.' };
   if (!isObject(raw.customer)) return { ok: false, status: 400, error: 'Preencha os dados de entrega.' };
@@ -95,7 +115,7 @@ export function buildOrderDraft(
     return { ok: false, status: 400, error: 'Confira nome, logradouro, número e endereço antes de continuar.' };
   }
   if (phone.length < 10 || phone.length > 11) return { ok: false, status: 400, error: 'Informe um telefone válido com DDD.' };
-  if (cep.length !== 8) return { ok: false, status: 400, error: 'Informe um CEP com 8 dígitos.' };
+  if (!isValidCep(cep)) return { ok: false, status: 400, error: 'Informe um CEP brasileiro válido com 8 dígitos.' };
   if (!state || !STATES.has(state)) return { ok: false, status: 400, error: 'Selecione um estado brasileiro válido.' };
   if (raw.termsAccepted !== true) return { ok: false, status: 400, error: 'É necessário aceitar os termos para registrar a solicitação.' };
   if (raw.paymentMethod === 'credit_card') {
@@ -113,15 +133,15 @@ export function buildOrderDraft(
   const shippingOptionId = shippingValue as ShippingOptionId;
 
   let couponCode: string | null = null;
-  let couponPercentage = 0;
   if (raw.couponCode !== undefined && raw.couponCode !== null && raw.couponCode !== '') {
     if (typeof raw.couponCode !== 'string' || raw.couponCode.length > 40) return { ok: false, status: 400, error: 'Cupom inválido.' };
     const normalized = raw.couponCode.trim().toUpperCase();
+    // Só a existência aqui. As regras (validade, mínimo, teto de usos) precisam
+    // do subtotal e são conferidas logo abaixo, quando ele já existe.
     if (!normalized || !Object.prototype.hasOwnProperty.call(VALID_COUPONS, normalized)) {
       return { ok: false, status: 400, error: 'O cupom informado não é válido.' };
     }
     couponCode = normalized;
-    couponPercentage = VALID_COUPONS[normalized];
   }
 
   if (!Array.isArray(raw.items) || raw.items.length < 1 || raw.items.length > 30) {
@@ -167,6 +187,22 @@ export function buildOrderDraft(
   }
 
   const subtotalCents = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+
+  // VUL-CUPOM: os códigos eram público, sem validade, sem mínimo e sem teto de
+  // uso — 15% para sempre, aplicado por qualquer um. As regras agora são
+  // conferidas aqui, no servidor, com o subtotal real em mãos.
+  let couponPercentage = 0;
+  if (couponCode) {
+    const verdict = checkCoupon({
+      code: couponCode,
+      subtotalCents,
+      now,
+      uses: couponUses?.(couponCode),
+    });
+    if (!verdict.ok) return { ok: false, status: 400, error: verdict.error };
+    couponPercentage = verdict.percentage;
+  }
+
   const discountCents = Math.round(subtotalCents * couponPercentage / 100);
   const freeShipping = subtotalCents >= 15000;
   let shippingCents: number;
@@ -463,6 +499,22 @@ export class EncryptedOrderStore {
     return this.records.slice(-boundedLimit).reverse().map(
       (item) => JSON.parse(JSON.stringify(item)) as StoredOrderDraft,
     );
+  }
+
+  /**
+   * Quantos pré-pedidos já gravados usaram este cupom.
+   *
+   * Conta sobre o arquivo atual: quando o operador o rota para liberar espaço,
+   * o contador recomeça junto. É o teto que dá para oferecer sem um banco de
+   * dados — e ainda assim é muito melhor que "para sempre".
+   */
+  couponUseCount(code: string): number {
+    const normalized = code.trim().toUpperCase();
+    let total = 0;
+    for (const record of this.records) {
+      if (record.couponCode && record.couponCode.toUpperCase() === normalized) total += 1;
+    }
+    return total;
   }
 
   get size(): number { return this.records.length; }

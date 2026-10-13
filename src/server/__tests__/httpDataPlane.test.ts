@@ -3,7 +3,10 @@ import { HttpDataPlane, type HttpDataPlaneOptions } from '../httpDataPlane';
 import type { InternalCallResult, InternalClient } from '../internalClient';
 import { PEDIDOS_INDISPONIVEL } from '../dataPlane';
 
-vi.mock('../logger', () => ({ log: vi.fn() }));
+vi.mock('../logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../logger')>()),
+  log: vi.fn(),
+}));
 import { log } from '../logger';
 
 const logMock = vi.mocked(log);

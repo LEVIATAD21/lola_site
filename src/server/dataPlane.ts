@@ -3,7 +3,7 @@ import { InventoryStore, type HoldLimits } from './inventory';
 import { CATALOG_INFO } from './catalog';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
 import { createInitialStock } from './stock';
-import { log } from './logger';
+import { log, loggableIp } from './logger';
 
 /**
  * Plano de dados da loja.
@@ -81,7 +81,12 @@ export class LocalDataPlane implements DataPlane {
       return { status: 503, body: { error: CAPACIDADE_ESGOTADA } };
     }
 
-    const result = buildOrderDraft(body, CATALOG_INFO, this.inventory);
+    const result = buildOrderDraft(
+      body, CATALOG_INFO, this.inventory, undefined,
+      // VUL-CUPOM: o teto de usos precisa de quem guarda os pré-pedidos. O
+      // plano de dados tem o armazenamento, então a contagem vem dele.
+      (code) => this.orders.couponUseCount(code),
+    );
     if (!result.ok) return { status: result.status, body: { error: result.error } };
 
     // VUL-03: sem reserva, 12 pedidos de 5 unidades passavam todos contra 7 em
@@ -98,7 +103,7 @@ export class LocalDataPlane implements DataPlane {
     );
     if (!hold.ok) {
       log('warn', 'pedido.recusado_por_estoque', {
-        ip: meta.ip, status: hold.status, produto: hold.productId,
+        ip: loggableIp(meta.ip), status: hold.status, produto: hold.productId,
         solicitado: hold.requested, disponivel: hold.available,
       });
       return { status: hold.status, body: { error: hold.error } };
@@ -106,14 +111,14 @@ export class LocalDataPlane implements DataPlane {
 
     if (!this.orders.save(result.order)) {
       this.inventory.removeHold(result.order.id);
-      log('error', 'pedido.falha_ao_persistir', { ip: meta.ip });
+      log('error', 'pedido.falha_ao_persistir', { ip: loggableIp(meta.ip) });
       return { status: 500, body: { error: PEDIDOS_PERSISTENCIA_FALHOU } };
     }
 
     // Número do pré-pedido é identificador de negócio, não dado pessoal: serve
     // para rastrear a origem do registro sem expor nome, telefone ou endereço.
     log('info', 'pedido.registrado', {
-      ip: meta.ip, numero: result.order.orderNumber, itens: result.order.itemCount,
+      ip: loggableIp(meta.ip), numero: result.order.orderNumber, itens: result.order.itemCount,
     });
     return { status: 201, body: { success: true, order: toPublicOrder(result.order) } };
   }

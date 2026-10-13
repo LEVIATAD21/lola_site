@@ -2,7 +2,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRequestLogger, truncatePath } from '../logger';
+import { configureIpLogging, createRequestLogger, loggableIp, resolveIpLogMode, truncatePath } from '../logger';
 
 const servers: Server[] = [];
 const logged = () => vi.mocked(console.log).mock.calls.map((call) => String(call[0]));
@@ -28,6 +28,7 @@ function sampleApp(logger = createRequestLogger()) {
 }
 
 afterEach(() => {
+  configureIpLogging('mask');
   vi.restoreAllMocks();
   return Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
@@ -132,5 +133,63 @@ describe('truncatePath (VUL-L)', () => {
     // comece continua sendo ignorado — sem depender dos 16 kB inteiros.
     expect(truncatePath(long).startsWith('/api/')).toBe(true);
     expect(('/' + 'b'.repeat(16_000)).startsWith('/api/')).toBe(false);
+  });
+});
+
+// LGPD: o logger grava IP em três eventos, e IP endereçável é dado pessoal.
+// O padrão mascara — preserva padrão de tráfego sem guardar o endereço.
+describe('loggableIp (LGPD)', () => {
+  it('mascara o host do IPv4 por padrão, mantendo o agregado do provedor', () => {
+    configureIpLogging('mask');
+    expect(loggableIp('189.45.10.203')).toBe('189.45.x.x');
+    expect(loggableIp('127.0.0.1')).toBe('127.0.x.x');
+  });
+
+  it('mascara o IPv6 depois dos 4 primeiros grupos', () => {
+    configureIpLogging('mask');
+    expect(loggableIp('2804:1234:5678:9abc:def0:1111:2222:3333')).toBe('2804:1234:5678:9abc::x');
+  });
+
+  it('modo full devolve o endereço inteiro, para quando precisar investigar', () => {
+    configureIpLogging('full');
+    expect(loggableIp('189.45.10.203')).toBe('189.45.10.203');
+  });
+
+  it('modo off remove o campo da linha', () => {
+    configureIpLogging('off');
+    expect(loggableIp('189.45.10.203')).toBeUndefined();
+  });
+
+  it('modo hash não é reversível sem a chave', () => {
+    configureIpLogging('hash', 'segredo-da-loja');
+    const hashed = loggableIp('189.45.10.203');
+    expect(hashed).toMatch(/^ip:[0-9a-f]{12}$/);
+    expect(hashed).not.toContain('189');
+
+    // A mesma entrada dá o mesmo token (permite agrupar), a diferente não.
+    expect(loggableIp('189.45.10.203')).toBe(hashed);
+    expect(loggableIp('189.45.10.204')).not.toBe(hashed);
+  });
+
+  it('hash com chave outra não reproduz o mesmo token', () => {
+    configureIpLogging('hash', 'chave-a');
+    const first = loggableIp('189.45.10.203');
+    configureIpLogging('hash', 'chave-b');
+    expect(loggableIp('189.45.10.203')).not.toBe(first);
+  });
+
+  it('endereço ausente não vira string vazia no log', () => {
+    expect(loggableIp(undefined)).toBeUndefined();
+    expect(loggableIp('')).toBeUndefined();
+  });
+
+  it('valor desconhecido de LOLA_LOG_IP_MODE cai no padrão mascarado', () => {
+    expect(resolveIpLogMode('sim')).toBe('mask');
+    expect(resolveIpLogMode(undefined)).toBe('mask');
+    expect(resolveIpLogMode('')).toBe('mask');
+    expect(resolveIpLogMode('full')).toBe('full');
+    expect(resolveIpLogMode('hash')).toBe('hash');
+    expect(resolveIpLogMode('off')).toBe('off');
+    expect(resolveIpLogMode('mask')).toBe('mask');
   });
 });
