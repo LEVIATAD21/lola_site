@@ -1,0 +1,177 @@
+##############################################################################
+# Sonda de segurança da própria API — abre com a extensão REST Client.
+#
+# Coloque na primeira linha, ou num arquivo .env ao lado:
+#   @host = http://127.0.0.1:3000
+#
+# Cada bloco abaixo tem um comentário dizendo O QUE ele testa e QUAL é a
+# resposta esperada. Se a resposta mudar para o contrário do esperado, você
+# acabou de achar uma regressão.
+#
+# Rode tudo com `npm run dev` em outro terminal.
+#
+# AVISO: hoje os itens de PEDIDO (4 a 8 e 10) respondem 503 na sua máquina.
+# A causa é o `.data/orders.key` (21:39) não casar com o `.data/orders.enc.json`
+# (11:06) — a chave original se perdeu, então o armazenamento recusa gravar.
+# Isso é independente das validações: o `createDraft` devolve 503 ANTES de
+# validar. Enquanto o bloqueio existir, esses itens só funcionam num diretório
+# de dados novo (LOLA_DATA_DIR apontando pra outro lugar).
+##############################################################################
+
+@host = http://127.0.0.1:3000
+
+### 1. A vitrine responde (sanidade)
+GET {{host}}/api/health
+
+### 2. O código-fonte do servidor NÃO pode ser servido pela web.
+# Esperado: 403 ou 404 (não 200 com TypeScript dentro).
+# Regressão: se um dia devolver 200, o servidor de dados está exposto.
+GET {{host}}/data-server.ts
+GET {{host}}/server.ts
+
+# ARMADILHA — leia antes de comemorar ou entrar em pânico:
+#   GET /.env  e  GET /qualquer-coisa-inexistente  respondem 200.
+#   Isso NÃO é vazamento: é o fallback da SPA (single-page app), que devolve o
+#   index.html para qualquer rota não tratada, para o React fazer o roteamento
+#   no navegador. O corpo começa com `<!doctype html>`.
+#   O teste certo não é o status code, é o CONTEÚDO. Confira sempre:
+#     1) o Content-Type da resposta (tem que ser text/html, não text/plain)
+#     2) o corpo (tem que ser o index.html, não a chave)
+# Um teste que só olha `200` vai te fazer perseguir fantasma — e mascarar um
+# vazamento de verdade, se um dia ele aparecer com status 200.
+GET {{host}}/.env
+GET {{host}}/nao-existe-{{now}}
+
+### 3. Arquivos de segredo negados pelo Vite em desenvolvimento.
+# Esperado: 404 em todos. Um 200 aqui entrega a chave AES dos pedidos.
+GET {{host}}/.data/orders.key
+GET {{host}}/.data/orders.enc.json
+GET {{host}}/orders.key
+GET {{host}}/cert.pem
+
+### 4. CEP inválido tem que ser recusado.
+# Esperado: 400 "Informe um CEP brasileiro válido".
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: {{host}}
+
+{
+  "customer": {
+    "fullName": "Teste de Sonda", "phone": "(21) 98765-4321", "cep": "00000-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 1 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 5. Cupom sem subtotal mínimo tem que ser recusado.
+# Esperado: 400 "Este cupom vale a partir de R$ 150,00".
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: {{host}}
+
+{
+  "customer": {
+    "fullName": "Teste de Sonda", "phone": "(21) 98765-4321", "cep": "26300-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 1 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac", "couponCode": "BEMVINDA",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 6. Cupom desconhecido tem que ser recusado.
+# Esperado: 400 "O cupom informado não é válido."
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: {{host}}
+
+{
+  "customer": {
+    "fullName": "Teste de Sonda", "phone": "(21) 98765-4321", "cep": "26300-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 1 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac", "couponCode": "GRATIS100",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 7. POST cross-site tem que morrer no CORS (VUL-E).
+# Esperado: 403. Se der 201, um site de terceiro consegue consumir o teto de
+# rate limit da sua cliente.
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: https://site-de-atacante.com
+
+{
+  "customer": {
+    "fullName": "Atacante", "phone": "(21) 98765-4321", "cep": "26300-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 1 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 8. Sem cabeçalho Origin (curl, Postman, app nativo) continua funcionando.
+# Esperado: 400 ou 201 — NUNCA 403. Sem Origin não é cross-site.
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+
+{
+  "customer": {
+    "fullName": "Teste de Sonda", "phone": "(21) 98765-4321", "cep": "26300-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 999 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 9. Erro interno não pode vazar stack trace.
+# Esperado: JSON com "error" genérico. Se aparecer caminho de arquivo,
+# nome de função ou `node_modules`, é vazamento de informação (VUL-B).
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: {{host}}
+
+{ "isso": "não é um pedido válido"
+
+### 10. Preço enviado pelo cliente é ignorado (o servidor calcula).
+# Esperado: 201 com subtotal de R$ 49,90, NÃO 10 centavos.
+POST {{host}}/api/pedidos/rascunho
+Content-Type: application/json
+Origin: {{host}}
+
+{
+  "customer": {
+    "fullName": "Teste de Sonda", "phone": "(21) 98765-4321", "cep": "26300-000",
+    "street": "Rua das Flores", "number": "123", "complement": "",
+    "neighborhood": "Centro", "city": "Queimados", "state": "RJ"
+  },
+  "items": [{ "productId": "brinco-1", "quantity": 1, "price": 0.01 }],
+  "paymentMethod": "pix", "shippingOptionId": "pac",
+  "giftWrap": false, "termsAccepted": true
+}
+
+### 11. Rota administrativa sem chave.
+# Esperado: 401 ou 403 — nunca 200. Em produção sem LOLA_EMBEDDED_ADMIN=true
+# a rota nem existe (404 também é aceitável e ainda mais fechado).
+GET {{host}}/api/admin/pre-pedidos
+
+### 12. Rota administrativa com chave errada.
+# Esperado: 401. E o tempo de resposta tem ser igual ao de uma chave inexistente
+# — se a resposta demorar mais, um atacante está medindo o comprimento da chave
+# verdadeira (oráculo de timing, VUL-M).
+GET {{host}}/api/admin/pre-pedidos
+x-admin-key: senha-errada-de-teste
+
+### 13. Cabeçalhos de segurança presentes.
+# Esperado: HSTS, X-Content-Type-Options, X-Frame-Options e CSP no corpo.
+HEAD {{host}}/
