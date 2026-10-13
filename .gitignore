@@ -7,3 +7,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Dependências instaladas (symlink no worktree de auditoria aponta para a cópia do usuário)
+node_modules
