@@ -33,6 +33,21 @@ export interface RequestLoggerOptions {
 }
 
 /**
+ * Caminho de no máximo 200 caracteres para log.
+ *
+ * `express.json({limit:'16kb'})` deixa chegar um `originalUrl` enorme; sem teto
+ * isso vira 16 KB por linha, e poucas requisições já enchem o disco. O corte
+ * acontece ANTES de qualquer teste de prefixo, então um path longo também não
+ * passa pela checagem `startsWith('/api/')` disfarçado.
+ */
+const MAX_LOG_PATH = 200;
+
+export function truncatePath(rawPath: string | undefined): string {
+  const value = rawPath || '/';
+  return value.length > MAX_LOG_PATH ? value.slice(0, MAX_LOG_PATH) + '…' : value;
+}
+
+/**
  * Registra uma linha por requisição de API ao finalizar.
  *
  * Só `/api/*`: arquivos estáticos e o HTML da vitrine multiplicariam o volume.
@@ -51,7 +66,7 @@ export function createRequestLogger(options: RequestLoggerOptions = {}): Request
     // sempre restauram (no 404 do `/api` ele ficaria `/admin/pre-pedidos`).
     // A query string fica de fora de propósito — filtros podem carregar dados
     // digitados pela cliente.
-    const requestPath = req.originalUrl.split('?')[0] || '/';
+    const requestPath = truncatePath(req.originalUrl.split('?')[0] || '/');
     if (!requestPath.startsWith('/api/')) return next();
     const startedAt = process.hrtime.bigint();
 
@@ -84,9 +99,9 @@ export function createRequestLogger(options: RequestLoggerOptions = {}): Request
 /** Resultado de uma tentativa administrativa. Nunca registra a chave em si. */
 export type AdminAccessOutcome = 'allow' | 'denied' | 'not_configured';
 
-/** Caminho sem query string, capturado de `originalUrl` (nunca mutado). */
+/** Caminho sem query string e truncado para log, capturado de `originalUrl` (nunca mutado). */
 export function safePath(req: Pick<Request, 'originalUrl'>): string {
-  return req.originalUrl.split('?')[0] || '/';
+  return truncatePath(req.originalUrl.split('?')[0] || '/');
 }
 
 export function auditAdminAccess(req: Request, outcome: AdminAccessOutcome, reason?: string) {

@@ -14,11 +14,23 @@ export type StockAdjustment =
   | { ok: false; status: 400 | 404 | 409 | 500; error: string };
 
 export interface HoldLine { productId: string; quantity: number; }
-interface HoldEntry { productId: string; quantity: number; expiresAt: number; }
+interface HoldEntry { productId: string; quantity: number; expiresAt: number; owner?: string; }
+
+/** Teto de pré-reservas simultâneas, por processo e por origem. */
+export interface HoldLimits {
+  /** Prevenção de esgotamento do catálogo sem custo. `0` desliga. */
+  maxActiveHolds?: number;
+  /**
+   * Teto por origem (IP do cliente). Desligue (`0`) no modo dividido: lá a
+   * origem visível é sempre a vitrine, e o teto passaria a valer por loja,
+   * não por cliente.
+   */
+  maxHoldsPerOwner?: number;
+}
 
 export type HoldResult =
   | { ok: true }
-  | { ok: false; status: 404 | 409; productId: string; requested: number; available: number; error: string };
+  | { ok: false; status: 404 | 409 | 429; productId: string; requested: number; available: number; error: string };
 
 /**
  * Persistent inventory for a single Node process. Mutations are synchronous to
@@ -35,7 +47,11 @@ export class InventoryStore {
    */
   private readonly holds = new Map<string, HoldEntry[]>();
 
-  constructor(initial: Record<string, StockItem>, filePath?: string) {
+  constructor(
+    initial: Record<string, StockItem>,
+    filePath?: string,
+    private readonly limits: HoldLimits = {},
+  ) {
     this.items = Object.fromEntries(
       Object.entries(initial).map(([id, item]) => [id, { ...item }]),
     );
@@ -81,7 +97,11 @@ export class InventoryStore {
 
   private persist() {
     if (!this.filePath) return;
-    mkdirSync(dirname(this.filePath), { recursive: true });
+    // O modo 0700 aqui importa mais parece: este `mkdirSync` roda ANTES do do
+    // EncryptedOrderStore, então `LOLA_DATA_DIR` nasceu 0755 e o 0700 posterior
+    // não corrigia um diretório já criado. O pai dos arquivos de dados não pode
+    // ficar legível por outros usuários do host.
+    mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
     const temporaryPath = this.filePath + '.' + process.pid + '.tmp';
     writeFileSync(temporaryPath, JSON.stringify(this.items, null, 2) + '\n', { mode: 0o600 });
     renameSync(temporaryPath, this.filePath);
@@ -137,8 +157,49 @@ export class InventoryStore {
    * era comprometido entre a validação e a gravação. Como o handler de pedido é
    * totalmente síncrono, validar tudo e gravar em seguida é atômico.
    */
-  placeHold(holdId: string, lines: HoldLine[], expiresAt: number, now = Date.now()): HoldResult {
+  /**
+   * Pré-reservas vivas, contando hold (e não linha) — um pedido de três
+   * produtos é UMA reserva, não três.
+   */
+  private countActiveHolds(now: number, owner?: string): number {
+    let total = 0;
+    for (const entries of this.holds.values()) {
+      const live = entries.filter((entry) =>
+        entry.expiresAt > now && (owner === undefined || entry.owner === owner));
+      if (live.length > 0) total += 1;
+    }
+    return total;
+  }
+
+  placeHold(
+    holdId: string,
+    lines: HoldLine[],
+    expiresAt: number,
+    now = Date.now(),
+    owner?: string,
+  ): HoldResult {
     this.sweep(now);
+
+    // VUL-C: sem teto, um IP anônimo segurava o catálogo inteiro em pré-reserva
+    // por 30 min e renovava continuamente — de graça, sem e-mail, sem pagamento,
+    // sem captcha. A loja aparecia esgotada para clientes reais.
+    const requested = lines.reduce((sum, line) => sum + (line.quantity || 0), 0);
+    const rejected = (productId: string, error: string): HoldResult => ({
+      ok: false, status: 429, productId, requested, available: 0, error,
+    });
+
+    const maxPerOwner = this.limits.maxHoldsPerOwner ?? 0;
+    if (maxPerOwner > 0 && owner && this.countActiveHolds(now, owner) >= maxPerOwner) {
+      return rejected(lines[0]?.productId ?? '',
+        'Este cliente já tem muitas pré-reservas ativas. Aguarde alguns minutos ou finalize o pedido em aberto.');
+    }
+
+    const maxActive = this.limits.maxActiveHolds ?? 0;
+    if (maxActive > 0 && this.countActiveHolds(now) >= maxActive) {
+      return rejected(lines[0]?.productId ?? '',
+        'O sistema está com muitas pré-reservas ativas no momento. Tente novamente em instantes.');
+    }
+
     // Acumula por produto durante a validação: sem isso, três linhas de 3
     // unidades passariam separadamente contra 7 em estoque (total 9).
     const pending = new Map<string, number>();
@@ -160,7 +221,7 @@ export class InventoryStore {
       }
       pending.set(line.productId, (pending.get(line.productId) ?? 0) + line.quantity);
     }
-    this.holds.set(holdId, lines.map((line) => ({ ...line, expiresAt })));
+    this.holds.set(holdId, lines.map((line) => ({ ...line, expiresAt, ...(owner ? { owner } : {}) })));
     return { ok: true };
   }
 

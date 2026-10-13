@@ -13,6 +13,20 @@ export type AdminKeyProvider = () => string | undefined;
 const ADMIN_UNAVAILABLE_MESSAGE = 'Chave administrativa inválida ou operação não habilitada neste servidor.';
 
 /**
+ * Copia o buffer para um vetor de comprimento fixo.
+ *
+ * A comparação precisa SEMPRE percorrer o mesmo número de bytes, senão o tempo
+ * de execução vira um oráculo do comprimento da chave. O trunca-cabeça aqui é
+ * inofensivo porque o teste de comprimento abaixo continua mandando rejeitar.
+ */
+function padToLength(buffer: Buffer, length: number): Buffer {
+  if (buffer.length === length) return buffer;
+  const padded = Buffer.alloc(length);
+  buffer.copy(padded, 0, 0, Math.min(buffer.length, length));
+  return padded;
+}
+
+/**
  * Protects privileged server routes with an admin key kept only in the server environment.
  * Use HTTPS in deployed environments; never send this key from browser-side application code.
  */
@@ -43,7 +57,17 @@ export function createAdminKeyMiddleware(
     const provided = Buffer.from(req.get('x-admin-key') || '', 'utf8');
     const expectedBuffer = Buffer.from(expected, 'utf8');
 
-    if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) {
+    // VUL-M: o `||` original não chamava `timingSafeEqual` quando os
+    // comprimentos diferiam, então o tempo da resposta media quantos bytes a
+    // chave errada acertou. As duas checagens passam a rodar SEMPRE, sobre
+    // buffers do mesmo comprimento; o resultado final é o mesmo.
+    const lengthMatches = provided.length === expectedBuffer.length;
+    const equal = timingSafeEqual(
+      padToLength(provided, expectedBuffer.length),
+      padToLength(expectedBuffer, expectedBuffer.length),
+    );
+
+    if (!lengthMatches || !equal) {
       auditAdminAccess(req, 'denied', 'chave ausente ou inválida');
       return res.status(401).json({ error: ADMIN_UNAVAILABLE_MESSAGE });
     }

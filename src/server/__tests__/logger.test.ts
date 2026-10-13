@@ -2,7 +2,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRequestLogger } from '../logger';
+import { createRequestLogger, truncatePath } from '../logger';
 
 const servers: Server[] = [];
 const logged = () => vi.mocked(console.log).mock.calls.map((call) => String(call[0]));
@@ -103,5 +103,34 @@ describe('createRequestLogger', () => {
     const line = logged().find((entry) => entry.includes('http.request'));
     expect(line).toContain('path=/api/rota-inexistente');
     expect(line).toContain('status=404');
+  });
+});
+
+describe('truncatePath (VUL-L)', () => {
+  it('corta caminho longo em 200 caracteres, que é o teto por linha de log', () => {
+    const long = '/api/' + 'a'.repeat(16_000);
+    const truncated = truncatePath(long);
+    expect(truncated.length).toBe(201);
+    expect(truncated.startsWith('/api/')).toBe(true);
+    expect(truncated.endsWith('…')).toBe(true);
+  });
+
+  it('mantém caminhos normais intactos', () => {
+    expect(truncatePath('/api/pedidos/rascunho')).toBe('/api/pedidos/rascunho');
+    expect(truncatePath('/')).toBe('/');
+  });
+
+  it('trata ausência de caminho como raiz, sem lançar', () => {
+    expect(truncatePath(undefined)).toBe('/');
+    expect(truncatePath('')).toBe('/');
+  });
+
+  it('não deixa um path gigante passar pela checagem de prefixo de API', async () => {
+    const long = '/api/' + 'a'.repeat(16_000);
+    // O logger usa o valor já truncado para decidir se registra: um path longo
+    // que comece com /api/ continua sendo tratado como API, e um que não
+    // comece continua sendo ignorado — sem depender dos 16 kB inteiros.
+    expect(truncatePath(long).startsWith('/api/')).toBe(true);
+    expect(('/' + 'b'.repeat(16_000)).startsWith('/api/')).toBe(false);
   });
 });

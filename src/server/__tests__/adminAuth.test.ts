@@ -120,4 +120,44 @@ describe('limite de tentativas administrativas', () => {
     expect(blocked.headers.get('retry-after')).toBeTruthy();
     expect(endpoint.mutations()).toBe(0);
   });
+
+  // VUL-M: o `||` original pulava `timingSafeEqual` quando os comprimentos
+  // diferiam, então o tempo da resposta dizia quantos bytes a chave errada
+  // acertou. As duas checagens passaram a rodar sempre, sobre buffers do mesmo
+  // comprimento — sem mudar o resultado.
+  it('recusa chave mais longa que começa com a chave certa', async () => {
+    const endpoint = await startProtectedEndpoint(() => expectedKey);
+
+    const response = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: { 'x-admin-key': expectedKey + 'lixo-extra' },
+    });
+
+    expect(response.status).toBe(401);
+    expect(endpoint.mutations()).toBe(0);
+  });
+
+  it('recusa chave mais curta que é prefixo da certa', async () => {
+    const endpoint = await startProtectedEndpoint(() => expectedKey);
+
+    const response = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: { 'x-admin-key': expectedKey.slice(0, -4) },
+    });
+
+    expect(response.status).toBe(401);
+    expect(endpoint.mutations()).toBe(0);
+  });
+
+  it('responde igual para chave errada e chave não configurada', async () => {
+    const wrong = await startProtectedEndpoint(() => expectedKey);
+    const missing = await startProtectedEndpoint(() => undefined);
+
+    const wrongBody = await (await fetch(wrong.url, {
+      method: 'POST', headers: { 'x-admin-key': 'x'.repeat(expectedKey.length) },
+    })).json();
+    const missingBody = await (await fetch(missing.url, { method: 'POST' })).json();
+
+    expect(JSON.stringify(wrongBody)).toBe(JSON.stringify(missingBody));
+  });
 });

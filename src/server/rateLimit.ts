@@ -100,8 +100,25 @@ export function createRateLimitMiddleware(options: RateLimitOptions): RequestHan
     }
 
     if (buckets.size >= maxBuckets) {
-      const oldestKey = buckets.keys().next().value;
-      if (oldestKey !== undefined) buckets.delete(oldestKey);
+      // Varre de novo antes de recusar: uma leva de IPs novos pode encher a
+      // tabela entre uma janela canônica e outra.
+      let evicted = 0;
+      for (const [expiredKey, bucket] of buckets) {
+        if (bucket.resetAt <= now) {
+          buckets.delete(expiredKey);
+          evicted += 1;
+        }
+      }
+      if (evicted === 0 && buckets.size >= maxBuckets) {
+        // VUL-F: trocar o bucket mais antigo por um novo era EXATAMENTE o que
+        // um inundador queria — 5.001 IPs distintos zeravam o contador diário
+        // de IA de todos os outros clientes. Sem espaço livre, a tabela recusa
+        // a criação de bucket novo (falha fechada) e os buckets ativos seguem
+        // contando. Quem chega depois volta em <= windowMs.
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Retry-After', String(Math.ceil(windowMs / 1000)));
+        return res.status(429).json({ error: message });
+      }
     }
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return next();

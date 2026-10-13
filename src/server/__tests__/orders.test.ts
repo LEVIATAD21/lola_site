@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildOrderDraft, EncryptedOrderStore, type StoredOrderDraft, type OrderCatalogProduct } from '../orders';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { buildOrderDraft, EncryptedOrderStore, ORDERS_AAD, type StoredOrderDraft, type OrderCatalogProduct } from '../orders';
 import { InventoryStore, type StockItem } from '../inventory';
 
 const catalog: OrderCatalogProduct[] = [
@@ -283,5 +284,100 @@ describe('EncryptedOrderStore', () => {
     expect(store.save(builtOrder())).toBe(false);
     // Nada foi adicionado: a recusa acontece antes do push.
     expect(store.size).toBe(EncryptedOrderStore.MAX_RECORDS);
+  });
+});
+
+describe('EncryptedOrderStore — AAD do envelope (VUL-J)', () => {
+  const readKey = (dir: string) =>
+    Buffer.from(readFileSync(join(dir, 'orders.key'), 'utf8').trim(), 'hex');
+
+  const readEnvelope = (dir: string) =>
+    JSON.parse(readFileSync(join(dir, 'orders.enc.json'), 'utf8')) as
+      { version: number; iv: string; tag: string; ciphertext: string };
+
+  function reencrypt(
+    key: Buffer,
+    plaintext: Buffer,
+    version: number,
+    aad?: Buffer,
+  ): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    if (aad) cipher.setAAD(aad);
+    const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    return JSON.stringify({
+      version, iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'),
+      ciphertext: body.toString('hex'),
+    }) + '\n';
+  }
+
+  function decryptWith(key: Buffer, envelope: { iv: string; tag: string; ciphertext: string }, aad?: Buffer): Buffer {
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'hex'));
+    if (aad) decipher.setAAD(aad);
+    decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+    return Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final()]);
+  }
+
+  it('grava envelope na versão que exige AAD', () => {
+    const dir = tempDirectory();
+    const store = new EncryptedOrderStore(dir);
+    expect(store.save(builtOrder())).toBe(true);
+    expect(readEnvelope(dir).version).toBe(2);
+  });
+
+  it('recusa envelope re-cifrado sem o AAD, mesmo com a chave certa', () => {
+    const dir = tempDirectory();
+    const store = new EncryptedOrderStore(dir);
+    const order = builtOrder();
+    expect(store.save(order)).toBe(true);
+
+    const key = readKey(dir);
+    const envelope = readEnvelope(dir);
+    const plaintext = decryptWith(key, envelope, Buffer.from(ORDERS_AAD, 'utf8'));
+
+    // Mesmo conteúdo, mesma chave, IV novo — só o contexto de autenticação some.
+    // Antes do AAD isto decifrava em silêncio: qualquer envelope válido do
+    // serviço era aceito em qualquer lugar.
+    writeFileSync(join(dir, 'orders.enc.json'), reencrypt(key, plaintext, 2));
+
+    const tampered = new EncryptedOrderStore(dir);
+    expect(tampered.ready).toBe(false);
+    expect(tampered.hasOrder(order.orderNumber)).toBe(false);
+  });
+
+  it('recusa envelope de outra aplicação que use a mesma chave', () => {
+    const dir = tempDirectory();
+    const store = new EncryptedOrderStore(dir);
+    expect(store.save(builtOrder())).toBe(true);
+
+    const key = readKey(dir);
+    const plaintext = decryptWith(key, readEnvelope(dir), Buffer.from(ORDERS_AAD, 'utf8'));
+    writeFileSync(join(dir, 'orders.enc.json'), reencrypt(key, plaintext, 2, Buffer.from('outro-sistema|outro-arquivo', 'utf8')));
+
+    expect(new EncryptedOrderStore(dir).ready).toBe(false);
+  });
+
+  it('ainda lê o envelope v1 gravado antes do AAD', () => {
+    const dir = tempDirectory();
+    const key = 'cd'.repeat(32);
+    const plaintext = Buffer.from(JSON.stringify([builtOrder()]), 'utf8');
+
+    writeFileSync(join(dir, 'orders.enc.json'), reencrypt(Buffer.from(key, 'hex'), plaintext, 1));
+    writeFileSync(join(dir, 'orders.key'), key + '\n');
+
+    const legacy = new EncryptedOrderStore(dir);
+    expect(legacy.ready).toBe(true);
+    expect(legacy.size).toBe(1);
+  });
+
+  it('recusa versão desconhecida em vez de decifrar às cegas', () => {
+    const dir = tempDirectory();
+    const key = 'ef'.repeat(32);
+    const plaintext = Buffer.from(JSON.stringify([]), 'utf8');
+
+    writeFileSync(join(dir, 'orders.enc.json'), reencrypt(Buffer.from(key, 'hex'), plaintext, 99, Buffer.from(ORDERS_AAD, 'utf8')));
+    writeFileSync(join(dir, 'orders.key'), key + '\n');
+
+    expect(new EncryptedOrderStore(dir).ready).toBe(false);
   });
 });

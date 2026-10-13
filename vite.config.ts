@@ -13,7 +13,8 @@ import {defineConfig} from 'vite';
  * Produção não passa por aqui (usa `express.static` sobre `dist/`), mas um dev
  * rodando numa rede corporativa entrega tudo isso a qualquer um na mesma rede.
  */
-const DEV_DENY = [
+/** Exportado para o teste de regressão que impede o vazamento do `data-server.ts`. */
+export const DEV_DENY = [
   '.env',
   '.env.*',
   '**/.env',
@@ -38,6 +39,17 @@ const DEV_DENY = [
   'vite.config.ts',
   'vite.config.ts.map',
   'vitest.config.ts',
+  // O entrypoint do serviço PRIVADO. Sem esta entrada, `GET /data-server.ts`
+  // era transformado e entregue em texto/javascript — o atacante lia o
+  // protocolo interno, as rotas /internal e como o canal é autenticado.
+  // VUL-A (confirmado ao vivo: 200 + text/javascript).
+  'data-server.ts',
+  'data-server.ts.map',
+  '**/data-server.ts',
+  '**/data-server.ts.map',
+  // Source maps de qualquer arquivo de backend serviriam o original.
+  'src/server/*.ts.map',
+  '**/src/server/**/*.ts.map',
   '**/src/server/**',
 ];
 

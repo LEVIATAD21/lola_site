@@ -99,3 +99,82 @@ describe('canonicalPath', () => {
     expect(() => canonicalPath('/%E0%A4%A')).not.toThrow();
   });
 });
+
+describe('createRateLimitMiddleware — lotação da tabela', () => {
+  /** Limite mínimo do construtor é 100 buckets, então a inundação parte de 99. */
+  async function startFloodableEndpoint() {
+    const app = express();
+    app.get('/limited', createRateLimitMiddleware({
+      windowMs: 60_000,
+      maxRequests: 2,
+      maxBuckets: 100,
+      message: 'Sem espaço para um bucket novo',
+      keyGenerator: (req) => req.get('x-test-key') || 'default',
+    }), (_req, res) => res.json({ ok: true }));
+
+    const server = app.listen(0, '127.0.0.1');
+    servers.push(server);
+    await new Promise<void>((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+    const address = server.address() as AddressInfo;
+    return `http://127.0.0.1:${address.port}/limited`;
+  }
+
+  // VUL-F: a tabela descartava o bucket mais antigo quando enchia. Um atacante
+  // com 5.001 IPs distintos zerava o contador diário de IA de todos os outros
+  // clientes — o teto de 400 consultas/dia pagas virava 400 por inundação.
+  it('recusa bucket novo quando a tabela está cheia, sem apagar os buckets ativos', async () => {
+    const url = await startFloodableEndpoint();
+    const hit = (key: string) => fetch(url, { headers: { 'x-test-key': key } });
+
+    // A vítima esgota o próprio teto: o bucket dela fica em primeiro na tabela.
+    expect((await hit('vitima')).status).toBe(200);
+    expect((await hit('vitima')).status).toBe(200);
+    expect((await hit('vitima')).status).toBe(429);
+
+    // 99 IPs distintos completam a tabela (1 da vítima + 99).
+    let accepted = 0;
+    for (let index = 0; index < 99; index += 1) {
+      if ((await hit('inundacao-' + index)).status === 200) accepted += 1;
+    }
+    expect(accepted).toBe(99);
+
+    // A tabela está cheia: um IP a mais não pode entrar e não pode ejetar ninguém.
+    expect((await hit('inundador')).status).toBe(429);
+
+    // O ponto todo: o bucket da vítima NÃO foi zerado pela inundação.
+    expect((await hit('vitima')).status).toBe(429);
+  });
+
+  it('volta a aceitar bucket novo quando as janelas vencem', async () => {
+    const app = express();
+    app.get('/short', createRateLimitMiddleware({
+      windowMs: 1_000,
+      maxRequests: 2,
+      maxBuckets: 100,
+      keyGenerator: (req) => req.get('x-test-key') || 'default',
+    }), (_req, res) => res.json({ ok: true }));
+
+    const server = app.listen(0, '127.0.0.1');
+    servers.push(server);
+    await new Promise<void>((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+    const address = server.address() as AddressInfo;
+    const url = `http://127.0.0.1:${address.port}/short`;
+
+    // Enche a tabela com chaves distintas.
+    for (let index = 0; index < 100; index += 1) {
+      await fetch(url, { headers: { 'x-test-key': 'preencher-' + index } });
+    }
+
+    // A recusa falha FECHADA, não para sempre: vencidas as janelas, a varredura
+    // libera espaço e um cliente novo entra normalmente.
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    const afterExpiry = await fetch(url, { headers: { 'x-test-key': 'novo-cliente' } });
+    expect(afterExpiry.status).toBe(200);
+  });
+});

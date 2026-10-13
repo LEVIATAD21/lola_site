@@ -256,7 +256,21 @@ export function toPublicOrder(order: StoredOrderDraft): PublicOrderDraft {
   };
 }
 
-interface EncryptedEnvelope { version: 1; iv: string; tag: string; ciphertext: string; }
+interface EncryptedEnvelope { version: 1 | 2; iv: string; tag: string; ciphertext: string; }
+
+/**
+ * Dados autenticados adicionais do envelope v2.
+ *
+ * Sem AAD, o AES-256-GCM protegia o conteúdo mas não o CONTEXTO: qualquer
+ * envelope válido emitido pelo próprio serviço era aceito em qualquer lugar —
+ * trocar `orders.enc.json` por um envelope antigo (para desfazer exclusões) ou
+ * por um arquivo de outro diretório passava despercebido. O AAD amarra a cifra
+ * a este nome fixo, então só o envelope certificado decifra aqui.
+ *
+ * Não é segredo: AAD não precisa ser oculto, precisa ser constante e coberto
+ * pela tag GCM. Exportado apenas para o teste de regressão.
+ */
+export const ORDERS_AAD = 'lola-orders|orders.enc.json';
 
 /**
  * Encrypted JSON storage for a single Node process. In production, the key must
@@ -351,8 +365,13 @@ export class EncryptedOrderStore {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
         if (existsSync(this.filePath)) {
           const envelope = JSON.parse(readFileSync(this.filePath, 'utf8')) as EncryptedEnvelope;
-          if (envelope.version !== 1) throw new Error('Versão desconhecida no arquivo cifrado de pedidos.');
+          // v1 foi gravado antes do AAD e continua legível; v2 vincula a cifra ao
+          // arquivo. Qualquer outra versão é recusada em vez de decifrada às cegas.
+          if (envelope.version !== 1 && envelope.version !== 2) {
+            throw new Error('Versão desconhecida no arquivo cifrado de pedidos.');
+          }
           const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'hex'));
+          if (envelope.version === 2) decipher.setAAD(Buffer.from(ORDERS_AAD, 'utf8'));
           decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
           const plaintext = Buffer.concat([
             decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final(),
@@ -383,9 +402,10 @@ export class EncryptedOrderStore {
     mkdirSync(join(this.filePath, '..'), { recursive: true, mode: 0o700 });
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    cipher.setAAD(Buffer.from(ORDERS_AAD, 'utf8'));
     const encrypted = Buffer.concat([cipher.update(Buffer.from(JSON.stringify(this.records), 'utf8')), cipher.final()]);
     const envelope: EncryptedEnvelope = {
-      version: 1, iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'),
+      version: 2, iv: iv.toString('hex'), tag: cipher.getAuthTag().toString('hex'),
       ciphertext: encrypted.toString('hex'),
     };
     const temp = this.filePath + '.' + process.pid + '.tmp';

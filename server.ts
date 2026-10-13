@@ -11,8 +11,9 @@ import { HttpDataPlane } from './src/server/httpDataPlane';
 import { InternalClient } from './src/server/internalClient';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { createRequestLogger, log } from './src/server/logger';
+import { createRequestLogger, log, safePath } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
+import { createCrossSiteWriteGuard } from './src/server/requestGuard';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { resolveTrustProxy } from './src/server/trustedProxy';
 
@@ -39,7 +40,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PRODUCTION = process.env.NODE_ENV === 'production';
 const DATA_SERVICE_URL = (process.env.LOLA_DATA_SERVICE_URL || '').trim();
 const SPLIT_MODE = DATA_SERVICE_URL.length > 0;
-const MOUNT_ADMIN = !SPLIT_MODE && (PRODUCTION ? process.env.LOLA_EMBEDDED_ADMIN === 'true' : true);
+// Resolvido no nível do módulo porque a decisão de montar o painel
+// administrativo precisa saber se há proxy declarado, e ela acontece antes do
+// corpo do servidor.
+const TRUST_PROXY = resolveTrustProxy(process.env.LOLA_TRUSTED_PROXY);
+
+/**
+ * O painel administrativo não fica no site público quando os servidores estão
+ * separados — é esse o ponto da separação. Nem embutido em produção ele aparece
+ * sem declaração explícita: quem comprometer este processo não pode encontrar
+ * rota de administração nenhuma, mesmo que a chave esteja correta.
+ */
+const WANTS_ADMIN = !SPLIT_MODE && (PRODUCTION ? process.env.LOLA_EMBEDDED_ADMIN === 'true' : true);
+
+// VUL-I: a allowlist administrativa lê `req.socket.remoteAddress`. Atrás de um
+// balanceador na rede privada, TODO chamador aparece como IP privado e passa na
+// faixa padrão — a allowlist vira decoração e a única defesa que sobra é a
+// chave, com 10 tentativas por minuto. Sem proxy declarado não há essa
+// confusão; havendo, o operador precisa declarar que entende o risco.
+const ADMIN_BEHIND_PROXY = TRUST_PROXY !== undefined;
+const ADMIN_PROXY_OPT_IN = process.env.LOLA_ADMIN_ALLOW_PRIVATE_PROXY === 'true';
+const MOUNT_ADMIN = WANTS_ADMIN && (!PRODUCTION || !ADMIN_BEHIND_PROXY || ADMIN_PROXY_OPT_IN);
 
 /** Lê um inteiro do ambiente com faixa segura; fora da faixa, usa o padrão. */
 function envInt(name: string, fallback: number, min: number, max: number): number {
@@ -75,7 +96,10 @@ SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  // Clamp de porta, como o data-server.ts já fazia: `PORT=99999` derrubava a
+  // subida no meio do `listen`, depois de todo o resto já ter sido inicializado.
+  const portRaw = Number(process.env.PORT);
+  const PORT = Number.isInteger(portRaw) && portRaw >= 1 && portRaw <= 65535 ? portRaw : 3000;
 
   // Plano de dados: remoto quando os servidores estão separados, local quando
   // este processo é também o dono dos arquivos. Nenhum caminho de requisição
@@ -103,6 +127,13 @@ async function startServer() {
       reservationTtlMs: RESERVATION_TTL_MS,
       encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
       keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+      // VUL-C: no modo embutido `meta.ip` é o IP da cliente, então o teto por
+      // origem separa clientes de verdade. No modo dividido o data-server só
+      // enxerga a vitrine — por isso ele desliga este teto e fica só com o global.
+      holdLimits: {
+        maxActiveHolds: envInt('LOLA_MAX_ACTIVE_HOLDS', 500, 10, 100_000),
+        maxHoldsPerOwner: envInt('LOLA_MAX_HOLDS_PER_ORIGIN', 10, 0, 10_000),
+      },
     });
     plane = localPlane;
     log('info', 'plano.local_configurado', { dados: dataDir });
@@ -130,17 +161,23 @@ async function startServer() {
     }
   } else {
     log(SPLIT_MODE ? 'info' : 'warn', 'admin.nao_exposto', {
-      motivo: SPLIT_MODE ? 'servidor_dividido' : 'producao_embutido_sem_LOLA_EMBEDDED_ADMIN',
+      motivo: SPLIT_MODE
+        ? 'servidor_dividido'
+        : WANTS_ADMIN && ADMIN_BEHIND_PROXY
+          ? 'proxy_declarado_sem_LOLA_ADMIN_ALLOW_PRIVATE_PROXY'
+          : 'producao_embutido_sem_LOLA_EMBEDDED_ADMIN',
       acao: SPLIT_MODE
         ? 'rotas administrativas vivem no data-server.ts'
-        : 'defina LOLA_EMBEDDED_ADMIN=true ou execute o data-server.ts',
+        : WANTS_ADMIN && ADMIN_BEHIND_PROXY
+          ? 'a allowlist não distinguiria a cliente do LB; defina LOLA_ADMIN_ALLOW_PRIVATE_PROXY=true para aceitar'
+          : 'defina LOLA_EMBEDDED_ADMIN=true ou execute o data-server.ts',
     });
   }
 
   app.disable('x-powered-by');
   // Só confia em X-Forwarded-For quando os proxies são declarados explicitamente.
   // Sem isso o rate limit usa o IP do socket e não pode ser contornado por header.
-  const trustProxy = resolveTrustProxy(process.env.LOLA_TRUSTED_PROXY);
+  const trustProxy = TRUST_PROXY;
   if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
   // Apply headers before body parsing so malformed/oversized JSON also gets protections.
   app.use(createSecurityHeadersMiddleware({
@@ -158,6 +195,23 @@ async function startServer() {
   });
   // VUL-08: registro por requisição de API, sem corpos nem dados pessoais.
   app.use(createRequestLogger());
+  // VUL-E: a guarda de origem precisa vir ANTES dos limites por rota. Sem ela,
+  // um site malicioso disparava `POST` simples contra um visitante e consumia os
+  // 10/min de pedido e 20/min de IA da vítima antes do handler sequer rodar.
+  app.use('/api', createCrossSiteWriteGuard());
+
+  // VUL-D: orçamento bruto por IP, ANTES do body parser. Os limites por rota só
+  // correm depois do `express.json`, então requisições com JSON malformado
+  // (400) ou corpo acima de 16 kB (413) não consumiam bucket nenhum e podiam
+  // ser disparadas sem teto — churn de CPU e de alocação de graça. Este teto
+  // cobre o caminho que os outros não alcançam.
+  app.use('/api', createRateLimitMiddleware({
+    windowMs: 60_000,
+    maxRequests: envInt('LOLA_API_BUDGET_PER_MINUTE', 600, 30, 100_000),
+    maxBuckets: 20_000,
+    message: 'Muitas requisições. Aguarde um minuto e tente novamente.',
+  }));
+
   app.use(express.json({ limit: '16kb' }));
 
   const limitOrderDraft = createRateLimitMiddleware({
@@ -485,23 +539,6 @@ ${JSON.stringify(pergunta)}
     res.status(404).json({ error: 'Endpoint de API não encontrado.' });
   });
 
-  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const candidate = error as { status?: number };
-    const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
-    // VUL-08: o motivo real era descartado, o que tornava incidente inexplicável.
-    // Ele só vai para o log do servidor; a resposta continua genérica.
-    if (status === 500) {
-      log('error', 'http.erro_nao_tratado', {
-        ip: req.ip, method: req.method, path: req.originalUrl.split('?')[0] || '/',
-        motivo: error instanceof Error ? error.message : String(error),
-      });
-    }
-    res.status(status).json({
-      error: status === 413 ? 'Corpo da requisição muito grande.' :
-        status === 400 ? 'JSON inválido na requisição.' : 'Erro interno do servidor.',
-    });
-  });
-
   // Vite middleware in dev or static files in production
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.resolve(__dirname, 'dist')));
@@ -523,6 +560,29 @@ ${JSON.stringify(pergunta)}
       porta: PORT,
     });
   }
+
+  // Tratador de erro no FIM da cadeia, depois de `express.static` e dos
+  // middlewares do Vite. Antes ele ficava registrado antes desses dois, então um
+  // erro lançado por eles escapava para o `finalhandler` do Express, que em
+  // não-produção devolve HTML com a stack trace completa — arquivo, linha e
+  // trecho de código na resposta. Com quatro argumentos, esta função pega
+  // qualquer erro lançado em QUALQUER ponto acima.
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const candidate = error as { status?: number };
+    const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
+    // VUL-08: o motivo real era descartado, o que tornava incidente inexplicável.
+    // Ele só vai para o log do servidor; a resposta continua genérica.
+    if (status === 500) {
+      log('error', 'http.erro_nao_tratado', {
+        ip: req.ip, method: req.method, path: safePath(req),
+        motivo: error instanceof Error ? error.message : String(error),
+      });
+    }
+    res.status(status).json({
+      error: status === 413 ? 'Corpo da requisição muito grande.' :
+        status === 400 ? 'JSON inválido na requisição.' : 'Erro interno do servidor.',
+    });
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     log('info', 'servidor.iniciado', {

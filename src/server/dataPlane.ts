@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { InventoryStore } from './inventory';
+import { InventoryStore, type HoldLimits } from './inventory';
 import { CATALOG_INFO } from './catalog';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
 import { createInitialStock } from './stock';
@@ -91,6 +91,10 @@ export class LocalDataPlane implements DataPlane {
       result.order.id,
       result.order.items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
       Date.now() + this.reservationTtlMs,
+      Date.now(),
+      // VUL-C: origem do cliente final. No modo embutido é o IP real; no
+      // dividido vira o IP da vitrine (ver `holdLimits` de cada entrypoint).
+      meta.ip || undefined,
     );
     if (!hold.ok) {
       log('warn', 'pedido.recusado_por_estoque', {
@@ -121,6 +125,8 @@ export interface LocalDataPlaneOptions {
   reservationTtlMs: number;
   encryptionKey?: string;
   keyFilePath?: string;
+  /** Tetos de pré-reserva simultânea. O chamador decide, porque no modo dividido não há origem de cliente. */
+  holdLimits?: HoldLimits;
 }
 
 /**
@@ -132,7 +138,11 @@ export interface LocalDataPlaneOptions {
  * essa a propriedade que separa "o site lê o estoque" de "o site tem o estoque".
  */
 export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataPlane {
-  const inventory = new InventoryStore(createInitialStock(), path.join(options.dataDir, 'inventory.json'));
+  const inventory = new InventoryStore(
+    createInitialStock(),
+    path.join(options.dataDir, 'inventory.json'),
+    options.holdLimits,
+  );
   const orders = new EncryptedOrderStore(
     options.dataDir,
     options.encryptionKey,

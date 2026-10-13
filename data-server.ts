@@ -7,7 +7,7 @@ import { createLocalDataPlane } from './src/server/dataPlane';
 import { createInternalRouter } from './src/server/internalRoutes';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { createRequestLogger, log } from './src/server/logger';
+import { createRequestLogger, log, safePath } from './src/server/logger';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
 
@@ -82,6 +82,14 @@ async function startDataService(): Promise<void> {
     reservationTtlMs: envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000),
     encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
     keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+    // VUL-C: aqui `meta.ip` é SEMPRE o IP da vitrine — este processo não enxerga
+    // a cliente final. O teto por origem ficaria valendo por loja, não por
+    // cliente, e derrubaria o checkout real. Desligado por padrão; o teto global
+    // de pré-reservas simultâneas continua valendo e é o que limita o griefing.
+    holdLimits: {
+      maxActiveHolds: envInt('LOLA_MAX_ACTIVE_HOLDS', 500, 10, 100_000),
+      maxHoldsPerOwner: envInt('LOLA_MAX_HOLDS_PER_ORIGIN', 0, 0, 10_000),
+    },
   });
 
   const allowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
@@ -140,7 +148,7 @@ async function startDataService(): Promise<void> {
     const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
     if (status === 500) {
       log('error', 'http.erro_nao_tratado', {
-        ip: req.ip, method: req.method, path: req.originalUrl.split('?')[0] || '/',
+        ip: req.ip, method: req.method, path: safePath(req),
         motivo: error instanceof Error ? error.message : String(error),
       });
     }

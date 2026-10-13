@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InventoryStore, type StockItem } from '../inventory';
@@ -218,5 +218,80 @@ describe('InventoryStore — pré-reservas', () => {
     const store = makeStore();
     const result = store.placeHold('pedido-1', [{ productId: 'nao-existe', quantity: 1 }], soon);
     expect(result).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe('InventoryStore — tetos de pré-reserva (VUL-C)', () => {
+  const now = Date.now();
+  const soon = now + 60_000;
+  const line = { productId: 'brinco-1', quantity: 1 };
+  const wideStock: Record<string, StockItem> = {
+    'brinco-1': { productId: 'brinco-1', total: 10_000, reservado: 0, vendido: 0, disponivel: 10_000 },
+  };
+
+  it('recusa com 429 quando a origem atinge o teto de reservas simultâneas', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxHoldsPerOwner: 3 });
+
+    expect(store.placeHold('p-1', [line], soon, now, '203.0.113.9').ok).toBe(true);
+    expect(store.placeHold('p-2', [line], soon, now, '203.0.113.9').ok).toBe(true);
+    expect(store.placeHold('p-3', [line], soon, now, '203.0.113.9').ok).toBe(true);
+
+    const rejected = store.placeHold('p-4', [line], soon, now, '203.0.113.9');
+    expect(rejected).toMatchObject({ ok: false, status: 429 });
+    // Outra origem continua livre: o teto é por cliente, não global.
+    expect(store.placeHold('p-5', [line], soon, now, '198.51.100.4').ok).toBe(true);
+  });
+
+  it('devolve a vaga quando a reserva vence, para o mesmo cliente não ficar preso', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxHoldsPerOwner: 1 });
+
+    expect(store.placeHold('p-1', [line], soon, now, '203.0.113.9').ok).toBe(true);
+    expect(store.placeHold('p-2', [line], soon, now, '203.0.113.9')).toMatchObject({ status: 429 });
+
+    // Depois do vencimento, a vaga volta sem precisar de novo pedido.
+    expect(store.placeHold('p-3', [line], soon, soon + 1, '203.0.113.9').ok).toBe(true);
+  });
+
+  it('conta UMA reserva por pedido, não uma por linha do pedido', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxHoldsPerOwner: 1 });
+
+    const multi = store.placeHold('p-1', [line, line, line], soon, now, '203.0.113.9');
+    expect(multi.ok).toBe(true);
+    expect(store.placeHold('p-2', [line], soon, now, '203.0.113.9')).toMatchObject({ status: 429 });
+  });
+
+  it('aplica teto global de reservas ativas, independente da origem', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxActiveHolds: 2 });
+
+    expect(store.placeHold('p-1', [line], soon, now, '203.0.113.9').ok).toBe(true);
+    expect(store.placeHold('p-2', [line], soon, now, '198.51.100.4').ok).toBe(true);
+    expect(store.placeHold('p-3', [line], soon, now, '203.0.113.9')).toMatchObject({ status: 429 });
+  });
+
+  it('fica sem teto quando o chamador não informa origem (modo dividido)', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxHoldsPerOwner: 1 });
+
+    expect(store.placeHold('p-1', [line], soon, now).ok).toBe(true);
+    expect(store.placeHold('p-2', [line], soon, now).ok).toBe(true);
+  });
+
+  it('0 desliga os tetos', () => {
+    const store = new InventoryStore(wideStock, undefined, { maxActiveHolds: 0, maxHoldsPerOwner: 0 });
+    for (let index = 0; index < 20; index += 1) {
+      expect(store.placeHold('p-' + index, [line], soon, now, '203.0.113.9').ok).toBe(true);
+    }
+  });
+
+  it('cria o diretório de dados sem permissão de leitura para outros usuários', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-mode-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'sub', 'inventory.json');
+
+    // A primeira gravação cria o diretório; antes o mkdirSync ia sem modo e o
+    // `.data` nascia 0755.
+    new InventoryStore(initial, file);
+
+    const { statSync } = require('node:fs') as typeof import('node:fs');
+    expect(statSync(join(dir, 'sub')).mode & 0o077).toBe(0);
   });
 });
