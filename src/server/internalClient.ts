@@ -1,5 +1,8 @@
-import { isIP } from 'node:net';
-import { buildInternalHeaders } from './internalAuth';
+import { BlockList, isIP } from 'node:net';
+import {
+  buildInternalHeaders, INTERNAL_NONCE_HEADER, INTERNAL_RESPONSE_SIG_HEADER,
+  verifyInternalResponse,
+} from './internalAuth';
 
 /**
  * Cliente do canal interno, usado pelo site público para falar com o servidor
@@ -14,10 +17,14 @@ import { buildInternalHeaders } from './internalAuth';
  *  - **nenhum redirect** é seguido: um `302` não reescreve o destino;
  *  - **HTTP fora de loopback é recusado** por padrão, porque a requisição carrega
  *    dado pessoal do cliente em claro;
+ *  - **faixa link-local é recusada** (`169.254.x.x`, `fe80::`): nenhum servidor
+ *    de dados legítimo mora onde ficam os metadata services de nuvem, e um typo
+ *    de configuração ali enviaria o canal inteiro — com PII — para o hipervisor;
  *  - **timeout curto e abortável**: servidor de dados pendurado não segura a
  *    requisição da vitrine aberta para sempre;
- *  - a resposta é **limitada em bytes e validada em forma** antes de chegar ao
- *    cache: um corpo gigante ou malformado vira indisponibilidade, não vaza
+ *  - a resposta é **assinada pelo vizinho** (nonce + status + corpo) e só então
+ *    **limitada em bytes e validada em forma** antes de chegar ao cache: um
+ *    corpo forjado, gigante ou malformado vira indisponibilidade, não vaza
  *    para dentro da aplicação.
  */
 
@@ -51,6 +58,30 @@ function isLoopbackHost(hostname: string): boolean {
   const family = isIP(host);
   if (family === 4) return host === '127.0.0.1' || host.startsWith('127.');
   return false;
+}
+
+/**
+ * Faixas link-local: `169.254.0.0/16` (IPv4) e `fe80::/10` (IPv6).
+ *
+ * Todos os metadata services de nuvem (AWS, GCP, Azure) moram em
+ * `169.254.169.254`. Um servidor de dados nunca é legítimo nessa faixa, então
+ * aceitá-la é só abrir uma porta para o hipervisor: com
+ * `LOLA_INTERNAL_PLAINTEXT=true` — legítimo em rede privada — um typo na URL
+ * enviaria o canal inteiro, corpos de pedido com PII, direto para o metadata
+ * service. Recusar é falha fechada sem custo para deploy legítimo.
+ */
+const LINK_LOCAL_RANGES = new BlockList();
+LINK_LOCAL_RANGES.addSubnet('169.254.0.0', 16, 'ipv4');
+LINK_LOCAL_RANGES.addSubnet('fe80::', 10, 'ipv6');
+
+/** Literal IP em faixa link-local, incluindo a forma IPv4-mapeada `::ffff:a.b.c.d`. */
+function isLinkLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(host);
+  const target = mapped && isIP(mapped[1]) === 4 ? mapped[1] : host;
+  const family = isIP(target);
+  if (!family) return false;
+  return LINK_LOCAL_RANGES.check(target, family === 4 ? 'ipv4' : 'ipv6');
 }
 
 async function readCappedBody(response: Response, maxBytes: number): Promise<string | null> {
@@ -102,6 +133,12 @@ export class InternalClient {
     }
     if (url.search || url.hash) {
       throw new Error('LOLA_DATA_SERVICE_URL não pode ter query string ou fragmento.');
+    }
+    if (isLinkLocalHost(url.hostname)) {
+      throw new Error(
+        'LOLA_DATA_SERVICE_URL aponta para faixa link-local (169.254.x.x ou fe80::), onde ficam os '
+        + 'metadata services de nuvem. Aponte para o IP privado do servidor de dados.',
+      );
     }
     const loopback = isLoopbackHost(url.hostname);
     if (url.protocol === 'http:' && !loopback && !options.allowPlaintext) {
@@ -155,9 +192,11 @@ export class InternalClient {
     }
 
     try {
+      const headers = buildInternalHeaders(this.secret, { method, path, body: rawBody });
+      const nonce = headers[INTERNAL_NONCE_HEADER];
       const response = await fetch(url, {
         method,
-        headers: buildInternalHeaders(this.secret, { method, path, body: rawBody }),
+        headers,
         body: payload === undefined ? undefined : rawBody,
         // Um redirect reescreveria o destino da assinatura: recusar em vez de seguir.
         redirect: 'error',
@@ -170,6 +209,21 @@ export class InternalClient {
       }
       if (!text) {
         return { ok: false, status: response.status, body: null, failure: 'resposta_vazia' };
+      }
+
+      // Autenticidade antes de forma: a resposta precisa estar assinada com o
+      // MESMO nonce desta requisição, sobre o status e os bytes exatos. Sem
+      // isso um atacante na rede privada forjava `201` de pré-pedido (corpo
+      // com formato público adivinhável) e a vitrine entregava um código de
+      // confirmação inexistente. Sem assinatura válida a resposta não passa —
+      // falha fechada, com o motivo real só no log do operador.
+      const assinaturaValida = verifyInternalResponse(
+        this.secret,
+        { nonce, status: response.status, body: Buffer.from(text, 'utf8') },
+        response.headers.get(INTERNAL_RESPONSE_SIG_HEADER),
+      );
+      if (!assinaturaValida) {
+        return { ok: false, status: response.status, body: null, failure: 'assinatura_resposta_invalida' };
       }
 
       let parsed: unknown;

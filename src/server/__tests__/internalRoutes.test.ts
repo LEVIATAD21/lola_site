@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildInternalHeaders } from '../internalAuth';
+import {
+  buildInternalHeaders, INTERNAL_NONCE_HEADER, INTERNAL_RESPONSE_SIG_HEADER, verifyInternalResponse,
+} from '../internalAuth';
 import { createInternalRouter } from '../internalRoutes';
 import { type LocalDataPlane } from '../dataPlane';
 
@@ -37,14 +39,20 @@ async function startServer(perMinute: number) {
 
 async function call(port: number, method: string, path: string, body = '') {
   const payload = Buffer.from(body, 'utf8');
+  const assinaturaRequest = buildInternalHeaders(secret, { method, path, body: payload });
   const headers: Record<string, string> = {
-    ...buildInternalHeaders(secret, { method, path, body: payload }),
+    ...assinaturaRequest,
     'content-type': 'application/json',
   };
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     method, headers, body: method === 'GET' ? undefined : payload,
   });
-  return { status: response.status, body: await response.text() };
+  return {
+    status: response.status,
+    body: await response.text(),
+    nonce: assinaturaRequest[INTERNAL_NONCE_HEADER] ?? '',
+    respSig: response.headers.get(INTERNAL_RESPONSE_SIG_HEADER),
+  };
 }
 
 afterEach(async () => {
@@ -54,11 +62,29 @@ afterEach(async () => {
 });
 
 describe('internalRoutes: teto por origem, não por caminho inventado', () => {
-  it('assinatura válida passa (controle)', async () => {
+  it('assinatura válida passa (controle) e a resposta vem assinada', async () => {
     const port = await startServer(10);
     const resposta = await call(port, 'GET', '/internal/estoque');
     expect(resposta.status).toBe(200);
     expect(resposta.body).toContain('brinco-1');
+    // O sentido de volta também é autenticado: nonce da requisição + status + corpo.
+    expect(resposta.respSig).toBeTruthy();
+    expect(verifyInternalResponse(secret, {
+      nonce: resposta.nonce,
+      status: resposta.status,
+      body: Buffer.from(resposta.body, 'utf8'),
+    }, resposta.respSig)).toBe(true);
+  });
+
+  it('resposta de erro do plano de dados também vem assinada', async () => {
+    const port = await startServer(10);
+    const resposta = await call(port, 'POST', '/internal/pedidos', '{}');
+    expect(resposta.status).toBe(409);
+    expect(verifyInternalResponse(secret, {
+      nonce: resposta.nonce,
+      status: resposta.status,
+      body: Buffer.from(resposta.body, 'utf8'),
+    }, resposta.respSig)).toBe(true);
   });
 
   it('chega no teto e recusa', async () => {

@@ -142,6 +142,17 @@ async function startDataService(): Promise<void> {
   // 4. Painel administrativo: chave + allowlist de origem.
   app.use('/api', createAdminRouter({ plane, allowlist }));
 
+  // Diagnóstico de subida: as rotas administrativas respondem 401 uniforme
+  // quando não há chave (VUL-11 — certo), mas quem opera precisa saber NA
+  // LARGADA que o painel vai recusar tudo, e não descobrir testando.
+  const adminKey = (process.env.LOLA_ADMIN_API_KEY ?? '').trim();
+  if (adminKey.length < 32) {
+    log('warn', 'admin.desativado', {
+      motivo: process.env.LOLA_ADMIN_API_KEY?.trim() ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
+      acao: 'rotas administrativas recusam qualquer chave com resposta 401 uniforme',
+    });
+  }
+
   // 5. Fora do que está declarado, não existe nada. Sem HTML, sem listagem.
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Endpoint de API não encontrado.' });

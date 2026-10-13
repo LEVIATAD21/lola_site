@@ -1,5 +1,8 @@
 import express, { type Router } from 'express';
-import { createInternalAuthMiddleware } from './internalAuth';
+import {
+  createInternalAuthMiddleware, INTERNAL_NONCE_HEADER, INTERNAL_RESPONSE_SIG_HEADER,
+  signInternalResponse,
+} from './internalAuth';
 import { createRateLimitMiddleware } from './rateLimit';
 import { type LocalDataPlane } from './dataPlane';
 import { log } from './logger';
@@ -15,7 +18,14 @@ import { log } from './logger';
  * Ordem dos middlewares, do mais barato ao mais caro:
  *   1. rate limit por IP do socket  — corta inundação antes de qualquer CPU;
  *   2. `express.raw`                — captura os bytes que serão assinados;
- *   3. autenticação HMAC            — só então a requisição é considerada real.
+ *   3. autenticação HMAC            — só então a requisição é considerada real;
+ *   4. assinatura de resposta       — `res.json` passa a carregar `x-lola-resp-sig`.
+ *
+ * A assinatura de resposta existe porque a rede entre os dois processos não é
+ * confiável por princípio: sem ela, um atacante nela forjava `201` de
+ * pré-pedido e estoque falsificado. Recusas ANTES do passo 4 (429 do rate
+ * limit, 401 da autenticação) não são assinadas — o cliente as trata como
+ * falha de transporte, que já era o efeito prático delas.
  */
 export interface InternalRouterOptions {
   plane: LocalDataPlane;
@@ -53,6 +63,24 @@ export function createInternalRouter(options: InternalRouterOptions): Router {
     skewMs: options.skewMs,
     maxNonces: options.maxNonces,
   }));
+
+  // Toda resposta autenticada sai assinada: HMAC sobre o nonce da requisição,
+  // o status e o digesto do corpo serializado. O wrapper intercepta `res.json`,
+  // que é como todo handler deste router responde; `JSON.stringify` aqui é o
+  // mesmo que o Express usa, então o digesto bate byte a byte com o enviado.
+  router.use((req, res, next) => {
+    const nonce = req.get(INTERNAL_NONCE_HEADER) ?? '';
+    const jsonOriginal = res.json.bind(res);
+    res.json = (body: unknown) => {
+      const serialized = Buffer.from(JSON.stringify(body ?? null) ?? '', 'utf8');
+      res.setHeader(
+        INTERNAL_RESPONSE_SIG_HEADER,
+        signInternalResponse(options.secret, { nonce, status: res.statusCode, body: serialized }),
+      );
+      return jsonOriginal(body);
+    };
+    next();
+  });
 
   router.get('/estoque', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');

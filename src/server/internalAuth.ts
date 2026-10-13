@@ -17,6 +17,12 @@ import { log } from './logger';
  *    destino, trocar o verbo ou alterar um byte do corpo invalida a assinatura;
  *  - comparação em **tempo constante**, para não entregar a chave por medição.
  *
+ * O sentido de VOLTA também é assinado: a resposta leva `x-lola-resp-sig`,
+ * HMAC sobre o nonce da requisição + status + digesto do corpo. Sem isso, um
+ * atacante na mesma rede forjava um `201` de pré-pedido e a vitrine entregava
+ * um código de confirmação inexistente à cliente. O nonce amarra a resposta à
+ * requisição que a originou; o status impede rebaixamento/upgrade de código.
+ *
  * Toda recusa responde exatamente a mesma coisa: 401, mesmo corpo, mesmo
  * cabeçalho. O motivo real fica no log do operador — qualquer diferença aqui
  * viraria um oráculo do estado do canal.
@@ -25,6 +31,8 @@ import { log } from './logger';
 export const INTERNAL_TS_HEADER = 'x-lola-ts';
 export const INTERNAL_NONCE_HEADER = 'x-lola-nonce';
 export const INTERNAL_SIG_HEADER = 'x-lola-sig';
+/** Assinatura da resposta, no sentido servidor de dados -> vitrine. */
+export const INTERNAL_RESPONSE_SIG_HEADER = 'x-lola-resp-sig';
 
 /** Chave curta demais é chave fraca: abaixo disso o canal não sobe. */
 export const INTERNAL_SECRET_MIN_LENGTH = 32;
@@ -67,6 +75,47 @@ function canonicalString(input: InternalSignInput): string {
 
 export function signInternalRequest(secret: string, input: InternalSignInput): string {
   return createHmac('sha256', secret).update(canonicalString(input)).digest('hex');
+}
+
+/** Versão do protocolo de resposta, separada da de requisição por segurança. */
+const RESPONSE_PROTOCOL_VERSION = 'lola-internal-resp-v1';
+
+export interface InternalResponseSignInput {
+  /** Nonce da requisição que originou esta resposta (amarração requisição-resposta). */
+  nonce: string;
+  status: number;
+  /** Bytes do corpo EXATAMENTE como serão enviados. */
+  body: Buffer;
+}
+
+function responseCanonicalString(input: InternalResponseSignInput): string {
+  return [
+    RESPONSE_PROTOCOL_VERSION,
+    input.nonce,
+    String(input.status),
+    bodyDigest(input.body),
+  ].join('\n');
+}
+
+export function signInternalResponse(secret: string, input: InternalResponseSignInput): string {
+  return createHmac('sha256', secret).update(responseCanonicalString(input)).digest('hex');
+}
+
+/**
+ * Verificação da resposta no cliente: comparação em tempo constante sobre
+ * comprimento fixo (64 hex, mesmo padrão da assinatura de requisição). Qualquer
+ * resposta sem assinatura válida — forjada, adulterada ou de outro nonce —
+ * é tratada como falha de transporte pelo chamador (falha fechada).
+ */
+export function verifyInternalResponse(
+  secret: string,
+  input: InternalResponseSignInput,
+  provided: string | null | undefined,
+): boolean {
+  if (!provided || !SIGNATURE_PATTERN.test(provided)) return false;
+  const expected = Buffer.from(signInternalResponse(secret, input), 'utf8');
+  const actual = Buffer.from(provided, 'utf8');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 /**
