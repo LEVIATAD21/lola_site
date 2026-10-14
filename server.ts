@@ -134,6 +134,9 @@ async function startServer() {
       reservationTtlMs: RESERVATION_TTL_MS,
       encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
       keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+      // LGPD, art. 15, II: pré-pedido acima da retenção é descartado, não
+      // "rotacionado quando o arquivo enche". 0 (desligado) é opt-in explícito.
+      retentionDays: envInt('LOLA_ORDER_RETENTION_DAYS', 90, 0, 3650),
       // VUL-C: no modo embutido `meta.ip` é o IP da cliente, então o teto por
       // origem separa clientes de verdade. No modo dividido o data-server só
       // enxerga a vitrine — por isso ele desliga este teto e fica só com o global.
@@ -290,6 +293,10 @@ async function startServer() {
   //    Validação, reserva e persistência acontecem do outro lado: este processo
   //    não tem estoque, não tem pedidos e não tem chave nenhuma para oferecer a
   //    quem comprometesse a vitrine.
+  //    LGPD: nome, telefone e endereço entram aqui (art. 7º, V — execução do
+  //    contrato/preparação do pedido) e vão cifrados para `.data/orders.enc.json`
+  //    com retenção de LOLA_ORDER_RETENTION_DAYS (art. 15, II). Nenhum dado de
+  //    cartão é aceito; a rota não grava IP de quem pediu.
   app.post('/api/pedidos/rascunho', limitOrderDraft, async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({ error: 'Dados do pré-pedido inválidos.' });
@@ -342,6 +349,18 @@ async function startServer() {
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
+  //
+  // SAÍDA DE DADO PESSOAL PARA TERCEIRO (LGPD, art. 39): com GEMINI_API_KEY
+  // setada, o texto da pergunta — digitado pela cliente, portanto capaz de
+  // conter nome, telefone ou endereço — mais o produto visualizado e a sacola
+  // viajam para a API do Gemini (Google), fora do Brasil. Sem a chave, nada
+  // sai da máquina: o motor local de regras responde.
+  //
+  // Base legal provisória: consentimento (art. 7º, I) c/c dever de informação
+  // (art. 9º) — o titular precisa SABER antes de perguntar que a conversa vai
+  // para um terceiro. Hoje não há aviso na UI nem consentimento (ver REPORT.md);
+  // enquanto isso, a chave deve ficar vazia em produção. Enquanto o aviso não
+  // existir, esta rota também não pode virar consentimento tácito por uso.
   app.post('/api/ai/consulta', limitAI, limitAIHourly, limitAIDaily, async (req, res) => {
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const pergunta = typeof body.pergunta === 'string' ? body.pergunta.trim() : '';

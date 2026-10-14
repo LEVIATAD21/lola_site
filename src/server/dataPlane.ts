@@ -130,13 +130,20 @@ export interface LocalDataPlaneOptions {
   reservationTtlMs: number;
   encryptionKey?: string;
   keyFilePath?: string;
+  /**
+   * Retenção dos pré-pedidos em dias (LGPD, art. 15, II). `0` desliga a
+   * expiração automática — decisão explícita, não o padrão. Ver
+   * `resolveOrderRetentionMs`.
+   */
+  retentionDays?: number;
   /** Tetos de pré-reserva simultânea. O chamador decide, porque no modo dividido não há origem de cliente. */
   holdLimits?: HoldLimits;
 }
 
 /**
  * Monta o plano de dados real: estoque em memória persistido em JSON, pedidos
- * cifrados com AES-256-GCM e a varredura que devolve reservas vencidas.
+ * cifrados com AES-256-GCM, a varredura que devolve reservas vencidas e a
+ * expiração de pré-pedidos acima da retenção (LGPD, art. 15, II).
  *
  * Só o processo que tem os arquivos chama isto. O site público nunca cria
  * `InventoryStore` nem `EncryptedOrderStore` quando está dividido — é exatamente
@@ -153,6 +160,7 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
     options.encryptionKey,
     options.production,
     options.keyFilePath,
+    options.retentionDays,
   );
 
   if (!orders.ready) {
@@ -163,6 +171,25 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
       acao: 'a rota de pré-pedido responde 503 genérico',
     });
   }
+
+  // LGPD, art. 15, II: a retenção é regra de tratamento, não de espaço em disco.
+  // Roda na subida (pega o arquivo que cresceu enquanto o processo estava parado)
+  // e depois de hora em hora. A varredura de reservas, abaixo, é de ESTOQUE; esta
+  // é de DADO PESSOAL — são relógios diferentes com propósitos diferentes.
+  const purgeExpiredOrders = () => {
+    if (!orders.ready) return;
+    const removed = orders.purgeExpired();
+    if (removed > 0) {
+      log('info', 'pedidos.expirados_removidos', {
+        removidos: removed,
+        restantes: orders.size,
+        retencaoDias: orders.retentionMs / 86_400_000,
+      });
+    }
+  };
+  purgeExpiredOrders();
+  const retentionSweep = setInterval(purgeExpiredOrders, 60 * 60_000);
+  retentionSweep.unref();
 
   // Libera reservas vencidas mesmo que nenhum novo pedido chegue.
   const reservationSweep = setInterval(() => {

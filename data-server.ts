@@ -89,6 +89,8 @@ async function startDataService(): Promise<void> {
     reservationTtlMs: envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000),
     encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
     keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+    // LGPD, art. 15, II: retenção dos pré-pedidos em dias; 0 desliga por opt-in.
+    retentionDays: envInt('LOLA_ORDER_RETENTION_DAYS', 90, 0, 3650),
     // VUL-C: aqui `meta.ip` é SEMPRE o IP da vitrine — este processo não enxerga
     // a cliente final. O teto por origem ficaria valendo por loja, não por
     // cliente, e derrubaria o checkout real. Desligado por padrão; o teto global

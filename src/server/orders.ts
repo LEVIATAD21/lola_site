@@ -15,10 +15,42 @@ export interface DraftOrderLine {
   productId: string; name: string; category: string; quantity: number;
   variant?: string; unitPriceCents: number; lineTotalCents: number;
 }
+/**
+ * Dados pessoais do titular do pré-pedido (LGPD, art. 5º, I).
+ *
+ * Base legal provisória: art. 7º, V — tratamento para execução do contrato ou
+ * de procedimentos preliminares a pedido do titular (é a cliente que pede o
+ * pré-pedido e fornece o endereço para entrega). Não há consentimento separado
+ * porque ele seria desnecessário e revogável a qualquer momento sem que o
+ * pré-pedido pudesse existir.
+ *
+ * `complement` é opcional e opcional por design: aceita texto livre de até 120
+ * caracteres, que é o único campo em que a cliente pode DIGITAR dado pessoal de
+ * terceiro (ex.: "entregar na portaria da minha mãe, falar com 21 9..."). Por
+ * isso `cleanText` recusa marcação e limita o tamanho — mas o texto livre nunca
+ * é validável por completo, e a política de privacidade precisa dizer que o
+ * endereço é fornecido pela própria cliente.
+ */
 export interface OrderCustomer {
   fullName: string; phone: string; cep: string; street: string; number: string;
   complement: string; neighborhood: string; city: string; state: string;
 }
+/**
+ * Pré-pedido persistido em `.data/orders.enc.json` (AES-256-GCM, envelope v2).
+ *
+ * Minimização (LGPD, art. 6º, III): só entra aqui o que é necessário para
+ * concluir a entrega e auditar a regra comercial. O que NÃO é gravado de
+ * propósito: cartão/CVV/validade (nunca são recebidos), e-mail (não existe
+ * cadastro), `giftWrap` como booleano (só o resultado em centavos),
+ * endereço IP (fica mascarado no log, nunca no pedido) e o próprio corpo da
+ * requisição.
+ *
+ * Retenção: art. 15, II — o tratamento termina quando a finalidade acaba.
+ * `EncryptedOrderStore.purgeExpired` descarta registros acima de
+ * `LOLA_ORDER_RETENTION_DAYS` (padrão 90); `redactedAt` marca o registro cujos
+ * dados pessoais já foram apagados a pedido do titular (art. 18, VI), mantendo
+ * apenas a casca comercial (número, data, itens e totais).
+ */
 export interface StoredOrderDraft {
   id: string; orderNumber: string; createdAt: string;
   status: 'awaiting_payment_setup'; paymentStatus: 'not_configured';
@@ -27,6 +59,8 @@ export interface StoredOrderDraft {
   itemCount: number; subtotalCents: number; discountCents: number;
   shippingCents: number; giftWrapCents: number; totalCents: number;
   couponCode: string | null;
+  /** Presente apenas quando `customer` foi anonimizado a pedido do titular. */
+  redactedAt?: string;
 }
 export interface PublicOrderDraft {
   orderNumber: string; createdAt: string;
@@ -253,6 +287,8 @@ export interface AdminOrderView {
   giftWrap: number;
   total: number;
   couponCode: string | null;
+  /** `true` quando os dados pessoais já foram apagados (LGPD, art. 18, VI). */
+  redacted: boolean;
 }
 
 export function toAdminOrder(order: StoredOrderDraft): AdminOrderView {
@@ -272,6 +308,7 @@ export function toAdminOrder(order: StoredOrderDraft): AdminOrderView {
     giftWrap: order.giftWrapCents / 100,
     total: order.totalCents / 100,
     couponCode: order.couponCode,
+    redacted: Boolean(order.redactedAt),
   };
 }
 
@@ -308,6 +345,75 @@ interface EncryptedEnvelope { version: 1 | 2; iv: string; tag: string; ciphertex
  */
 export const ORDERS_AAD = 'lola-orders|orders.enc.json';
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Retenção padrão dos pré-pedidos, em dias (LGPD, art. 15, II e VI).
+ *
+ * O pré-pedido existe para que a loja entre em contato e conclua a venda: essa
+ * é a finalidade, e ela se encerra em poucas semanas. 90 dias cobrem o
+ * acompanhamento de uma negociação aberta sem virar arquivo permanente — e sem
+ * depender de "a loja gira o arquivo quando o disco enche", que é teto de
+ * espaço, não retenção. Configure com `LOLA_ORDER_RETENTION_DAYS`.
+ *
+ * Atenção à rotação de chave: apagar NÃO depende da chave antiga — o registro é
+ * removido do array e todo o arquivo é reescrito com a chave vigente. Uma chave
+ * nova só torna ILEGÍVEL o arquivo que não for reescrito; por isso nunca troque
+ * a chave sem regravar (o `persist()` deste módulo regrava sempre).
+ */
+export const DEFAULT_ORDER_RETENTION_DAYS = 90;
+
+/**
+ * Converte `LOLA_ORDER_RETENTION_DAYS` em milissegundos.
+ *
+ *  - ausente/inválido → padrão de 90 dias (o padrão NUNCA é "para sempre");
+ *  - `0` → expiração desligada, só para quem assumir explicitamente o risco;
+ *  - fora da faixa → arredonda para 1..3650 dias.
+ */
+export function resolveOrderRetentionMs(days: number | undefined): number {
+  if (days === undefined || !Number.isFinite(days)) return DEFAULT_ORDER_RETENTION_DAYS * DAY_MS;
+  if (days === 0) return 0;
+  return Math.min(3650, Math.max(1, Math.round(days))) * DAY_MS;
+}
+
+/** Dígitos de um telefone, que é como ele é gravado (`buildOrderDraft` remove `\D`). */
+function phoneDigits(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/\D/g, '') : '';
+}
+
+/**
+ * Chaves possíveis para a MESMA caixa telefônica.
+ *
+ * A cliente digita como quer: `21 98765-4321`, `(21) 98765-4321` ou
+ * `+55 21 98765-4321`. Todas viram a mesma chave. O prefixo 55 só é removido
+ * quando sobram dígitos para um número COM DDD (mais de 11): DDD 55 (Santa
+ * Maria/RS) em número fixo tem 10 dígitos e nunca é cortado.
+ */
+function phoneSearchKeys(raw: unknown): string[] {
+  const digits = phoneDigits(raw);
+  if (!digits) return [];
+  const keys = new Set<string>([digits]);
+  if (digits.length > 11 && digits.startsWith('55')) keys.add(digits.slice(2));
+  return [...keys];
+}
+
+/**
+ * Nome sem acento e em caixa baixa para comparação.
+ *
+ * "João" e "joao" precisam achar a mesma pessoa, senão a busca por nome do
+ * titular (LGPD, art. 18, I e V) falha para a maioria dos nomes brasileiros.
+ */
+function normalizePersonName(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/** Cliente apagado: só o comprimento dos campos, nenhum dado pessoal sobra. */
+const EMPTY_CUSTOMER: OrderCustomer = {
+  fullName: '', phone: '', cep: '', street: '', number: '',
+  complement: '', neighborhood: '', city: '', state: '',
+};
+
 /**
  * Encrypted JSON storage for a single Node process. In production, the key must
  * come from the environment; missing/invalid keys disable order registration.
@@ -324,9 +430,26 @@ export class EncryptedOrderStore {
   private capacityWarned = false;
   readonly ready: boolean;
   readonly unavailableReason: string | null;
+  /**
+   * Retenção efetiva em milissegundos; `0` desligada (só por decisão explícita).
+   * Veja {@link DEFAULT_ORDER_RETENTION_DAYS}.
+   */
+  readonly retentionMs: number;
+  /**
+   * Índice telefone → números de pré-pedido (LGPD, art. 18, I e V).
+   *
+   * Sem isto, atender um pedido do titular exigiria decifrar e varrer os 10.000
+   * registros por chamada e o operador ainda não teria como perguntar "existe
+   * tratamento meus dados?" sem saber o número do pedido — que é justamente o
+   * dado que o titular NÃO tem em mãos depois que o e-mail de confirmação
+   * nunca veio. O índice guarda apenas o telefone gravado, é reconstruído na
+   * carga e atualizado em toda mutação.
+   */
+  private readonly phoneIndex = new Map<string, Set<string>>();
 
-  constructor(directory: string, keyHex?: string, production = false, keyFilePath?: string) {
+  constructor(directory: string, keyHex?: string, production = false, keyFilePath?: string, retentionDays?: number) {
     this.filePath = join(directory, 'orders.enc.json');
+    this.retentionMs = resolveOrderRetentionMs(retentionDays);
     let key: Buffer | undefined;
     let reason: string | null = null;
 
@@ -431,6 +554,57 @@ export class EncryptedOrderStore {
     this.records = records;
     this.unavailableReason = reason;
     this.ready = Boolean(key) && !reason;
+    this.rebuildPhoneIndex();
+  }
+
+  /** Reconstrói o índice de telefones a partir dos registros em memória. */
+  private rebuildPhoneIndex() {
+    this.phoneIndex.clear();
+    for (const record of this.records) this.addToPhoneIndex(record);
+  }
+
+  private addToPhoneIndex(record: StoredOrderDraft) {
+    const keys = phoneSearchKeys(record.customer?.phone);
+    if (keys.length === 0) return;
+    for (const key of keys) {
+      const bucket = this.phoneIndex.get(key);
+      if (bucket) bucket.add(record.orderNumber);
+      else this.phoneIndex.set(key, new Set([record.orderNumber]));
+    }
+  }
+
+  /**
+   * Remove da memória e do disco os pré-pedidos acima da retenção (art. 15, II).
+   *
+   * Chamar na subida e depois em janela horária (ver `createLocalDataPlane`).
+   * Se a escrita falhar, os registros voltam para a memória: uma exclusão que só
+   * existe na RAM reaparece no próximo boot e o operador acredita que apagou.
+   * Devolve quantos registros saíram de fato.
+   */
+  purgeExpired(now = Date.now()): number {
+    if (!this.ready || this.retentionMs === 0 || this.records.length === 0) return 0;
+
+    const expired = (record: StoredOrderDraft): boolean => {
+      const createdAt = Date.parse(record.createdAt);
+      // Data ilegível não é dado confiável: expira em vez de ficar para sempre.
+      if (!Number.isFinite(createdAt)) return true;
+      return now - createdAt > this.retentionMs;
+    };
+
+    const before = this.records;
+    const kept = before.filter((record) => !expired(record));
+    if (kept.length === before.length) return 0;
+
+    this.records = kept;
+    try {
+      this.persist();
+      this.rebuildPhoneIndex();
+      return before.length - kept.length;
+    } catch (error) {
+      this.records = before;
+      console.error('[pedidos] Falha ao gravar a expiração de pré-pedidos:', (error as Error)?.message);
+      return 0;
+    }
   }
 
   private persist() {
@@ -462,6 +636,7 @@ export class EncryptedOrderStore {
     this.records.push(order);
     try {
       this.persist();
+      this.addToPhoneIndex(order);
       if (!this.capacityWarned && this.records.length >= EncryptedOrderStore.CAPACITY_WARNING) {
         this.capacityWarned = true;
         console.warn(
@@ -494,6 +669,124 @@ export class EncryptedOrderStore {
     return record ? JSON.parse(JSON.stringify(record)) as StoredOrderDraft : undefined;
   }
 
+  /**
+   * Todos os pré-pedidos de um telefone (LGPD, art. 18, I e V).
+   *
+   * É a porta de entrada do atendimento ao titular: telefone é o único dado que
+   * ele realmente tem em mãos. `orderNumber` sozinho não resolve — ele só
+   * existe se o cliente anotou a confirmação que o site mostrou uma vez.
+   * Busca O(1) no índice; devolve cópias, como `findByOrderNumber`.
+   */
+  findByPhone(rawPhone: string): StoredOrderDraft[] {
+    const matches = new Set<string>();
+    for (const key of phoneSearchKeys(rawPhone)) {
+      const bucket = this.phoneIndex.get(key);
+      if (bucket) for (const orderNumber of bucket) matches.add(orderNumber);
+    }
+    const found: StoredOrderDraft[] = [];
+    for (const orderNumber of matches) {
+      const record = this.findByOrderNumber(orderNumber);
+      if (record) found.push(record);
+    }
+    return found;
+  }
+
+  /**
+   * Pré-pedidos cujo nome contém o fragmento informado, sem acento e sem
+   * distinção de caixa. Complementa a busca por telefone quando o titular não
+   * lembra o número usado na entrega.
+   */
+  searchByName(fragment: string): StoredOrderDraft[] {
+    const needle = normalizePersonName(fragment);
+    if (!needle) return [];
+    return this.records
+      .filter((record) => normalizePersonName(record.customer?.fullName).includes(needle))
+      .map((record) => JSON.parse(JSON.stringify(record)) as StoredOrderDraft);
+  }
+
+  /**
+   * Busca única do fluxo de direitos do titular (art. 18, I e V).
+   *
+   * Devolve do mais recente para o mais antigo, sem limite: quem atende o
+   * pedido precisa saber o TOTAL de registros existentes antes de responder
+   * "sim, tratamos seus dados". A rota administrativa trunca a resposta.
+   */
+  searchByTitular(query: { phone?: string; name?: string }): StoredOrderDraft[] {
+    const phone = (query.phone ?? '').trim();
+    const name = (query.name ?? '').trim();
+    if (!phone && !name) return [];
+    const base = phone ? this.findByPhone(phone) : [...this.records];
+    const needle = normalizePersonName(name);
+    const matched = needle
+      ? base.filter((record) => normalizePersonName(record.customer?.fullName).includes(needle))
+      : base;
+    return matched.reverse();
+  }
+
+  /**
+   * Elimina o pré-pedido inteiro (LGPD, art. 18, VI — supressão).
+   *
+   * O arquivo é CIFRADO, não criptografado campo a campo: um registro não sai
+   * sozinho. A supressão reescreve o arquivo completo com a MESMA chave vigente,
+   * então os demais registros continuam legíveis — não há necessidade de
+   * rotacionar chave (e rotacionar deixaria o resto ilegível, porque só existe
+   * uma chave por arquivo).
+   *
+   * Devolve `false` para registro inexistente ou armazenamento indisponível;
+   * em falha de escrita a memória é restaurada, para o registro não "sumir"
+   * só na RAM.
+   */
+  remove(orderNumber: string): boolean {
+    if (!this.ready) return false;
+    const before = this.records;
+    const kept = before.filter((item) => item.orderNumber !== orderNumber);
+    if (kept.length === before.length) return false;
+    this.records = kept;
+    try {
+      this.persist();
+      this.rebuildPhoneIndex();
+      return true;
+    } catch (error) {
+      this.records = before;
+      console.error('[pedidos] Falha ao eliminar pré-pedido:', (error as Error)?.message);
+      return false;
+    }
+  }
+
+  /**
+   * Apaga SÓ os dados pessoais, mantendo a casca comercial (LGPD, art. 18, VI,
+   * c/c art. 16 — dever de guardar o registro de operação quando a lei exigir).
+   *
+   * Escolha entre `remove` e `redact` conforme a política da loja: pré-pedido
+   * que nunca virou venda, `remove`; registro que precisa sobreviver para
+   * conferência de cupom/estoque, `redact`. Nos dois casos a resposta ao titular
+   * é a mesma — nenhum dado pessoal permanece acessível.
+   *
+   * `redactedAt` deixa o fato registrado para o art. 37 sem guardar quem pediu.
+   */
+  redact(orderNumber: string, now = new Date()): boolean {
+    if (!this.ready) return false;
+    const before = this.records;
+    const index = before.findIndex((item) => item.orderNumber === orderNumber);
+    if (index === -1) return false;
+    const next = [...before];
+    next[index] = {
+      ...before[index],
+      customer: { ...EMPTY_CUSTOMER },
+      redactedAt: now.toISOString(),
+    };
+    this.records = next;
+    try {
+      this.persist();
+      this.rebuildPhoneIndex();
+      return true;
+    } catch (error) {
+      this.records = before;
+      console.error('[pedidos] Falha ao anonimizar pré-pedido:', (error as Error)?.message);
+      return false;
+    }
+  }
+
   listRecent(limit = 50): StoredOrderDraft[] {
     const boundedLimit = Number.isSafeInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 50;
     return this.records.slice(-boundedLimit).reverse().map(
@@ -507,6 +800,11 @@ export class EncryptedOrderStore {
    * Conta sobre o arquivo atual: quando o operador o rota para liberar espaço,
    * o contador recomeça junto. É o teto que dá para oferecer sem um banco de
    * dados — e ainda assim é muito melhor que "para sempre".
+   *
+   * `couponCode` é gravado porque sem ele o teto de usos é contável só na
+   * memória do processo. Não é dado pessoal por si (é código promocional de
+   * circulação pública): `remove` o leva junto com o registro, e `redact`
+   * mantém — apagá-lo liberaria o teto de usos a quem pedisse anonimização.
    */
   couponUseCount(code: string): number {
     const normalized = code.trim().toUpperCase();
