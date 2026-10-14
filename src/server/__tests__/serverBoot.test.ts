@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -25,7 +25,18 @@ import {
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const distIndex = path.join(raiz, 'dist', 'index.html');
-const MARCADOR_SPA = '<!-- lola-boot-test-stub -->';
+const STUB_SPA = '<!-- lola-boot-test-stub -->';
+/**
+ * Conteúdo exato que o servidor precisa devolver para a SPA neste boot.
+ *
+ * O valor sai do `dist/index.html` que existir na hora: se não houver build,
+ * o `beforeAll` planta um stub e guarda ele; se houver (alguém rodou
+ * `npm run build` antes do teste), o servidor vai servir o arquivo de verdade
+ * e o marcador do stub não existe nele. Antes a asserção apontava sempre para o
+ * marcador do stub, o que fazia este teste falhar em qualquer árvore já
+ * construída — ele só passava limpo.
+ */
+let SPA_ESPERADA = '';
 
 const MENSAGEM_CATALOGO_INDISPONIVEL =
   'O catálogo está temporariamente indisponível. Recarregue a página em instantes.';
@@ -78,20 +89,32 @@ function postRascunho(base: string, body: unknown): Promise<{ status: number; co
 }
 
 let crieiODist = false;
+let crieiODiretorio = false;
 
 beforeAll(() => {
   // A vitrine em produção entrega `dist/index.html` para tudo que não é API.
-  // O worktree não tem build; um stub com marcador basta para provar o
-  // caminho real do `sendFile` sem depender do Vite.
+  // Sem build, um stub basta para provar o caminho real do `sendFile` sem
+  // depender do Vite.
   if (!existsSync(distIndex)) {
-    mkdirSync(path.dirname(distIndex), { recursive: true });
-    writeFileSync(distIndex, `<!doctype html><html><body>${MARCADOR_SPA}</body></html>\n`);
+    const diretorioDist = path.dirname(distIndex);
+    crieiODiretorio = !existsSync(diretorioDist);
+    mkdirSync(diretorioDist, { recursive: true });
+    SPA_ESPERADA = `<!doctype html><html><body>${STUB_SPA}</body></html>\n`;
+    writeFileSync(distIndex, SPA_ESPERADA);
     crieiODist = true;
+    return;
   }
+  // Com build existente o servidor sirve este arquivo — então a referência é ele.
+  SPA_ESPERADA = readFileSync(distIndex, 'utf8');
 });
 
 afterAll(() => {
-  if (crieiODist) rmSync(distIndex, { force: true });
+  if (!crieiODist) return;
+  rmSync(distIndex, { force: true });
+  // Sem isto sobrava um `dist/` VAZIO, que um boot de produção leria como
+  // diretório estático sem index — e que fazia o teste seguinte enxergar um
+  // `dist/` que ele mesmo tinha criado.
+  if (crieiODiretorio) rmSync(path.dirname(distIndex), { recursive: true, force: true });
 });
 
 describe('server.ts — modo embutido em produção (boot real)', () => {
@@ -266,7 +289,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
 
       expect(resposta.status, caminho).toBe(200);
       expect(resposta.headers.get('content-type'), caminho).toContain('text/html');
-      expect(html, caminho).toContain(MARCADOR_SPA);
+      expect(html.trim(), caminho).toBe(SPA_ESPERADA.trim());
     }
   });
 
