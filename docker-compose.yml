@@ -1,0 +1,258 @@
+# =============================================================================
+# docker-compose.yml — os DOIS modos de operação da loja
+# =============================================================================
+#
+#   docker compose --profile embutido up -d --build
+#       Um serviço só: vitrine + API + (admin se LOLA_EMBEDDED_ADMIN=true).
+#       Serve para VPS pequena, container único ou primeiro contato.
+#
+#   docker compose --profile dividido up -d --build
+#       Dois serviços: `vitrine` (pública) + `data-server` (privada).
+#       O data-server fica só na rede interna, SEM porta publicada, dono do
+#       volume `.data/` e das chaves. É o modo que isola a chave AES.
+#
+# Arquivos de ambiente (via env_file — NUNCA inline neste YAML):
+#
+#   .env        comum aos dois serviços. É o que a VITRINE enxerga.
+#               No modo dividido ele NÃO pode conter LOLA_ORDERS_ENCRYPTION_KEY
+#               nem LOLA_ADMIN_API_KEY: entregar essas duas chaves à vitrine
+#               anularia toda a separação que o modo dividido existe para criar.
+#
+#   .env.dados  só o data-server lê. É onde moram a chave AES e a chave
+#               administrativa no modo dividido. Exemplos prontos para copiar:
+#               `deploy/env.producao.example` (o .env) e
+#               `deploy/env.producao.dados.example` (o .env.dados) — os dois
+#               com `chmod 600`.
+#
+# Requisitos: Docker Engine 24+ / Docker Compose v2.24+ (sintaxe `env_file`
+# com `required:`), Node 22 no HOST apenas para os scripts de backup/rotação.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Base comum aos três serviços: endurecimento que vale para qualquer modo.
+# -----------------------------------------------------------------------------
+x-lola-base: &lola-base
+  # Uma imagem só, dois comandos (server.ts / data-server.ts).
+  image: lola-site:local
+  build:
+    context: .
+
+  # Rootfs somente-leitura: o processo não altera o próprio código nem deixa
+  # lixo no sistema de arquivos. Grava SÓ em /app/.data (volume) e /tmp (tmpfs).
+  read_only: true
+  tmpfs:
+    - /tmp
+
+  # Nunca root, mesmo que alguém mude o Dockerfile. O usuário `node` é 1000:1000.
+  user: "1000:1000"
+
+  # `no-new-privileges` impede que um processo escalonne (sudo/setuid);
+  # `cap_drop: ALL` remove todas as capabilities — nada aqui usa bind em porta
+  # privilegiada (<1024), então nenhuma é necessária.
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+  restart: unless-stopped
+
+  # Rotação de log: sem teto, um flood preenche o disco da VPS. Mesmo com o
+  # logger limitando a 600 linhas/min, o disco precisa de um teto próprio.
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  # -----------------------------------------------------------------------------
+  # MODO EMBUTIDO — um serviço com tudo dentro
+  # -----------------------------------------------------------------------------
+  embutido:
+    <<: *lola-base
+    profiles: ["embutido"]
+
+    env_file:
+      - path: .env
+        required: true
+
+    environment:
+      NODE_ENV: production
+      # Fixa no compose porque o mapeamento de porta abaixo é estático:
+      # trocar PORT sem trocar `ports:` deixaria o healthcheck e o proxy fora.
+      PORT: "3000"
+
+    # Só o loopback do HOST alcança a aplicação: quem expõe 80/443 é o proxy
+    # reverso (Caddy/nginx) instalado na máquina. Em versões do Docker anteriores
+    # a 28.0.0, portas publicadas em 127.0.0.1 ainda podiam ser alcançáveis por
+    # vizinhos do mesmo segmento L2 (moby#45610) — mantenha o Docker atualizado
+    # ou um firewall (ufw/iptables) bloqueando a rede externa.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    # `.data/` é o disco da loja: estoque em JSON e pré-pedidos cifrados.
+    # Ninguém além deste serviço monta o volume.
+    volumes:
+      - lola-data:/app/.data
+
+    networks:
+      - lola-publica
+
+  # -----------------------------------------------------------------------------
+  # MODO DIVIDIDO (1/2) — a VITRINE pública
+  # -----------------------------------------------------------------------------
+  # Sem `.data/` montado, sem LOLA_ORDERS_ENCRYPTION_KEY, sem LOLA_ADMIN_API_KEY:
+  # ela não pode abrir os dados nem administrar nada, mesmo com a chave na mão.
+  vitrine:
+    <<: *lola-base
+    profiles: ["dividido"]
+
+    env_file:
+      - path: .env
+        required: true
+      # Arquivo de segredos do servidor de dados. Deixamos `required: false`
+      # para que o modo embutido (que não o usa) não trave na validação do
+      # compose. No modo dividido ele DEVE existir e ser preenchido.
+      - path: .env.dados
+        required: false
+
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Modo dividido é escolhido na largada por LOLA_DATA_SERVICE_URL.
+      # `http://` fora de loopback só passa com LOLA_INTERNAL_PLAINTEXT=true —
+      # ver justificativa em `deploy/env.producao.example`.
+      LOLA_DATA_SERVICE_URL: "http://data-server:4100"
+      LOLA_INTERNAL_PLAINTEXT: "true"
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    depends_on:
+      data-server:
+        condition: service_healthy
+
+    networks:
+      # `lola-publica` primeiro: dá saída para a internet (Gemini, ViaCEP) e é
+      # por ela que o proxy do host chega na porta publicada.
+      - lola-publica
+      # `lola-interna` é por onde ela fala com o servidor de dados.
+      - lola-interna: {}
+
+    # Defesa em profundidade: mesmo que uma configuração errada montasse o
+    # volume aqui, ele ficaria somente-leitura — a vitrine NÃO escreve dados.
+    # (No modo dividido o volume não é montado de propósito; esta linha existe
+    # como trava, não como caminho de uso.)
+    # volumes:  <- deliberadamente ausente
+
+  # -----------------------------------------------------------------------------
+  # MODO DIVIDIDO (2/2) — o SERVIDOR DE DADOS privado
+  # -----------------------------------------------------------------------------
+  data-server:
+    <<: *lola-base
+    profiles: ["dividido"]
+
+    # `start:data` = `tsx data-server.ts`. Mesmo caminho documentado no README.
+    command: ["node", "--import", "tsx", "data-server.ts"]
+
+    env_file:
+      - path: .env
+        required: true
+      - path: .env.dados
+        required: false
+
+    environment:
+      NODE_ENV: production
+      PORT: "4100"
+      # Bind no IP FIXO da rede interna (e não 127.0.0.1, que seria só o próprio
+      # container, nem 0.0.0.0, que exigiria o opt-in LOLA_ALLOW_WILDCARD_BIND).
+      # Fixo para ser previsível: a vitrine chega por `http://data-server:4100`.
+      LOLA_BIND_HOST: "172.31.1.10"
+      # Mantido `false` de propósito: com o IP fixo acima não há motivo de abrir
+      # o bind coringa, e o opt-in continuaria valendo para qualquer futuro host.
+      LOLA_ALLOW_WILDCARD_BIND: "false"
+      # Em produção o painel administrativo vive AQUI, nunca na vitrine.
+      LOLA_EMBEDDED_ADMIN: "false"
+
+    # SEM `ports:` de propósito — é o coração do modo dividido.
+    # A porta 4100 continua alcançável a partir do HOST pelo IP da ponte
+    # (`docker network inspect` -> 172.31.1.1), que é por onde o SSH tunnel e o
+    # curl local falam com o painel administrativo. Ela NÃO é alcançável de
+    # fora da máquina: não há porta publicada nem rota até a rede interna.
+    # ports:  <- deliberadamente ausente
+
+    volumes:
+      # Dono exclusivo dos dados. `read_only` no rootfs + este volume = único
+      # lugar gravável do container.
+      - lola-data:/app/.data
+      # Alternativa mais dura (opcional): mover a chave AES para um secret do
+      # Docker, com permissão 0600 exigida pelo código em produção.
+      # Descomente os dois blocos junto e troque LOLA_ORDERS_ENCRYPTION_KEY por
+      # LOLA_ORDERS_KEY_FILE=/run/secrets/orders_key em `.env.dados`.
+      # - type: secret
+      #   source: orders_key
+      #   target: /run/secrets/orders_key
+      #   uid: "1000"
+      #   gid: "1000"
+      #   mode: 0600
+
+    networks:
+      # Só a rede interna: NÃO existe caminho de rede deste container até a
+      # internet. Comprometer o processo não entrega rota de saída para
+      # exfiltrar os pedidos — a defesa que sobra quando a chave já está no
+      # ambiente do processo.
+      - lola-interna:
+          ipv4_address: 172.31.1.10
+
+    healthcheck:
+      # O healthcheck do Dockerfile já é herdado (usa PORT=4100). Repetimos aqui
+      # só para tornar explícito que a saúde do servidor de dados é o que
+      # destrava a subida da vitrine via `depends_on: service_healthy`.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.PORT||4100)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+# -----------------------------------------------------------------------------
+# volumes
+# -----------------------------------------------------------------------------
+volumes:
+  # `.data/` da loja. Volume NOMEADO (fora do repositório, fora do contexto de
+  # build, sobrevive a `docker compose down`). Só `embutido` e `data-server` o
+  # montam; a vitrine do modo dividido jamais o vê.
+  lola-data:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# networks
+# -----------------------------------------------------------------------------
+networks:
+  # Rede de saída da vitrine. Subfaixa fixa para que `LOLA_TRUSTED_PROXY` possa
+  # apontar para o gateway (172.31.0.1) de forma previsível — sem isso, o rate
+  # limit leria o IP errado atrás do proxy.
+  # Se 172.31.0.0/24 já estiver em uso na máquina, troque as duas subfaixas e
+  # ajuste LOLA_TRUSTED_PROXY em `.env` (ver `deploy/CHECKLIST.md`).
+  lola-publica:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1
+
+  # Rede exclusiva vitrine <-> servidor de dados. `internal: true` remove a rota
+  # de saída: nada neste container alcança a internet, e nenhum container fora
+  # desta rede alcança ele.
+  lola-interna:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.1.0/24
+          gateway: 172.31.1.1

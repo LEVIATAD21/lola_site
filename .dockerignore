@@ -1,0 +1,53 @@
+# =============================================================================
+# Contexto de build da imagem — nada abaixo precisa entrar nela.
+# =============================================================================
+# além de deixar o build rápido, isto é controle de segurança: garante que
+# `.data/` (pedidos cifrados), `.env` (segredos), `.git` (histórico) e
+# `node_modules`/`dist` velhos NUNCA entram numa imagem publicada.
+
+# dependências e saída de build — a imagem instala as suas na hora
+node_modules
+**/node_modules
+dist
+**/dist
+build
+coverage
+
+# DADOS. Nunca em imagem: `.data/` é o disco da loja, com pedidos de cliente.
+.data
+**/.data
+
+# SEGREDOS e metadados
+.env
+.env.*
+**/.env
+**/.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+secrets
+.git
+.github
+.gitignore
+.npmrc
+*.log
+**/*.log
+
+# documentação e ferramentas de desenvolvimento (o runbook `deploy/*.md` fica,
+# é ele que o operador lê de dentro do container)
+docs
+*.md
+README.md
+REPORT.md
+api-test.http
+.nvmrc
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# testes: não rodam dentro da imagem e só aumentam o contexto
+**/__tests__
+**/*.test.ts
+**/*.spec.ts

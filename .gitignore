@@ -7,3 +7,8 @@ coverage/
 *.log
 .env*
 !.env.example
+# Destino alternativo do deploy/backup.sh, caso alguém aponte o
+# LOLA_BACKUP_DEST para dentro do repo. Backup de PII não entra no git.
+# (Os exemplos de produção usam `env.producao.example`, SEM ponto inicial,
+# então `.env*` não os pega — são versionados de propósito e sem segredo.)
+deploy/backups/
