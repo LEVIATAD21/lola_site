@@ -11,7 +11,7 @@
 
 **Elegância nos detalhes. Uma experiência de compra em construção.**
 
-[Visão geral](#-sobre-o-projeto) · [Telas](#-experiência-da-loja) · [Tecnologias](#-tecnologias) · [Executar localmente](#-como-executar) · [Arquitetura](#-arquitetura-de-segurança) · [Testes](#-qualidade-e-testes) · [Próximas etapas](#-estado-atual-e-próximas-etapas)
+[Visão geral](#-sobre-o-projeto) · [Telas](#-experiência-da-loja) · [Tecnologias](#-tecnologias) · [Executar localmente](#-como-executar) · [Produção](#-como-colocar-em-produção) · [Arquitetura](#-arquitetura-de-segurança) · [Testes](#-qualidade-e-testes) · [Próximas etapas](#-estado-atual-e-próximas-etapas)
 
 </div>
 
@@ -168,6 +168,64 @@ Os comandos disponíveis são:
 O workflow [GitHub Actions · CI](.github/workflows/ci.yml) executa instalação, verificação de tipos, testes e build para alterações na branch `main` e pull requests direcionados a ela.
 
 > A existência desses comandos e do workflow não garante, por si só, que a última execução passou. Consulte a página de [Actions](https://github.com/LEVIATAD21/lola_site/actions) para conferir os resultados reais.
+
+## 🌐 Como colocar em produção
+
+Tudo o que a operação precisa está em [`deploy/`](deploy/): `Dockerfile` + `docker-compose.yml` na raiz, proxy reverso (`Caddyfile` ou `nginx.conf`), backup com teste de restauração e o checklist de lançamento. O passo a passo abaixo é o resumo — quem opera deve seguir o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md), item a item, com o comando de verificação de cada um.
+
+### 1. Escolha um dos dois modos (o mesmo código, duas superfícies)
+
+| | `--profile embutido` | `--profile dividido` (recomendado) |
+|---|---|---|
+| Serviços | 1 container (vitrine + API) | `vitrine` (pública) + `data-server` (privada) |
+| Chave AES dos pedidos | no ambiente do próprio container | só no `.env.dados`, que a vitrine não lê |
+| Painel administrativo | opt-in (`LOLA_EMBEDDED_ADMIN=true`) | no `data-server`, sem porta publicada |
+| Rede | 1 rede | rede pública + rede `internal: true` |
+| VPS mínima | 1 GB | 1 GB (o ganho é de superfície, não de hardware) |
+
+No modo dividido, o servidor de dados **não publica porta nenhuma**: ele fica só na rede interna do Docker (`internal: true`, sem rota para a internet), e o painel é alcançado por túnel SSH — `ssh -N -L 4100:172.31.1.10:4100 usuario@servidor` — ou por `docker compose exec`. Quem comprometer a vitrine exposta não encontra a chave de cifra nem as rotas de administração.
+
+### 2. Suba assim
+
+```bash
+# pré-requisitos: Docker 24+ / Compose v2.24+ (Node 22 no host, para os scripts)
+git clone <repo> /srv/lola && cd /srv/lola
+
+install -m 600 deploy/env.producao.example       /srv/lola/.env        # e edite
+install -m 600 deploy/env.producao.dados.example  /srv/lola/.env.dados  # e edite
+
+docker compose --profile dividido up -d --build   # ou --profile embutido
+```
+
+Os exemplos de ambiente explicam, variável por variável, o que trocar e por quê — inclusive por que a chave AES **não** pode morar no `.env` comum no modo dividido.
+
+### 3. Proxy reverso
+
+O compose sobe o Caddy automaticamente (perfil `dividido`/`embutido`, serviço `proxy-caddy`) lendo [`deploy/Caddyfile`](deploy/Caddyfile): TLS automático, redirect HTTP→HTTPS e o painel administrativo bloqueado no host público. Prefere nginx? Descomente o serviço `proxy-nginx`, tire o `proxy-caddy` e aponte para [`deploy/nginx.conf`](deploy/nginx.conf).
+
+### 4. Backup (sem plano de restore, não é backup)
+
+```bash
+install -m 700 deploy/backup.sh /usr/local/bin/lola-backup
+LOLA_COMPOSE_SERVICE=data-server lola-backup   # copia do container, testa a restauração e rotaciona
+```
+
+O script recusa gravar backup que não conseguiu decifrar: ele roda `deploy/verify-orders-restore.mjs` contra o conteúdo candidato **antes** de criar o `.tar.gz`, e só então aplica a retenção. Agende no cron e — obrigatório — guarde a chave AES **fora** da máquina (cofre de senhas + papel no cofre físico): o backup não a inclui de propósito, e sem ela os `.enc` são lixo.
+
+### 5. Antes de dizer "está no ar"
+
+Siga o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md). Os itens que mais derrubam lançamento são: IP real por trás do proxy (sem `LOLA_TRUSTED_PROXY` declarado, todo cliente divide o mesmo bucket de rate limit), `X-Forwarded-For` forjado sendo ignorado, e backup agendado mas nunca testado.
+
+### 6. Manutenção recorrente
+
+| Tarefa | Quando | Ferramenta |
+|---|---|---|
+| Backup + teste de restauração | diário (cron) | `deploy/backup.sh` |
+| Rotação da chave AES dos pedidos | anual, ou antes de 80% do teto de 10.000 registros | [`deploy/rotate-orders-key.md`](deploy/rotate-orders-key.md) |
+| `docker compose pull && up -d --build` | a cada release | git tag + compose |
+| Conferir `docker compose logs vitrine \| tail` | semanal | — |
+
+A chave AES tem teto de uso por arquivo (`orders.enc.json`, 10.000 registros) e o servidor avisa ao chegar em 90%. A rotação **não** é "trocar a variável e reiniciar": o script redecifra cada registro com a chave velha e redecifra com a nova, falhando alto se qualquer registro não sobreviver.
 
 ## 🧩 Estado atual e próximas etapas
 

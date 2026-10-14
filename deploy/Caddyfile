@@ -1,0 +1,117 @@
+# =============================================================================
+# Caddyfile — proxy reverso recomendado para a LOLA (Caddy)
+# =============================================================================
+# Por que Caddy em vez de nginx/certbot aqui:
+#   * TLS automático: emite e RENOVA sozinho o certificado do Let's Encrypt,
+#     sem cron de certbot, sem "certificado expirou" às 3h da manhã;
+#   * redirect HTTP -> HTTPS automático (o que já expõe 80 vira 301 para 443);
+#   * configuração de 20 linhas em vez de 60.
+#
+# Instalação (Debian/Ubuntu):  apt install caddy
+# Depois:                      systemctl enable --now caddy
+# Recarregar:                  systemctl reload caddy
+#
+# Coloque este arquivo em /etc/caddy/Caddyfile e troque:
+#   * `loja.seudominio.com.br` pelo domínio REAL apontado no DNS;
+#   * `SEU_EMAIL@aqui.exemplo` pelo e-mail de contato do Let's Encrypt
+#     (é para ele avisar se o certificado estiver perto de expirar).
+#
+# -----------------------------------------------------------------------------
+# REGRAS DESTE ARQUIVO
+# -----------------------------------------------------------------------------
+# 1. TODO o tráfego vai para a VITRINE (127.0.0.1:3000).
+# 2. NADA aponta para o servidor de dados: no modo dividido ele não tem porta
+#    publicada, e o caminho até ele é a rede interna do Docker. Um proxy que
+#    apontasse para ele transformaria a metade privada em pública.
+# 3. O painel administrativo (/api/admin/* e POST /api/estoque/atualizar) é
+#    bloqueado na porta pública. Ele é acessado direto pela loopback do host
+#    (modo embutido) ou pelo IP da ponte interna (modo dividido) — nunca pela
+#    internet. A allowlist de origem da aplicação lê o IP do SOCKET, que atrás
+#    do proxy é sempre o mesmo; então quem restringe de verdade aqui é o proxy.
+# =============================================================================
+
+{
+	# E-mail real do responsável pelo domínio: Let's Encrypt envia avisos de
+	# renovação e de bloqueio de conta por aqui.
+	email SEU_EMAIL@aqui.exemplo
+
+	# Log de acesso em /var/log/caddy/. Mantenha por pelo menos uma semana:
+	# sem histórico não dá para investigar um ataque depois que ele aconteceu.
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 20mb
+			roll_keep 10
+			roll_keep_for 720h
+		}
+	}
+}
+
+loja.seudominio.com.br {
+	# Compressão. `zstd` é mais barato que gzip; se algum cliente antigo não
+	# entender, o Caddy cai sozinho para gzip.
+	encode zstd gzip
+
+	# HSTS: o navegador passa a exigir HTTPS para este host por 180 dias.
+	# `defer` garante que o cabeçalho seja enviado mesmo se a resposta vier da
+	# aplicação com erro. O backend também envia HSTS (LOLA_HSTS_ENABLED, padrão
+	# ligado); os dois valores são iguais, então não há conflito.
+	# Só adicione `; includeSubDomains` quando TODOS os subdomínios já estiverem
+	# em HTTPS — senão você quebra o subdomínio pendente pelo período inteiro.
+	header Strict-Transport-Security "max-age=15552000" {
+		defer
+	}
+
+	# Limite de corpo. A API aceita no máximo 16 kB (`express.json({limit:'16kb'})`),
+	# então 32 kB aqui deixa o APP ser quem devolve o 413 em JSON padronizado e
+	# ainda corta inundação grosseira antes de ela atravessar o proxy.
+	# O Caddy NÃO limita corpo por padrão — esta diretiva exige Caddy >= 2.7.
+	request_body {
+		max_size 32KB
+	}
+
+	# Trava do painel administrativo na porta pública. Veja a regra 3 acima.
+	@bloqueio_admin path /api/admin/* /api/estoque/atualizar
+	respond @bloqueio_admin 403
+
+	# /api/health é o alvo do monitoramento (2xx = saudável). Ela é O(1) e fica
+	# fora do rate limit de leitura de propósito — se quiser tirá-la do access
+	# log, use `log_skip @saude` (exige Caddy >= 2.8):
+	#   @saude path /api/health
+	#   log_skip @saude
+
+	# Encaminha TUDO para a vitrine: a SPA (React), /api/* e /internal/*
+	# (que a própria aplicação responde 404 — o canal interno não é da vitrine).
+	# O Caddy acrescenta X-Forwarded-For, X-Forwarded-Proto e X-Forwarded-Host
+	# automaticamente.
+	#
+	# IMPORTANTE: em `.env` precisa estar
+	#     LOLA_TRUSTED_PROXY=127.0.0.1,172.31.0.1
+	# sem isso a aplicação IGNORA o X-Forwarded-For, lê como IP da cliente o
+	# endereço do socket (o proxy, ou o gateway do Docker) e todo mundo acaba no
+	# MESMO balde de rate limit — um atacante derruba o checkout de todas as
+	# clientes ao mesmo tempo. O valor acima cobre as duas formas de o Docker
+	# entregar a conexão do host: pela loopback publicada ou pela ponte da rede.
+	#
+	# Timeouts: os padrões do Caddy já são seguros (dial 10s, resposta sem
+	# teto). Se quiser travar a resposta, descomente — exige Caddy >= 2.7:
+	#   transport http {
+	#     dial_timeout 5s
+	#     response_header_timeout 30s
+	#   }
+	reverse_proxy 127.0.0.1:3000
+
+	# Arquivos estáticos são servidos pela aplicação (express.static em dist/),
+	# então não há diretório separado para cachear aqui. Se quiser acelerar
+	# imagens depois, descomente e ajuste:
+	# header /images/* {
+	# 	Cache-Control "public, max-age=604800, immutable"
+	# }
+}
+
+# -----------------------------------------------------------------------------
+# Se ainda não houver domínio apontado, não tente subir este bloco: o Caddy só
+# consegue emitir certificado para um nome que o Let's Encrypt valida (DNS
+# apontando para este servidor, porta 80 acessível de fora). Para testar em
+# máquina local use um bloco `localhost` sem TLS, que o Caddy gera para
+# desenvolvimento.
+# -----------------------------------------------------------------------------

@@ -8,5 +8,13 @@ coverage/
 .env*
 !.env.example
 
-# Dependências instaladas (symlink no worktree de auditoria aponta para a cópia do usuário)
+# `node_modules` SEM a barra final de propósito: a barra cobre só diretório, e
+# nos worktrees de auditoria esse caminho é um SYMLINK para a cópia do usuário.
+# Com a barra, o symlink entraria no repositório.
 node_modules
+
+# Destino alternativo do deploy/backup.sh, caso alguém aponte o
+# LOLA_BACKUP_DEST para dentro do repo. Backup de PII não entra no git.
+# (Os exemplos de produção usam `env.producao.example`, SEM ponto inicial,
+# então `.env*` não os pega — são versionados de propósito e sem segredo.)
+deploy/backups/
