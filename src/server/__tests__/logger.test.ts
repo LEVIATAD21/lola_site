@@ -2,7 +2,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureIpLogging, createRequestLogger, loggableIp, resolveIpLogMode, truncatePath } from '../logger';
+import { configureIpLogging, configureIpLoggingFromEnv, createRequestLogger, loggableIp, resolveIpLogMode, truncatePath } from '../logger';
 
 const servers: Server[] = [];
 const logged = () => vi.mocked(console.log).mock.calls.map((call) => String(call[0]));
@@ -191,5 +191,68 @@ describe('loggableIp (LGPD)', () => {
     expect(resolveIpLogMode('hash')).toBe('hash');
     expect(resolveIpLogMode('off')).toBe('off');
     expect(resolveIpLogMode('mask')).toBe('mask');
+  });
+});
+
+/**
+ * Wiring REAL dos entrypoints: `server.ts` e `data-server.ts` ligam o registro
+ * de IP no boot exatamente por `configureIpLoggingFromEnv(process.env)` —
+ * resolver a função isolado não prova que o wiring existe. Estes testes
+ * exercitam a composição resolve+configure e olham a LINHA DE LOG que sai,
+ * que é o dado pessoal que a LGPD protege.
+ */
+describe('configureIpLoggingFromEnv — wiring dos entrypoints', () => {
+  async function linhaDeRequisicao() {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const base = await listen(sampleApp());
+    await fetch(base + '/api/ok');
+    await settle();
+    return logged().find((line) => line.includes('http.request')) ?? '';
+  }
+
+  it('LOLA_LOG_IP_MODE=banana (valor inválido) cai no mascaramento, sem vazar o endereço', async () => {
+    configureIpLoggingFromEnv({ LOLA_LOG_IP_MODE: 'banana' });
+
+    const linha = await linhaDeRequisicao();
+
+    expect(linha).toContain('ip=127.0.x.x');
+    expect(linha).not.toContain('ip=127.0.0.1');
+  });
+
+  it('LOLA_LOG_IP_MODE=off remove o campo ip da linha inteira', async () => {
+    configureIpLoggingFromEnv({ LOLA_LOG_IP_MODE: 'off' });
+
+    const linha = await linhaDeRequisicao();
+
+    // O resto da linha continua — investigação de incidente não pode perder
+    // método, caminho e status; só o dado pessoal é que sai.
+    expect(linha).toContain('path=/api/ok');
+    expect(linha).toContain('status=200');
+    expect(linha).not.toContain('ip=');
+  });
+
+  it('ambiente sem LOLA_LOG_IP_MODE mantém o padrão mascarado', async () => {
+    configureIpLoggingFromEnv({});
+
+    const linha = await linhaDeRequisicao();
+
+    expect(linha).toContain('ip=127.0.x.x');
+  });
+
+  it('LOLA_LOG_IP_MODE=full devolve o endereço cheio, para investigação', async () => {
+    configureIpLoggingFromEnv({ LOLA_LOG_IP_MODE: 'full' });
+
+    const linha = await linhaDeRequisicao();
+
+    expect(linha).toContain('ip=127.0.0.1');
+  });
+
+  it('LOLA_LOG_IP_MODE=hash com LOLA_LOG_IP_SECRET agrupa sem identificar a cliente', async () => {
+    configureIpLoggingFromEnv({ LOLA_LOG_IP_MODE: 'hash', LOLA_LOG_IP_SECRET: 'segredo-da-loja' });
+
+    const linha = await linhaDeRequisicao();
+
+    expect(linha).toMatch(/ip=ip:[0-9a-f]{12}/);
+    expect(linha).not.toContain('127.0.0.1');
   });
 });

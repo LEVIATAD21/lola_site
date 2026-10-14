@@ -10,8 +10,10 @@ import { createLocalDataPlane } from './src/server/dataPlane';
 import { createInternalRouter } from './src/server/internalRoutes';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { configureIpLogging, createRequestLogger, log, loggableIp, resolveIpLogMode, safePath } from './src/server/logger';
+import { configureIpLoggingFromEnv, createRequestLogger, log } from './src/server/logger';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
+import { createJsonErrorHandler } from './src/server/httpError';
+import { envInt, resolveTlsConfig } from './src/server/envConfig';
 import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
 
 /**
@@ -35,11 +37,6 @@ import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
  */
 
 dotenv.config({ quiet: true });
-
-function envInt(name: string, fallback: number, min: number, max: number): number {
-  const value = Number(process.env[name]);
-  return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
-}
 
 function fail(motivo: string, acao: string): never {
   log('error', 'dados.falha_configuracao', { motivo, acao });
@@ -76,10 +73,7 @@ async function startDataService(): Promise<void> {
   }
 
   const PORT = envInt('PORT', 4100, 1, 65_535);
-  configureIpLogging(
-    resolveIpLogMode(process.env.LOLA_LOG_IP_MODE),
-    process.env.LOLA_LOG_IP_SECRET,
-  );
+  configureIpLoggingFromEnv(process.env);
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
 
@@ -150,36 +144,19 @@ async function startDataService(): Promise<void> {
     res.status(404).json({ error: 'Recurso não encontrado.' });
   });
 
-  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const candidate = error as { status?: number };
-    const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
-    if (status === 500) {
-      log('error', 'http.erro_nao_tratado', {
-        ip: loggableIp(req.ip), method: req.method, path: safePath(req),
-        motivo: error instanceof Error ? error.message : String(error),
-      });
-    }
-    res.status(status).json({
-      error: status === 413 ? 'Corpo da requisição muito grande.'
-        : status === 400 ? 'JSON inválido na requisição.' : 'Erro interno do servidor.',
-    });
-  });
+  // Tratador de erro por último na cadeia: qualquer erro lançado acima —
+  // inclusive do body-parser — vira JSON genérico, nunca HTML com stack (VUL-B).
+  app.use(createJsonErrorHandler());
 
   // TLS opcional. Sem ele, `x-admin-key` (adminAuth.ts) e o PII completo dos
   // pedidos — nome, telefone, endereço — atravessam a rede privada em claro.
   // Loopback não precisa; qualquer outro destino, inclusive outro host da mesma
   // máquina, precisa. Configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
-  const tlsCertFile = (process.env.LOLA_TLS_CERT_FILE || '').trim();
-  const tlsKeyFile = (process.env.LOLA_TLS_KEY_FILE || '').trim();
-  if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
-    throw new Error(
-      'LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE precisam ser configurados juntos: um sem o outro não sobe TLS.',
-    );
-  }
-  if (tlsCertFile && tlsCertFile === tlsKeyFile) {
-    throw new Error('LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE não podem apontar para o mesmo arquivo.');
-  }
-  const tlsEnabled = Boolean(tlsCertFile);
+  // A validação é função pura exportada (envConfig.ts) para ser testável sem
+  // subir servidor; aqui só o resultado é aplicado, como antes.
+  const tls = resolveTlsConfig(process.env);
+  if ('error' in tls) throw new Error(tls.error);
+  const { enabled: tlsEnabled, certFile: tlsCertFile, keyFile: tlsKeyFile } = tls;
 
   if (!tlsEnabled && !bindHost.startsWith('127.') && bindHost !== '::1') {
     log('warn', 'dados.sem_tls_em_endereco_publico', {

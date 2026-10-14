@@ -11,11 +11,13 @@ import { HttpDataPlane } from './src/server/httpDataPlane';
 import { InternalClient } from './src/server/internalClient';
 import { createAdminRouter } from './src/server/adminRoutes';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
-import { configureIpLogging, createRequestLogger, log, loggableIp, resolveIpLogMode, safePath } from './src/server/logger';
+import { configureIpLoggingFromEnv, createRequestLogger, log } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
 import { createCrossSiteWriteGuard } from './src/server/requestGuard';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { resolveTrustProxy } from './src/server/trustedProxy';
+import { createJsonErrorHandler } from './src/server/httpError';
+import { envInt } from './src/server/envConfig';
 
 // `quiet` remove o banner de divulgação do dotenv, que poluía o log do servidor
 // a cada reinício — e um anúncio dentro do log de produção é anúncio no lugar
@@ -62,11 +64,9 @@ const ADMIN_BEHIND_PROXY = TRUST_PROXY !== undefined;
 const ADMIN_PROXY_OPT_IN = process.env.LOLA_ADMIN_ALLOW_PRIVATE_PROXY === 'true';
 const MOUNT_ADMIN = WANTS_ADMIN && (!PRODUCTION || !ADMIN_BEHIND_PROXY || ADMIN_PROXY_OPT_IN);
 
-/** Lê um inteiro do ambiente com faixa segura; fora da faixa, usa o padrão. */
-function envInt(name: string, fallback: number, min: number, max: number): number {
-  const value = Number(process.env[name]);
-  return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
-}
+// `envInt` é o clamp de ambiente compartilhado com o data-server.ts, exportado
+// de src/server/envConfig.ts para ser testado sem subir servidor (VUL: PORT
+// fora da faixa derrubava a subida no meio do `listen`).
 
 // VUL-03: janela em que um pré-pedido segura o estoque. Ao vencer, a reserva
 // expira e as unidades voltam para a vitrine automaticamente.
@@ -97,16 +97,12 @@ SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 async function startServer() {
   // LGPD: o IP endereçável é dado pessoal, e o logger o registra em três
   // eventos. O padrão mascara antes de gravar; `full` volta ao endereço cheio.
-  configureIpLogging(
-    resolveIpLogMode(process.env.LOLA_LOG_IP_MODE),
-    process.env.LOLA_LOG_IP_SECRET,
-  );
+  configureIpLoggingFromEnv(process.env);
 
   const app = express();
   // Clamp de porta, como o data-server.ts já fazia: `PORT=99999` derrubava a
   // subida no meio do `listen`, depois de todo o resto já ter sido inicializado.
-  const portRaw = Number(process.env.PORT);
-  const PORT = Number.isInteger(portRaw) && portRaw >= 1 && portRaw <= 65535 ? portRaw : 3000;
+  const PORT = envInt('PORT', 3000, 1, 65_535);
 
   // Plano de dados: remoto quando os servidores estão separados, local quando
   // este processo é também o dono dos arquivos. Nenhum caminho de requisição
@@ -573,23 +569,9 @@ ${JSON.stringify(pergunta)}
   // erro lançado por eles escapava para o `finalhandler` do Express, que em
   // não-produção devolve HTML com a stack trace completa — arquivo, linha e
   // trecho de código na resposta. Com quatro argumentos, esta função pega
-  // qualquer erro lançado em QUALQUER ponto acima.
-  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const candidate = error as { status?: number };
-    const status = candidate?.status === 413 ? 413 : candidate?.status === 400 ? 400 : 500;
-    // VUL-08: o motivo real era descartado, o que tornava incidente inexplicável.
-    // Ele só vai para o log do servidor; a resposta continua genérica.
-    if (status === 500) {
-      log('error', 'http.erro_nao_tratado', {
-        ip: loggableIp(req.ip), method: req.method, path: safePath(req),
-        motivo: error instanceof Error ? error.message : String(error),
-      });
-    }
-    res.status(status).json({
-      error: status === 413 ? 'Corpo da requisição muito grande.' :
-        status === 400 ? 'JSON inválido na requisição.' : 'Erro interno do servidor.',
-    });
-  });
+  // qualquer erro lançado em QUALQUER ponto acima. O tratador em si é o mesmo
+  // do data-server.ts, extraído para src/server/httpError.ts e testado lá.
+  app.use(createJsonErrorHandler());
 
   app.listen(PORT, '0.0.0.0', () => {
     log('info', 'servidor.iniciado', {

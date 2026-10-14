@@ -32,6 +32,17 @@ export function configureIpLogging(mode: IpLogMode, secret?: string): void {
     : undefined;
 }
 
+/**
+ * Wiring real dos entrypoints: `server.ts` e `data-server.ts` ligam o registro
+ * de IP exatamente por aqui, lendo `LOLA_LOG_IP_MODE` e `LOLA_LOG_IP_SECRET`
+ * do ambiente. Testar `resolveIpLogMode` isolado não prova que o wiring
+ * existe — este é o único caminho que os dois processos executam no boot, e é
+ * ele que o teste cobre.
+ */
+export function configureIpLoggingFromEnv(env: Record<string, string | undefined> = process.env): void {
+  configureIpLogging(resolveIpLogMode(env.LOLA_LOG_IP_MODE), env.LOLA_LOG_IP_SECRET);
+}
+
 function maskIp(ip: string): string {
   // IPv4: mantém a rede, esconde o host. `189.45.x.x` continua mostrando se o
   // tráfego vem do mesmo provedor, sem apontar o assinante.
