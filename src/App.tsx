@@ -17,9 +17,8 @@ import { ProductDetailPage } from './components/product/ProductDetailPage';
 import { CartPage } from './components/cart/CartPage';
 import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
-import { ReportModal } from './components/ReportModal';
-import { FileText } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
+import { FileText } from 'lucide-react';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
@@ -93,7 +92,6 @@ export default function App() {
   const [infoModalTitle, setInfoModalTitle] = useState('');
   const [infoModalContent, setInfoModalContent] = useState('');
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Category filter state for home page
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
@@ -679,15 +677,6 @@ export default function App() {
         catalog={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS]}
       />
 
-      {/* Relatório Executivo e Auditoria Técnica Modal */}
-      <ReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        onNavigateToScreen={(screen) => {
-          setPageView(screen);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-      />
 
       {/* Discrete feedback notifications */}
       <ToastNotification toasts={toasts} onDismiss={handleDismissToast} />
