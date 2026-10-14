@@ -25,6 +25,11 @@
 | Backups | `~/lola-backups/*.tar.gz` |
 | Pedidos antigos que não decifram | `~/backups/lola-pedidos-ilegiveis-20261013-203712/` |
 | Bloqueios que só o dono resolve | `lola_coord/BLOCKERS.md` |
+| Configuração (chaves, portas, limites) | `.env` na raiz do projeto · em produção `/srv/lola/.env` e `/srv/lola/.env.dados` |
+
+> Em desenvolvimento local o `.env` pode nem existir — nesse caso os valores são
+> os padrões do sistema e os comandos que leem `.env` abaixo não acham nada.
+> **Isso é normal e não é incidente.** Em produção, use o caminho real do arquivo.
 
 **Neste runbook, `LOG` significa o arquivo/terminal de log da loja.** Escolha o
 que existe na sua máquina:
