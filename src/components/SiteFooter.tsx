@@ -142,7 +142,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Privacidade',
-                      'Nesta demonstração, os dados informados no checkout permanecem apenas no seu navegador (armazenamento local) e não são enviados a servidores. Na versão comercial, o tratamento de dados seguirá a LGPD e a política oficial será divulgada antes do lançamento.'
+                      'Seus dados informados no checkout — nome, telefone e endereço — são usados exclusivamente para registrar e processar o seu pedido. Ficam armazenados de forma cifrada por até 90 dias e não são vendidos nem usados para publicidade. Você pode solicitar a confirmação ou a exclusão dos seus dados pelo atendimento da loja, conforme o art. 18 da LGPD.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -168,7 +168,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Cookies',
-                      'Utilizamos armazenamento local (localStorage) para manter o seu carrinho de compras e seus favoritos neste navegador. Não utilizamos cookies de rastreamento ou de terceiros nesta demonstração.'
+                      'Utilizamos armazenamento local (localStorage) para manter o seu carrinho de compras e seus favoritos neste navegador. Não utilizamos cookies de rastreamento ou de terceiros.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
