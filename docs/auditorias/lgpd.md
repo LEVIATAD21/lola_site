@@ -287,7 +287,7 @@ participação do Google), *ViaCEP/Google Fonts* (interesse legítimo/minimizaç
 | 7 | Escrever **LIA** do legítimo interesse (reserva de estoque, limite de cupom, logs) | 10 | **Médio** | ❌ |
 | 8 | Arquivar **adhesão Google Cloud ToS + DPA** se Gemini seguir ativo | 39 | **Baixo** | ❌ |
 | **P2** | | | | |
-| 9 | **Correção de dados** (art. 18, IV) — rota PATCH preservando `orderNumber` | 18, IV | **Médio** | ❌ esboço §8.3 |
+| 9 | **Correção de dados** (art. 18, III) — rota PATCH preservando `orderNumber` | 18, III | **Médio** | ❌ esboço §8.3 |
 | 10 | Aviso/consentimento **antes de perguntar ao assistente** | 9º · 7º, I | **Médio** | ❌ decisão §8.2 |
 | 11 | **Auto-hospedar fontes** e documentar ViaCEP | 46 | **Baixo** | ❌ |
 | 12 | Política de **backup/restore + rotação de log** testada | 46 | **Baixo** | ❌ |
@@ -324,7 +324,7 @@ nome, telefone ou endereço."*
 >    ligar o aviso uma única vez (opt-in guardado em `localStorage`) em vez de toda conversa.*
 > 3. **Quem é o responsável pela conta Google e vai arquivar o DPA/Terms?**
 
-### 8.3 Correção de dados (art. 18, IV) — esboço, não implementado
+### 8.3 Correção de dados (art. 18, III) — esboço, não implementado
 ```ts
 // adminRoutes.ts — preserva orderNumber/createdAt, revalida como um pedido novo
 router.patch('/admin/pre-pedidos/:orderNumber', requireAdminKey, requireTrustedOrigin, (req, res) => {
@@ -401,6 +401,6 @@ router.patch('/admin/pre-pedidos/:orderNumber', requireAdminKey, requireTrustedO
 1. Publicar Política/Termos reais (§8.4) — **bloqueia o go-live** (art. 9º, I).
 2. Destino do Gemini: desligar OU avisar+consentir (§8.2).
 3. Política apagar × anonimizar (§8.1).
-4. Correção de dados — art. 18, IV (esboço §8.3).
+4. Correção de dados — art. 18, III (esboço §8.3).
 5. Canal + prazo de resposta ao titular (§8.5), encarregado, ROPA e LIA.
 6. Tudo o que é UI: nada foi criado sem pergunta.

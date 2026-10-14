@@ -55,9 +55,10 @@ seus domínios reais.
 - [ ] `curl -sI https://www.example.com/.env | head -1` → `404` (nunca `200`).
 - [ ] `curl -sI https://www.example.com/admin | head -1` → `404` ou `403`,
       **nunca** `200`.
-- [ ] `curl -s https://pedidos.example.com/ | head -c 80` →
-      `{"ok":true,"servico":"lola-data"}` (o painel em si é protegido por
-      allowlist; ver próxima seção).
+- [ ] `curl -sI https://pedidos.example.com/ | head -1` → `404` (o servidor de
+      dados é API pura e não serve página nenhuma; o painel em si é protegido
+      por allowlist, ver próxima seção).
+- [ ] `curl -s https://pedidos.example.com/api/health` → `{"status":"ok"}`.
 
 ## 4. IP real por trás do proxy (obrigatório)
 
@@ -101,13 +102,15 @@ funciona direito.
 
 - [ ] `curl -s https://www.example.com/ | grep -o '<title>[^<]*'` → título
       correto do site.
-- [ ] Formulário de orçamento: enviar uma mensagem de teste e conferir que
-      chega (se `GEMINI_API_KEY` estiver vazia, a resposta é
-      "Serviço indisponível (503)" — espere por isso).
+- [ ] Assistente virtual: enviar uma mensagem de teste e conferir que chega.
+      Com `GEMINI_API_KEY` **vazia** a resposta vem do motor local — `200`
+      com `{"resposta": ...}`. **Isso não é erro.** Texto só vai para o
+      Google quando a chave está setada (ver B3 em `docs/GO-LIVE.md`).
 - [ ] `docker compose logs vitrine 2>&1 | grep -i -e error -e exception | tail`
       → sem erro novo.
 - [ ] `docker stats --no-stream` — memória dos containers estável.
-- [ ] Vitrine com "comprar direto": `POST /api/pedido` respondendo (é o
-      endpoint do vitrine, no mesmo domínio).
+- [ ] Vitrine com "comprar direto": `POST /api/pedidos/rascunho` respondendo
+      `201` (é o endpoint do vitrine, no mesmo domínio; não existe nenhuma
+      rota `/api/pedido`).
 - [ ] Backup diário agendado e **testado em restore** (o `deploy/backup.sh`
       já roda o teste automático em toda execução; veja `backup.log`).

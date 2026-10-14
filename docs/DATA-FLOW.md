@@ -344,11 +344,15 @@ escrita.
 
 ### 7.2 Nota de precisão sobre o número do inciso
 
-A correção é o **art. 18, III** (LGPD). `DECISIONS.md`, `BLOCKERS.md` (B8) e
-`docs/auditorias/lgpd.md` §2.2/§8.3 citam "art. 18, IV". A **decisão em si está
-íntegra e não é reaberta aqui** — correção não existe, e este documento não finge
-que existe. Anoto só a divergência de numeração para o texto final da política não
-repetir o número errado.
+A correção é o **art. 18, III** (LGPD). O **art. 18, IV** é anonimização, bloqueio
+ou eliminação de dados excessivos ou desconformes — que é justamente o caminho que
+o `redact()` atende, e por isso o IV não pode ser usado para falar de correção sob
+risco de o texto final da política atribuir ao titular um direito com outro nome.
+
+Esta divergência foi encontrada durante a montagem do mapa de dados e **já está
+corrigida** em `BLOCKERS.md` (B8), `DECISIONS.md`, `docs/GO-LIVE.md` e
+`docs/auditorias/lgpd.md` §2.2/§8.3/§9. A decisão em si não foi reaberta —
+correção não existe, e este documento não finge que existe.
 
 ---
 

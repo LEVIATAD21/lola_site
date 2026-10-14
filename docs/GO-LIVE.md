@@ -121,7 +121,7 @@ integrado pela responsável"*. Sem isso, a cliente sem resposta não tem pra ond
 |---|---|---|
 | 1 | **Catálogo vem de `mockData.ts`, não da API.** `GET /api/produtos` existe mas **nenhum componente chama**. | O servidor recalcula o preço na hora de cobrar, então **ninguém é cobrado errado** — mas a vitrine pode *exibir* valor desatualizado. |
 | 2 | **12 modais sem focus trap nem fechamento por `Escape`** (só o lightbox fecha). | Acessibilidade, não segurança. Sugestão: um hook central `useDialogA11y`. |
-| 3 | **Correção de dados (art. 18, IV)** | **Não existe hoje.** Exclusão e anonimização existem; correção ficou só com esboço de `PATCH` (§8.3). |
+| 3 | **Correção de dados (art. 18, III)** | **Não existe hoje.** Exclusão e anonimização existem; correção ficou só com esboço de `PATCH` (§8.3). |
 
 ---
 
