@@ -119,7 +119,7 @@ integrado pela responsável"*. Sem isso, a cliente sem resposta não tem pra ond
 
 | # | Assunto | Estado |
 |---|---|---|
-| 1 | **Catálogo vem de `mockData.ts`, não da API.** `GET /api/produtos` existe mas **nenhum componente chama**. | O servidor recalcula o preço na hora de cobrar, então **ninguém é cobrado errado** — mas a vitrine pode *exibir* valor desatualizado. |
+| 1 | **O catálogo de verdade é `src/data/mockData.ts`.** Não é só a vitrine que lê: `src/server/catalog.ts:1` importa `ALL_PRODUCTS` de lá, e é de lá que sai o preço que o servidor cobra (`orders.ts:202`). `GET /api/produtos` existe mas **nenhum componente chama**. | Dentro de um build os dois lados **não podem divergir** — leem a mesma fonte, então ninguém é cobrado errado hoje. O risco é do **modo dividido**: a vitrine e o servidor de dados são processos separados, e um redeploy de uma metade só deixa a cliente *exibir* um valor que não é mais o cobrado. Também é problema de nomenclature: o arquivo que se chama "mock" é a autoridade de preço. |
 | 2 | **12 modais sem focus trap nem fechamento por `Escape`** (só o lightbox fecha). | Acessibilidade, não segurança. Sugestão: um hook central `useDialogA11y`. |
 | 3 | **Correção de dados (art. 18, III)** | **Não existe hoje.** Exclusão e anonimização existem; correção ficou só com esboço de `PATCH` (§8.3). |
 
