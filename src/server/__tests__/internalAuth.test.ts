@@ -4,7 +4,8 @@ import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildInternalHeaders, createInternalAuthMiddleware, INTERNAL_NONCE_HEADER,
-  INTERNAL_SIG_HEADER, INTERNAL_TS_HEADER, signInternalRequest,
+  INTERNAL_RESPONSE_SIG_HEADER, INTERNAL_SIG_HEADER, INTERNAL_TS_HEADER,
+  signInternalRequest, signInternalResponse, verifyInternalResponse,
 } from '../internalAuth';
 
 const secret = 'a'.repeat(32);
@@ -274,5 +275,40 @@ describe('signInternalRequest', () => {
     });
     const response = await fetch(endpoint.origin + '/internal/estoque', { method: 'GET', headers });
     expect(response.status).toBe(200);
+  });
+});
+
+describe('signInternalResponse / verifyInternalResponse', () => {
+  const base = { nonce: 'n'.repeat(32), status: 200, body: Buffer.from('{"stock":{}}', 'utf8') };
+
+  it('verifica a assinatura correta e é sensível a cada campo', () => {
+    const esperada = signInternalResponse(secret, base);
+
+    expect(verifyInternalResponse(secret, base, esperada)).toBe(true);
+    // Nonce de OUTRA requisição: a resposta não pode ser reaproveitada.
+    expect(verifyInternalResponse(secret, { ...base, nonce: 'o'.repeat(32) }, esperada)).toBe(false);
+    // Status adulterado (ex.: 409 -> 201).
+    expect(verifyInternalResponse(secret, { ...base, status: 201 }, esperada)).toBe(false);
+    // Um byte de corpo alterado.
+    expect(verifyInternalResponse(secret, {
+      ...base, body: Buffer.from('{"stock":{"x":1}}', 'utf8'),
+    }, esperada)).toBe(false);
+    // Outra chave.
+    expect(verifyInternalResponse(otherSecret, base, esperada)).toBe(false);
+  });
+
+  it('recusa assinatura ausente, malformada ou de outra versão de protocolo', () => {
+    const esperada = signInternalResponse(secret, base);
+
+    expect(verifyInternalResponse(secret, base, null)).toBe(false);
+    expect(verifyInternalResponse(secret, base, '')).toBe(false);
+    expect(verifyInternalResponse(secret, base, 'xx')).toBe(false);
+    expect(verifyInternalResponse(secret, base, 'z'.repeat(64))).toBe(false);
+    // Uma assinatura de requisição (protocolo v1) nunca valida uma resposta.
+    const assinaturaRequisicao = signInternalRequest(secret, {
+      ts: Date.now(), nonce: base.nonce, method: 'GET', path: '/internal/estoque', body: Buffer.alloc(0),
+    });
+    expect(verifyInternalResponse(secret, base, assinaturaRequisicao)).toBe(false);
+    expect(esperada).toMatch(/^[0-9a-f]{64}$/);
   });
 });

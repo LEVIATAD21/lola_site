@@ -4,6 +4,9 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import { InternalClient } from '../internalClient';
+import { signInternalResponse } from '../internalAuth';
+import { createInternalRouter } from '../internalRoutes';
+import { type LocalDataPlane } from '../dataPlane';
 
 const secret = 'a'.repeat(32);
 const servers: Array<Server | http.Server> = [];
@@ -17,6 +20,22 @@ async function listen(handler: http.RequestListener): Promise<string> {
   });
   const address = server.address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
+}
+
+/** Responde JSON assinado no formato do servidor de dados (nonce + status + corpo). */
+function respondSigned(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  status: number,
+  body: unknown,
+): void {
+  const nonce = String(req.headers['x-lola-nonce'] ?? '');
+  const raw = Buffer.from(JSON.stringify(body), 'utf8');
+  res.writeHead(status, {
+    'content-type': 'application/json',
+    'x-lola-resp-sig': signInternalResponse(secret, { nonce, status, body: raw }),
+  });
+  res.end(raw);
 }
 
 afterEach(async () => {
@@ -36,6 +55,12 @@ describe('InternalClient: validação da URL base', () => {
     // O canal carrega nome, telefone e endereço do cliente: fora de loopback,
     // texto puro só se quem opera disser explicitamente que aceita o risco.
     ['http fora de loopback sem opt-in', 'http://10.0.0.5:4100', {}],
+    // Metadata service da nuvem mora em faixa link-local: recusado mesmo em
+    // https e mesmo com o opt-in de texto puro, para os dois protocolos.
+    ['metadata service em https (link-local)', 'https://169.254.169.254', {}],
+    ['metadata service em http com opt-in', 'http://169.254.169.254', { allowPlaintext: true }],
+    ['metadata service IPv4-mapeado', 'https://[::ffff:169.254.169.254]', {}],
+    ['link-local IPv6', 'https://[fe80::1]', {}],
   ];
 
   for (const [nome, baseUrl, extra] of rejeitados) {
@@ -62,9 +87,8 @@ describe('InternalClient: validação da URL base', () => {
 
 describe('InternalClient: transporte', () => {
   it('entrega a resposta JSON quando tudo está certo', async () => {
-    const origin = await listen((_req, res) => {
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ stock: { 'brinco-1': 8 } }));
+    const origin = await listen((req, res) => {
+      respondSigned(req, res, 200, { stock: { 'brinco-1': 8 } });
     });
     const client = new InternalClient({ baseUrl: origin, secret });
 
@@ -72,6 +96,79 @@ describe('InternalClient: transporte', () => {
 
     expect(result.ok).toBe(true);
     expect(result.body).toEqual({ stock: { 'brinco-1': 8 } });
+  });
+
+  // A assinatura da resposta amarra o corpo ao nonce da requisição: remover o
+  // cabeçalho não adianta, e reusar a assinatura de outra resposta também não.
+  it('recusa resposta JSON sem assinatura', async () => {
+    const origin = await listen((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ stock: { 'brinco-1': 8 } }));
+    });
+    const client = new InternalClient({ baseUrl: origin, secret });
+
+    const result = await client.call('GET', '/internal/estoque');
+
+    expect(result.ok).toBe(false);
+    expect(result.body).toBeNull();
+    expect(result.failure).toBe('assinatura_resposta_invalida');
+  });
+
+  it('recusa corpo adulterado mesmo com assinatura de outro corpo', async () => {
+    const origin = await listen((req, res) => {
+      // O atacante assina legitimamente... para OUTRO corpo, e envia este.
+      const nonce = String(req.headers['x-lola-nonce'] ?? '');
+      const original = Buffer.from(JSON.stringify({ stock: { 'brinco-1': 8 } }), 'utf8');
+      const forjado = Buffer.from(JSON.stringify({ stock: { 'brinco-1': 800 } }), 'utf8');
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'x-lola-resp-sig': signInternalResponse(secret, { nonce, status: 200, body: original }),
+      });
+      res.end(forjado);
+    });
+    const client = new InternalClient({ baseUrl: origin, secret });
+
+    const result = await client.call('GET', '/internal/estoque');
+
+    expect(result.ok).toBe(false);
+    expect(result.failure).toBe('assinatura_resposta_invalida');
+  });
+
+  it('recusa status adulterado (ex.: 409 virando 201)', async () => {
+    const origin = await listen((req, res) => {
+      const nonce = String(req.headers['x-lola-nonce'] ?? '');
+      const body = Buffer.from(JSON.stringify({ success: true }), 'utf8');
+      // Assinado como recusa de negócio; chega como "sucesso".
+      res.writeHead(201, {
+        'content-type': 'application/json',
+        'x-lola-resp-sig': signInternalResponse(secret, { nonce, status: 409, body }),
+      });
+      res.end(body);
+    });
+    const client = new InternalClient({ baseUrl: origin, secret });
+
+    const result = await client.call('POST', '/internal/pedidos', {});
+
+    expect(result.ok).toBe(false);
+    expect(result.failure).toBe('assinatura_resposta_invalida');
+  });
+
+  it('recusa resposta assinada com outra chave', async () => {
+    const origin = await listen((req, res) => {
+      const nonce = String(req.headers['x-lola-nonce'] ?? '');
+      const body = Buffer.from(JSON.stringify({ stock: { 'brinco-1': 8 } }), 'utf8');
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'x-lola-resp-sig': signInternalResponse('b'.repeat(32), { nonce, status: 200, body }),
+      });
+      res.end(body);
+    });
+    const client = new InternalClient({ baseUrl: origin, secret });
+
+    const result = await client.call('GET', '/internal/estoque');
+
+    expect(result.ok).toBe(false);
+    expect(result.failure).toBe('assinatura_resposta_invalida');
   });
 
   // Um redirect reescreveria o destino que a assinatura cobria.
@@ -89,10 +186,16 @@ describe('InternalClient: transporte', () => {
     expect(result.body).toBeNull();
   });
 
-  it('recusa resposta que não é JSON', async () => {
-    const origin = await listen((_req, res) => {
-      res.setHeader('content-type', 'text/html');
-      res.end('<html>erro</html>');
+  it('recusa resposta que não é JSON (assinada, mas malformada)', async () => {
+    const origin = await listen((req, res) => {
+      // Assinatura válida sobre bytes malformados: autenticidade ok, forma não.
+      const nonce = String(req.headers['x-lola-nonce'] ?? '');
+      const raw = Buffer.from('<html>erro</html>', 'utf8');
+      res.writeHead(200, {
+        'content-type': 'text/html',
+        'x-lola-resp-sig': signInternalResponse(secret, { nonce, status: 200, body: raw }),
+      });
+      res.end(raw);
     });
     const client = new InternalClient({ baseUrl: origin, secret });
 
@@ -175,7 +278,7 @@ describe('InternalClient: Express', () => {
   it('funciona contra uma aplicação Express real', async () => {
     const app = express();
     app.use(express.raw({ type: '*/*', limit: '16kb' }));
-    app.get('/internal/estoque', (_req, res) => res.json({ stock: { 'brinco-1': 3 } }));
+    app.get('/internal/estoque', (req, res) => respondSigned(req, res, 200, { stock: { 'brinco-1': 3 } }));
     const origin = await listen(app);
 
     const client = new InternalClient({ baseUrl: origin, secret });
@@ -183,5 +286,108 @@ describe('InternalClient: Express', () => {
 
     expect(result.ok).toBe(true);
     expect(result.body).toEqual({ stock: { 'brinco-1': 3 } });
+  });
+});
+
+describe('InternalClient: ponta a ponta contra o router real', () => {
+  async function startRealRouter(): Promise<string> {
+    const plane = {
+      snapshot: async () => ({ 'brinco-1': 5 }),
+      createDraft: async () => ({ status: 409, body: { error: 'Estoque insuficiente.' } }),
+    };
+    const app = express();
+    app.use('/internal', createInternalRouter({
+      plane: plane as unknown as LocalDataPlane,
+      secret,
+      perMinute: 100,
+    }));
+    return listen(app);
+  }
+
+  it('canal completo funciona com resposta assinada', async () => {
+    const origin = await startRealRouter();
+    const client = new InternalClient({ baseUrl: origin, secret });
+
+    const result = await client.call('GET', '/internal/estoque');
+
+    expect(result.ok).toBe(true);
+    expect(result.body).toEqual({ stock: { 'brinco-1': 5 } });
+  });
+
+  // PoC do achado: um atacante na rede privada entre os dois processos repassa
+  // a requisição e reescreve o corpo da resposta. Sem assinatura de resposta a
+  // vitrine aceitaria estoque forjado; agora a adulteração vira indisponibilidade.
+  it('MITM que reescreve o corpo da resposta não passa', async () => {
+    const origin = await startRealRouter();
+    const upstream = new URL(origin);
+    const mitmOrigin = await listen((req, res) => {
+      const encaminhada = http.request(
+        {
+          host: upstream.hostname,
+          port: upstream.port,
+          path: req.url,
+          method: req.method,
+          headers: { ...req.headers, host: upstream.host },
+        },
+        (upstreamRes) => {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            const corpo = Buffer.concat(chunks)
+              .toString('utf8')
+              .replace('"brinco-1":5', '"brinco-1":999');
+            const headers = { ...upstreamRes.headers };
+            delete headers['content-length'];
+            res.writeHead(upstreamRes.statusCode ?? 502, headers);
+            res.end(corpo);
+          });
+        },
+      );
+      encaminhada.on('error', () => { res.writeHead(502); res.end(); });
+      req.pipe(encaminhada);
+    });
+
+    const client = new InternalClient({ baseUrl: mitmOrigin, secret });
+    const result = await client.call('GET', '/internal/estoque');
+
+    expect(result.ok).toBe(false);
+    expect(result.body).toBeNull();
+    expect(result.failure).toBe('assinatura_resposta_invalida');
+  });
+
+  // A recusa de negócio (409) também viaja assinada: um MITM não converte
+  // "estoque insuficiente" em "pré-pedido confirmado".
+  it('MITM que reescreve 409 de pedido em 201 não passa', async () => {
+    const origin = await startRealRouter();
+    const upstream = new URL(origin);
+    const mitmOrigin = await listen((req, res) => {
+      const encaminhada = http.request(
+        {
+          host: upstream.hostname,
+          port: upstream.port,
+          path: req.url,
+          method: req.method,
+          headers: { ...req.headers, host: upstream.host },
+        },
+        (upstreamRes) => {
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', () => {
+            const headers = { ...upstreamRes.headers };
+            delete headers['content-length'];
+            res.writeHead(201, headers);
+            res.end(JSON.stringify({ success: true, order: { orderNumber: 'LOLA-20261013-ABCDEF123456' } }));
+          });
+        },
+      );
+      encaminhada.on('error', () => { res.writeHead(502); res.end(); });
+      req.pipe(encaminhada);
+    });
+
+    const client = new InternalClient({ baseUrl: mitmOrigin, secret });
+    const result = await client.call('POST', '/internal/pedidos', { cliente: 'sem-dado' });
+
+    expect(result.ok).toBe(false);
+    expect(result.failure).toBe('assinatura_resposta_invalida');
   });
 });
