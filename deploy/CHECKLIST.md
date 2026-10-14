@@ -81,8 +81,11 @@ funciona direito.
       ex.: Bitwarden/1Password/LastPass + cópia em papel no cofre). É a única
       coisa que o backup NÃO leva — se ela se perder, os arquivos `.enc` viram
       lixo.
-- [ ] `crontab -e` com a linha do `deploy/backup.sh` (o `install -m 700` está
-      no runbook do script; o log vai para `~/lola-backups/backup.log`).
+- [ ] `crontab -e` com a linha apontando **para dentro do repositório** (o
+      script resolve a raiz da loja pelo próprio caminho e sai com `exit 2`
+      se morar fora dele, ex.: `0 4 * * * LOLA_COMPOSE_SERVICE=data-server
+      /caminho/do/lola_site/deploy/backup.sh`). O log vai para
+      `~/lola-backups/backup.log`.
 - [ ] `bash deploy/backup.sh` manual, uma vez, **antes** do lançamento, e
       conferir a última linha do log:
       `ok=... itens=... bytes=...` — se aparecer qualquer erro, o script já

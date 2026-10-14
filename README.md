@@ -206,9 +206,16 @@ O compose sobe o Caddy automaticamente (perfil `dividido`/`embutido`, serviço `
 ### 4. Backup (sem plano de restore, não é backup)
 
 ```bash
-install -m 700 deploy/backup.sh /usr/local/bin/lola-backup
-LOLA_COMPOSE_SERVICE=data-server lola-backup   # copia do container, testa a restauração e rotaciona
+cd /caminho/do/lola_site
+LOLA_COMPOSE_SERVICE=data-server ./deploy/backup.sh   # copia do container, testa a restauração e rotaciona
 ```
+
+> **Não copie o script para fora do repositório** (`/usr/local/bin` e afins).
+> Ele resolve a raiz da loja como o diretório **pai** do próprio script
+> (`backup.sh:71`) e precisa achar `deploy/verify-orders-restore.mjs`
+> ao lado dele — fora de lá encontra outra coisa e sai com `exit 2`. No cron,
+> use o caminho absoluto apontando para dentro do repo:
+> `0 4 * * * LOLA_COMPOSE_SERVICE=data-server /caminho/do/lola_site/deploy/backup.sh >> /var/log/lola-backup.log 2>&1`.
 
 O script recusa gravar backup que não conseguiu decifrar: ele roda `deploy/verify-orders-restore.mjs` contra o conteúdo candidato **antes** de criar o `.tar.gz`, e só então aplica a retenção. Agende no cron e — obrigatório — guarde a chave AES **fora** da máquina (cofre de senhas + papel no cofre físico): o backup não a inclui de propósito, e sem ela os `.enc` são lixo.
 
