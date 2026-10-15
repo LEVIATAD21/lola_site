@@ -19,6 +19,7 @@ import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { FileText } from 'lucide-react';
+import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
@@ -89,6 +90,7 @@ export default function App() {
   
   // Info Modal states
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [infoModalTitle, setInfoModalTitle] = useState('');
   const [infoModalContent, setInfoModalContent] = useState('');
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
@@ -393,6 +395,7 @@ export default function App() {
   };
 
   const handleSelectProduct = (product: Product) => {
+    setIsAccountOpen(false);
     setActiveProduct(product);
     setPageView('product-detail');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -406,10 +409,10 @@ export default function App() {
   };
 
   const handleOpenAccount = () => {
-    handleOpenInfo(
-      'Área da Cliente Lola',
-      'Bem-vinda! A área personalizada de login, histórico de pedidos e rastreamento em tempo real será integrada na próxima etapa.\n\nPor enquanto, suas peças favoritas e sua sacola já estão salvas nesta sessão local!'
-    );
+    setIsCartOpen(false);
+    setIsFavoritesOpen(false);
+    setIsAccountOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleOpenBenefit = (benefit: Benefit) => {
@@ -506,7 +509,18 @@ export default function App() {
       />
 
       {/* Main page content based on pageView */}
-      {pageView === 'home' ? (
+      {isAccountOpen ? (
+        <CustomerAccountPage
+          favorites={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].filter((product) => favorites.includes(product.id))}
+          onToggleFavorite={handleToggleFavorite}
+          onSelectProduct={handleSelectProduct}
+          onBackToStore={() => {
+            setIsAccountOpen(false);
+            navigateToHome();
+          }}
+          onOpenInfo={handleOpenInfo}
+        />
+      ) : pageView === 'home' ? (
         <main className="flex-1">
           {/* Design 01: Home Page */}
           <HeroCarousel
