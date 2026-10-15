@@ -459,11 +459,13 @@ export default function App() {
   };
 
   const navigateToHome = () => {
+    setIsAccountOpen(false);
     setPageView('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateToEarrings = () => {
+    setIsAccountOpen(false);
     setPageView('category-earrings');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -474,11 +476,13 @@ export default function App() {
   };
 
   const navigateToCart = () => {
+    setIsAccountOpen(false);
     setPageView('cart');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateToCheckout = () => {
+    setIsAccountOpen(false);
     setIsCartOpen(false);
     setPageView('checkout');
     window.scrollTo({ top: 0, behavior: 'smooth' });
