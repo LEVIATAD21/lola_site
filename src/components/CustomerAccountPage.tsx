@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, BadgeCheck, Box, Check, ChevronRight, CircleHelp,
-  ClipboardList, Heart, House, LockKeyhole, Mail, MapPin, Package, Pencil,
+  ArrowLeft, ArrowRight, BadgeCheck, Check, ChevronRight, CircleHelp,
+  ClipboardList, Heart, House, LockKeyhole, Mail, MapPin, Package,
   ShieldCheck, ShoppingBag, Sparkles, UserRound, Wallet, X
 } from 'lucide-react';
 import type { Product } from '../data/mockData';
