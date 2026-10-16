@@ -408,9 +408,11 @@ O backend emite uma linha por evento, com carimbo de tempo, nível e campos no f
 2026-10-12T12:00:05.000Z WARN  admin.access ip=203.0.113.9 method=POST path=/api/estoque/atualizar outcome=denied reason=chave_ausente_ou_inválida
 ```
 
-Eventos: `servidor.iniciado`, `servidor.falha_ao_iniciar`, `http.request`, `http.erro_nao_tratado`, `http.logs_suppressed`, `pedido.registrado`, `pedido.recusado_por_estoque`, `pedido.falha_ao_persistir`, `pedidos.desativado`, `admin.access`, `admin.desativado`, `admin.embutido_em_producao`, `estoque.reserva_expirada`, `dev.exposto`, `plano.local_configurado`, `plano.remoto_configurado`, `interno.requisicao_rejeitada`, `interno.estoque_falhou`, `interno.pedido_falhou`, `dados.servidor_iniciado`, `dados.falha_configuracao`, `dados.falha_ao_iniciar`, `dados.bind_por_hostname`, `rastreamento.criado`.
+Eventos: `servidor.iniciado`, `servidor.falha_ao_iniciar`, `http.request`, `http.erro_nao_tratado`, `http.logs_suppressed`, `pedido.registrado`, `pedido.recusado_por_estoque`, `pedido.falha_ao_persistir`, `pedidos.desativado`, `admin.access`, `admin.desativado`, `admin.embutido_em_producao`, `estoque.reserva_expirada`, `dev.exposto`, `plano.local_configurado`, `plano.remoto_configurado`, `interno.requisicao_rejeitada`, `interno.estoque_falhou`, `interno.pedido_falhou`, `interno.chave_rejeitada`, `interno.canal_texto_puro`, `dados.servidor_iniciado`, `dados.falha_configuracao`, `dados.falha_ao_iniciar`, `dados.bind_por_hostname`, `rastreamento.criado`, `config.proxy_rejeitado`, `config.origem_admin_liberada`, `config.origem_admin_rejeitada`.
 
 No modo dividido, os eventos com prefixo `dados.` são do `data-server.ts` e os com prefixo `interno.` marcam recusas do canal assinado. As recusas de assinatura vêm protegidas por orçamento (20 linhas por segundo): sem isso, um flood de chamadas inválidas encheria o disco da máquina de logs de rejeição — que é exatamente o que a limitação de requisições existe para evitar.
+
+Os eventos com prefixo `config.` são diagnósticos de configuração resolvidos na subida: um valor inválido nunca derruba o servidor — ele cai no padrão seguro e registra o motivo. `interno.chave_rejeitada` é falha fechada (nenhuma requisição interna é aceita sem chave válida) e `interno.canal_texto_puro` marca o opt-in explícito por `LOLA_INTERNAL_PLAINTEXT`.
 
 Regras fixas do registro:
 

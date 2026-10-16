@@ -160,8 +160,13 @@ export function createInternalAuthMiddleware(options: InternalAuthOptions): Requ
   // subida do servidor já impede, mas que um refactor pode voltar a permitir —
   // o canal inteiro fica recusando em vez de negociar com a chave curtinha.
   if (secret.length < INTERNAL_SECRET_MIN_LENGTH) {
-    console.error('[seguranca] Canal interno recusado: LOLA_INTERNAL_SECRET ausente ou curto. '
-      + 'Nenhuma requisição interna será aceita até a chave ter 32+ caracteres.');
+    log('error', 'interno.chave_rejeitada', {
+      variavel: 'LOLA_INTERNAL_SECRET',
+      motivo: 'ausente_ou_curta',
+      tamanho: secret.length,
+      minimo: INTERNAL_SECRET_MIN_LENGTH,
+      impacto: 'nenhuma_requisicao_interna_e_aceita',
+    });
     return (_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
       res.status(401).json({ error: REJECTION_MESSAGE });

@@ -1,7 +1,7 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildInternalHeaders, createInternalAuthMiddleware, INTERNAL_NONCE_HEADER,
   INTERNAL_RESPONSE_SIG_HEADER, INTERNAL_SIG_HEADER, INTERNAL_TS_HEADER,
@@ -11,6 +11,7 @@ import {
 const secret = 'a'.repeat(32);
 const otherSecret = 'b'.repeat(32);
 const servers: Server[] = [];
+const linhasDeErro = () => vi.mocked(console.error).mock.calls.map((call) => String(call[0]));
 
 async function startInternalEndpoint(options: { secret?: string; skewMs?: number } = {}) {
   const app = express();
@@ -45,6 +46,7 @@ async function startInternalEndpoint(options: { secret?: string; skewMs?: number
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   ));
@@ -223,6 +225,7 @@ describe('canal interno: recusas', () => {
   });
 
   it('mantém o canal fechado quando a chave configurada é curta', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const endpoint = await startInternalEndpoint({ secret: 'curta' });
     const headers = buildInternalHeaders('curta', {
       method: 'GET', path: '/internal/estoque', body: Buffer.alloc(0),
@@ -231,6 +234,24 @@ describe('canal interno: recusas', () => {
     const response = await fetch(endpoint.origin + '/internal/estoque', { method: 'GET', headers });
     expect(response.status).toBe(401);
     expect(endpoint.reached()).toBe(0);
+  });
+
+  // A recusa precisa de registro que o monitor acha pelo nome do evento, com
+  // contexto suficiente para diagnosticar — e sem levar o segredo junto.
+  it('registra a chave curta como interno.chave_rejeitada, sem expor o valor', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const segredoCurto = 'segredo-brevidade-total';
+
+    expect(() => createInternalAuthMiddleware({ secret: segredoCurto })).not.toThrow();
+
+    const linha = linhasDeErro().find((entry) => entry.includes('interno.chave_rejeitada')) ?? '';
+    expect(linha).toContain('ERROR');
+    expect(linha).toContain('variavel=LOLA_INTERNAL_SECRET');
+    expect(linha).toContain('motivo=ausente_ou_curta');
+    expect(linha).toContain('tamanho=23');
+    expect(linha).toContain('minimo=32');
+    expect(linha).toContain('impacto=nenhuma_requisicao_interna_e_aceita');
+    expect(linha).not.toContain(segredoCurto);
   });
 
   it('não é forjável por assinatura válida em texto puro', async () => {
