@@ -3,15 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LOLA Aço Inox & Acessórios</title>
-    <meta name="description" content="Loja online de semijoias e acessórios em aço inoxidável com design elegante, contemporâneo e acabamento refinado." />
-    <meta property="og:title" content="LOLA Aço Inox & Acessórios" />
-    <meta property="og:description" content="Loja online de semijoias e acessórios em aço inoxidável com design elegante, contemporâneo e acabamento refinado." />
+    <title>LOLA Aço Inox &amp; Acessórios — semijoias em aço inoxidável</title>
+    <meta name="description" content="Semijoias e acessórios em aço inoxidável — brincos, colares, pulseiras e anéis com acabamento elegante e refinado. Atendimento pelo Instagram @lola_acoinox." />
+    <meta name="theme-color" content="#F8F4ED" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="LOLA Aço Inox &amp; Acessórios — semijoias em aço inoxidável" />
+    <meta property="og:description" content="Semijoias e acessórios em aço inoxidável — brincos, colares, pulseiras e anéis com acabamento elegante e refinado. Atendimento pelo Instagram @lola_acoinox." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+    <meta property="og:site_name" content="LOLA Aço Inox &amp; Acessórios" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- Twitter Card. Sem og:image hospedada com URL absoluta, o card correto é "summary". -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="LOLA Aço Inox &amp; Acessórios — semijoias em aço inoxidável" />
+    <meta name="twitter:description" content="Semijoias e acessórios em aço inoxidável — brincos, colares, pulseiras e anéis com acabamento elegante e refinado. Atendimento pelo Instagram @lola_acoinox." />
+
+    <!--
+      Fontes servidas do próprio domínio (public/fonts/), licença SIL Open Font
+      License 1.1. Nenhuma requisição sai para domínio de terceiros.
+      Cormorant Garamond não é servida de propósito: `.font-cormorant` não tem
+      uso no código e o fallback de `.font-serif-brand` é Georgia.
+    -->
+    <link rel="preload" href="/fonts/montserrat-regular-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/playfair-regular-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/alexbrush-regular-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face {
+        font-family: 'Montserrat';
+        font-style: italic;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/montserrat-italic-latin-ext.woff2) format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Montserrat';
+        font-style: italic;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/montserrat-italic-latin.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Montserrat';
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url(/fonts/montserrat-regular-latin-ext.woff2) format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Montserrat';
+        font-style: normal;
+        font-weight: 300 700;
+        font-display: swap;
+        src: url(/fonts/montserrat-regular-latin.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Playfair Display';
+        font-style: italic;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/playfair-italic-latin-ext.woff2) format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Playfair Display';
+        font-style: italic;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/playfair-italic-latin.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Playfair Display';
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/playfair-regular-latin-ext.woff2) format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Playfair Display';
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url(/fonts/playfair-regular-latin.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Alex Brush';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url(/fonts/alexbrush-regular-latin-ext.woff2) format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Alex Brush';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url(/fonts/alexbrush-regular-latin.woff2) format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+    </style>
+
+    <!--
+      Dados estruturados da home. Só o que existe no código: `url`, `logo`,
+      `telephone`, `address` e `contactPoint` ficam de fora até o dono passar
+      os dados da empresa (BLOCKERS B2/B6) e o domínio canônico de produção.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "name": "LOLA Aço Inox & Acessórios",
+            "description": "Loja de semijoias e acessórios em aço inoxidável com design elegante, contemporâneo e acabamento refinado.",
+            "sameAs": ["https://www.instagram.com/lola_acoinox/"]
+          },
+          {
+            "@type": "WebSite",
+            "name": "LOLA Aço Inox & Acessórios",
+            "description": "Semijoias e acessórios em aço inoxidável — brincos, colares, pulseiras e anéis com acabamento elegante e refinado.",
+            "inLanguage": "pt-BR"
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="bg-[#F8F4ED] text-[#241F1B] antialiased selection:bg-[#DCC7B0] selection:text-[#2A211B]">
     <div id="root"></div>
