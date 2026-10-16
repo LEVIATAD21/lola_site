@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { SiteHeader } from './components/SiteHeader';
 import { HeroCarousel } from './components/HeroCarousel';
@@ -11,20 +11,37 @@ import { CartDrawer } from './components/CartDrawer';
 import { FavoritesModal } from './components/FavoritesModal';
 import { InfoModal } from './components/InfoModal';
 import { ToastNotification } from './components/ToastNotification';
-import { EarringsCategoryPage } from './components/category/EarringsCategoryPage';
-import { ProductDetailPage } from './components/product/ProductDetailPage';
-import { CartPage } from './components/cart/CartPage';
-import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
-import { OrderTrackingPage } from './components/OrderTrackingPage';
+import { LoaderCircle } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
-import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
 import { parseStoredCart } from './utils/cartStorage';
 import { parseStoredCoupon, parseStoredFavorites, parseStoredShipping } from './utils/checkoutStorage';
 import type { ShippingOption } from './data/shippingOptions';
+
+// Cada página que existe em uma única rota é baixada só quando essa rota é
+// aberta; o bundle inicial fica com o shell (cabeçalho, home, drawer, modais
+// e chatbot), que é o que a primeira visita de fato precisa.
+const EarringsCategoryPage = lazy(() =>
+  import('./components/category/EarringsCategoryPage').then((module) => ({ default: module.EarringsCategoryPage }))
+);
+const ProductDetailPage = lazy(() =>
+  import('./components/product/ProductDetailPage').then((module) => ({ default: module.ProductDetailPage }))
+);
+const CartPage = lazy(() =>
+  import('./components/cart/CartPage').then((module) => ({ default: module.CartPage }))
+);
+const CheckoutPage = lazy(() =>
+  import('./components/checkout/CheckoutPage').then((module) => ({ default: module.CheckoutPage }))
+);
+const OrderTrackingPage = lazy(() =>
+  import('./components/OrderTrackingPage').then((module) => ({ default: module.OrderTrackingPage }))
+);
+const CustomerAccountPage = lazy(() =>
+  import('./components/CustomerAccountPage').then((module) => ({ default: module.CustomerAccountPage }))
+);
 
 export type PageView = 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
 
@@ -71,6 +88,18 @@ export const routePathFor = (view: PageView, activeProduct: Product): string => 
       return '/';
   }
 };
+
+// Enquanto a página da rota ainda não chegou, o shell permanece montado e a
+// área de conteúdo mostra o mesmo carregamento usado no rastreio: spinner
+// discreto na cor de destaque, com texto apenas para leitores de tela.
+const RouteLoading = () => (
+  <main className="flex-1 flex min-h-[60vh] items-center justify-center">
+    <span className="flex items-center gap-3 text-[#766D64]" role="status">
+      <LoaderCircle className="h-5 w-5 animate-spin text-[#C49A5A]" aria-hidden="true" />
+      <span className="sr-only">Carregando…</span>
+    </span>
+  </main>
+);
 
 export default function App() {
   // Inicialização segura de rota a partir de window.location.pathname
@@ -517,124 +546,126 @@ export default function App() {
       />
 
       {/* Main page content based on pageView */}
-      {isAccountOpen ? (
-        <CustomerAccountPage
-          favorites={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].filter((product) => favorites.includes(product.id))}
-          onToggleFavorite={handleToggleFavorite}
-          onSelectProduct={handleSelectProduct}
-          onBackToStore={() => {
-            setIsAccountOpen(false);
-            navigateToHome();
-          }}
-          onOpenInfo={handleOpenInfo}
-        />
-      ) : pageView === 'home' ? (
-        <main className="flex-1">
-          {/* Design 01: Home Page */}
-          <HeroCarousel
-            onExploreClick={() => {
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
+      <Suspense fallback={<RouteLoading />}>
+        {isAccountOpen ? (
+          <CustomerAccountPage
+            favorites={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].filter((product) => favorites.includes(product.id))}
+            onToggleFavorite={handleToggleFavorite}
+            onSelectProduct={handleSelectProduct}
+            onBackToStore={() => {
+              setIsAccountOpen(false);
+              navigateToHome();
             }}
+            onOpenInfo={handleOpenInfo}
           />
+        ) : pageView === 'home' ? (
+          <main className="flex-1">
+            {/* Design 01: Home Page */}
+            <HeroCarousel
+              onExploreClick={() => {
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
 
-          <CategorySection
-            onSelectCategory={handleSelectCategory}
-            onViewAllCategories={() => {
-              setSelectedCategoryFilter(null);
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          />
+            <CategorySection
+              onSelectCategory={handleSelectCategory}
+              onViewAllCategories={() => {
+                setSelectedCategoryFilter(null);
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
 
-          <FeaturedProductsSection
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onSelectProduct={handleSelectProduct}
-            onViewAllProducts={() => {
-              setSelectedCategoryFilter(null);
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            selectedCategoryFilter={selectedCategoryFilter}
-            onClearFilter={() => setSelectedCategoryFilter(null)}
-          />
+            <FeaturedProductsSection
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onSelectProduct={handleSelectProduct}
+              onViewAllProducts={() => {
+                setSelectedCategoryFilter(null);
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              selectedCategoryFilter={selectedCategoryFilter}
+              onClearFilter={() => setSelectedCategoryFilter(null)}
+            />
 
-          <BenefitsStrip onOpenBenefitInfo={handleOpenBenefit} />
-          <SocialSection onOpenPost={handleOpenPost} />
-        </main>
-      ) : pageView === 'category-earrings' ? (
-        <main className="flex-1">
-          {/* Design 02: Página de Categoria "Brincos" */}
-          <EarringsCategoryPage
-            onNavigateHome={navigateToHome}
-            onNavigateCategories={navigateToHome}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={(product) => handleAddToCart(product, 1)}
-            onSelectProduct={handleSelectProduct}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      ) : pageView === 'product-detail' ? (
-        <main className="flex-1">
-          {/* Design 03: Página Individual de Produto */}
-          <ProductDetailPage
-            product={activeProduct}
-            onNavigateHome={navigateToHome}
-            onNavigateCategories={navigateToHome}
-            onNavigateEarrings={navigateToEarrings}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            onSelectProduct={handleSelectProduct}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      ) : pageView === 'cart' ? (
-        <main className="flex-1">
-          {/* Design 04: Página do Carrinho de Compras (Sacola) */}
-          <CartPage
-            items={cartItems}
-            onUpdateQuantity={handleUpdateCartQuantity}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onContinueShopping={navigateToEarrings}
-            onSelectProduct={handleSelectProduct}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            onCheckout={navigateToCheckout}
-            onOpenInfo={handleOpenInfo}
-            coupon={appliedCoupon}
-            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
-            shipping={appliedShipping}
-            onSelectShipping={setAppliedShipping}
-          />
-        </main>
-      ) : pageView === 'tracking' ? (
-        <OrderTrackingPage onBackHome={navigateToHome} />
-      ) : (
-        <main className="flex-1">
-          {/* Design 05: Finalização de Compra (Checkout) */}
-          <CheckoutPage
-            items={cartItems}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onBackToCart={navigateToCart}
-            onGoToAccount={handleOpenAccount}
-            onContinueShopping={navigateToEarrings}
-            onSelectProduct={handleSelectProduct}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            coupon={appliedCoupon}
-            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
-            shipping={appliedShipping}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      )}
+            <BenefitsStrip onOpenBenefitInfo={handleOpenBenefit} />
+            <SocialSection onOpenPost={handleOpenPost} />
+          </main>
+        ) : pageView === 'category-earrings' ? (
+          <main className="flex-1">
+            {/* Design 02: Página de Categoria "Brincos" */}
+            <EarringsCategoryPage
+              onNavigateHome={navigateToHome}
+              onNavigateCategories={navigateToHome}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={(product) => handleAddToCart(product, 1)}
+              onSelectProduct={handleSelectProduct}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        ) : pageView === 'product-detail' ? (
+          <main className="flex-1">
+            {/* Design 03: Página Individual de Produto */}
+            <ProductDetailPage
+              product={activeProduct}
+              onNavigateHome={navigateToHome}
+              onNavigateCategories={navigateToHome}
+              onNavigateEarrings={navigateToEarrings}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              onSelectProduct={handleSelectProduct}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        ) : pageView === 'cart' ? (
+          <main className="flex-1">
+            {/* Design 04: Página do Carrinho de Compras (Sacola) */}
+            <CartPage
+              items={cartItems}
+              onUpdateQuantity={handleUpdateCartQuantity}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              onContinueShopping={navigateToEarrings}
+              onSelectProduct={handleSelectProduct}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              onCheckout={navigateToCheckout}
+              onOpenInfo={handleOpenInfo}
+              coupon={appliedCoupon}
+              onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+              shipping={appliedShipping}
+              onSelectShipping={setAppliedShipping}
+            />
+          </main>
+        ) : pageView === 'tracking' ? (
+          <OrderTrackingPage onBackHome={navigateToHome} />
+        ) : (
+          <main className="flex-1">
+            {/* Design 05: Finalização de Compra (Checkout) */}
+            <CheckoutPage
+              items={cartItems}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              onBackToCart={navigateToCart}
+              onGoToAccount={handleOpenAccount}
+              onContinueShopping={navigateToEarrings}
+              onSelectProduct={handleSelectProduct}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              coupon={appliedCoupon}
+              onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+              shipping={appliedShipping}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        )}
+      </Suspense>
 
       {/* 3. Rodapé institucional compartilhado */}
       <SiteFooter onOpenInfo={handleOpenInfo} />
