@@ -3,6 +3,7 @@ import {
   buildInternalHeaders, INTERNAL_NONCE_HEADER, INTERNAL_RESPONSE_SIG_HEADER,
   verifyInternalResponse,
 } from './internalAuth';
+import { log } from './logger';
 
 /**
  * Cliente do canal interno, usado pelo site público para falar com o servidor
@@ -148,10 +149,13 @@ export class InternalClient {
       );
     }
     if (url.protocol === 'http:' && !loopback && options.allowPlaintext) {
-      console.warn(
-        '[seguranca] Canal interno em texto puro fora de loopback (LOLA_INTERNAL_PLAINTEXT=true): '
-        + 'a assinatura impede forja e replay, mas não impede leitura de dado pessoal em trânsito.',
-      );
+      log('warn', 'interno.canal_texto_puro', {
+        variavel: 'LOLA_INTERNAL_PLAINTEXT',
+        motivo: 'http_fora_de_loopback',
+        alvo: url.origin,
+        impacto: 'dado_pessoal_em_claro_durante_o_transito',
+        observacao: 'assinatura_impede_forja_e_replay_mas_nao_leitura',
+      });
     }
 
     const basePath = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');

@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InternalClient } from '../internalClient';
 import { signInternalResponse } from '../internalAuth';
 import { createInternalRouter } from '../internalRoutes';
@@ -39,6 +39,7 @@ function respondSigned(
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve) => server.close(() => resolve())),
   ));
@@ -79,9 +80,33 @@ describe('InternalClient: validação da URL base', () => {
   });
 
   it('aceita http fora de loopback apenas com opt-in explícito', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     expect(() => new InternalClient({
       baseUrl: 'http://10.0.0.5:4100', secret, allowPlaintext: true,
     })).not.toThrow();
+
+    // O aviso é evento estruturado: quem opta por texto puro precisa ver o
+    // risco registrado pelo monitor, com o alvo e sem dado pessoal junto.
+    const linhas = vi.mocked(console.warn).mock.calls.map((call) => String(call[0]));
+    const linha = linhas.find((entry) => entry.includes('interno.canal_texto_puro')) ?? '';
+    expect(linha).toContain('WARN');
+    expect(linha).toContain('variavel=LOLA_INTERNAL_PLAINTEXT');
+    expect(linha).toContain('motivo=http_fora_de_loopback');
+    expect(linha).toContain('alvo=http://10.0.0.5:4100');
+    expect(linha).toContain('impacto=dado_pessoal_em_claro_durante_o_transito');
+    expect(linha).toContain('observacao=assinatura_impede_forja_e_replay_mas_nao_leitura');
+  });
+
+  it('loopback em http não registra aviso de texto puro', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(() => new InternalClient({ baseUrl: 'http://127.0.0.1:4100', secret })).not.toThrow();
+
+    expect(
+      vi.mocked(console.warn).mock.calls.map((call) => String(call[0]))
+        .filter((entry) => entry.includes('interno.canal_texto_puro')),
+    ).toHaveLength(0);
   });
 });
 

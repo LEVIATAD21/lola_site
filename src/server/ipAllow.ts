@@ -1,4 +1,5 @@
 import { BlockList, isIP } from 'node:net';
+import { log } from './logger';
 
 /**
  * Restrição de origem das rotas administrativas.
@@ -71,10 +72,12 @@ function buildList(entries: string[]): BlockList {
 export function resolveAdminAllowlist(raw: string | undefined): AdminAllowlist {
   const value = (raw ?? '').trim();
   if (value.toLowerCase() === 'any') {
-    console.warn(
-      '[seguranca] LOLA_ADMIN_ALLOWED_IPS=any: as rotas administrativas aceitam qualquer '
-      + 'origem que alcance o servidor de dados. Restrinja a rede do painel administrativo.',
-    );
+    log('warn', 'config.origem_admin_liberada', {
+      variavel: 'LOLA_ADMIN_ALLOWED_IPS',
+      motivo: 'valor_any',
+      impacto: 'rotas_administrativas_aceitam_qualquer_origem_que_alcance_o_servidor',
+      acao: 'restrinja_a_rede_do_painel_administrativo',
+    });
     return { allowAny: true, check: () => true };
   }
 
@@ -100,15 +103,19 @@ export function resolveAdminAllowlist(raw: string | undefined): AdminAllowlist {
     effective = [];
   } else if (entries.length === 0 || invalid.length > 0) {
     if (invalid.length > 0) {
-      console.error(
-        '[seguranca] LOLA_ADMIN_ALLOWED_IPS tem entradas inválidas: '
-        + invalid.join(', ') + '. Caindo para a faixa privada padrão.',
-      );
+      log('error', 'config.origem_admin_rejeitada', {
+        variavel: 'LOLA_ADMIN_ALLOWED_IPS',
+        motivo: 'entradas_invalidas',
+        entradas: invalid.join(',').slice(0, 300),
+        total: invalid.length,
+        acao: 'caindo_para_a_faixa_privada_padrao',
+      });
     } else {
-      console.error(
-        '[seguranca] LOLA_ADMIN_ALLOWED_IPS veio sem nenhuma entrada válida. '
-        + 'Caindo para a faixa privada padrão.',
-      );
+      log('error', 'config.origem_admin_rejeitada', {
+        variavel: 'LOLA_ADMIN_ALLOWED_IPS',
+        motivo: 'nenhuma_entrada_valida',
+        acao: 'caindo_para_a_faixa_privada_padrao',
+      });
     }
     effective = DEFAULT_RANGES;
   }

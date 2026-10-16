@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { log } from './logger';
 
 /**
  * Interpreta LOLA_TRUSTED_PROXY de forma explícita e restrita.
@@ -12,6 +13,8 @@ import { isIP } from 'node:net';
  */
 const NAMED_RANGES = new Set(['loopback', 'linklocal', 'uniquelocal']);
 const HOPS = /^\d{1,2}$/;
+/** Teto de saltos declaráveis: acima disso a cadeia de proxies não é rastreável. */
+const MAX_HOPS = 10;
 
 export type TrustProxyValue = string[] | number | undefined;
 
@@ -45,19 +48,28 @@ export function resolveTrustProxy(raw?: string | null): TrustProxyValue {
   if (!value) return undefined;
 
   if (value === 'true') {
-    console.error(
-      '[seguranca] LOLA_TRUSTED_PROXY=true REJEITADO: faria o Express confiar em qualquer '
-      + 'X-Forwarded-For e anularia o rate limit. Informe IPs/CIDRs dos seus proxies '
-      + '(ex.: 127.0.0.1,10.0.0.0/8). Rate limit permanece sem confiar em proxy.',
-    );
+    log('error', 'config.proxy_rejeitado', {
+      variavel: 'LOLA_TRUSTED_PROXY',
+      motivo: 'confianca_total_em_x-forwarded-for',
+      valor: 'true',
+      impacto: 'rate_limit_sem_confianca_em_proxy',
+      acao: 'informe_ips_ou_cidrs_dos_proxies_ex_127.0.0.1,10.0.0.0/8',
+    });
     return undefined;
   }
   if (value === 'false') return undefined;
 
   if (HOPS.test(value)) {
     const hops = Number(value);
-    if (hops <= 10) return hops;
-    console.error(`[seguranca] LOLA_TRUSTED_PROXY=${value} rejeitado: máximo de 10 saltos.`);
+    if (hops <= MAX_HOPS) return hops;
+    log('error', 'config.proxy_rejeitado', {
+      variavel: 'LOLA_TRUSTED_PROXY',
+      motivo: 'saltos_acima_do_limite',
+      valor: hops,
+      limite: MAX_HOPS,
+      impacto: 'rate_limit_sem_confianca_em_proxy',
+      acao: 'informe_no_maximo_10_saltos',
+    });
     return undefined;
   }
 
@@ -65,10 +77,14 @@ export function resolveTrustProxy(raw?: string | null): TrustProxyValue {
   if (!entries.length) return undefined;
   const invalid = entries.filter((entry) => !isAddressOrCidr(entry));
   if (invalid.length) {
-    console.error(
-      `[seguranca] LOLA_TRUSTED_PROXY contém entradas inválidas: ${invalid.join(', ')}. `
-      + 'Rate limit permanece sem confiar em proxy.',
-    );
+    log('error', 'config.proxy_rejeitado', {
+      variavel: 'LOLA_TRUSTED_PROXY',
+      motivo: 'entradas_invalidas',
+      entradas: invalid.join(',').slice(0, 300),
+      total: invalid.length,
+      impacto: 'rate_limit_sem_confianca_em_proxy',
+      acao: 'use_ips_ou_cidrs_validos',
+    });
     return undefined;
   }
   return entries;
