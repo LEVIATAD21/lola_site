@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InternalClient } from '../internalClient';
 import { HttpDataPlane } from '../httpDataPlane';
 import { PEDIDOS_INDISPONIVEL } from '../dataPlane';
+import { log } from '../logger';
 
 vi.mock('../logger', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../logger')>()),
@@ -91,9 +92,16 @@ describe('HttpDataPlane com rede falhando de verdade', () => {
   it('host que não resolve (DNS) vira indisponibilidade, com o motivo preso no timeout', async () => {
     // `.invalid` nunca resolve (RFC 2606). Se o resolver local demorar, o
     // timeout de 500 ms corta — de qualquer forma o desfecho é o mesmo.
-    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // O aviso de canal em claro continua existindo, agora como evento
+    // estruturado: o logger deste teste é mockado, então o alvo da asserção
+    // é o próprio `log` (o transporte real em `logger.ts` segue warn→console.warn).
+    vi.mocked(log).mockClear();
     const plane = montarPlane('http://nao-existe.invalid:4100', 500, true);
-    expect(aviso).toHaveBeenCalled(); // o aviso de canal em claro continua existindo
+    expect(vi.mocked(log)).toHaveBeenCalledWith(
+      'warn',
+      'interno.canal_texto_puro',
+      expect.objectContaining({ motivo: 'http_fora_de_loopback' }),
+    );
 
     expect(await plane.snapshot()).toBeNull();
 
