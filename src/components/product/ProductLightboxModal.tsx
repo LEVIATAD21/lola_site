@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 interface ProductLightboxModalProps {
   isOpen: boolean;
@@ -18,10 +19,19 @@ export const ProductLightboxModal: React.FC<ProductLightboxModalProps> = ({
   onSelectIndex,
   productName,
 }) => {
+  // `label`: o lightbox não tem título visível, então o nome acessível fica no
+  // próprio diálogo (antes: único caso do projeto que já acertava).
+  const { dialogProps } = useDialogA11y({
+    isOpen,
+    onClose,
+    label: `Galeria de fotos em tela cheia de ${productName}`,
+  });
+
+  // Escape e Tab passam a ser do useDialogA11y; sobra só a navegação por setas,
+  // que é específica desta galeria.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft') {
         onSelectIndex((currentIndex === 0 ? images.length - 1 : currentIndex - 1));
       }
@@ -31,7 +41,7 @@ export const ProductLightboxModal: React.FC<ProductLightboxModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, images.length, onClose, onSelectIndex]);
+  }, [isOpen, currentIndex, images.length, onSelectIndex]);
 
   if (!isOpen) return null;
 
@@ -45,17 +55,15 @@ export const ProductLightboxModal: React.FC<ProductLightboxModalProps> = ({
 
   return (
     <div
+      {...dialogProps}
       className="fixed inset-0 z-50 overflow-hidden bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-4 animate-in fade-in duration-200"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Galeria de fotos em tela cheia de ${productName}`}
     >
       {/* Top Header */}
       <div className="w-full max-w-5xl flex items-center justify-between text-white py-2">
         <div className="text-xs sm:text-sm font-medium text-white/80">
           <span>{productName}</span>
           <span className="mx-2 text-white/40">•</span>
-          <span className="tabular-nums font-semibold text-white">
+          <span className="tabular-nums font-semibold text-white" aria-live="polite">
             {currentIndex + 1} de {images.length}
           </span>
         </div>

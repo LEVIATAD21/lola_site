@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Sparkles, Instagram, Heart } from 'lucide-react';
 import { InstagramPost } from '../data/mockData';
 import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from '../data/siteConfig';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface InfoModalProps {
   isOpen: boolean;
@@ -18,13 +19,18 @@ export const InfoModal: React.FC<InfoModalProps> = ({
   content,
   post,
 }) => {
+  // Um único hook cobre os 8 gatilhos do InfoModal (cabeçalho, barra de
+  // anúncios, conta, checkout): seja de onde for que abra, o Escape fecha e o
+  // foco volta ao botão que abriu.
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -35,7 +41,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
           <div className="p-5 border-b border-[#E7DED3] flex items-center justify-between bg-[#F8F4ED]">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#C49A5A]" />
-              <h3 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+              <h3 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
                 {post ? 'Publicação no Instagram' : title}
               </h3>
             </div>
@@ -76,6 +82,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
                     href={INSTAGRAM_URL}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="Ver no perfil oficial da Lola (abre em nova aba)"
                     className="w-full py-2.5 px-4 rounded-full bg-[#2A211B] hover:bg-[#C49A5A] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
                   >
                     <Instagram className="w-4 h-4" />

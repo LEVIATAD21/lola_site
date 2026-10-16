@@ -1,5 +1,6 @@
-import React from 'react';
-import { CheckCircle2, Package, ArrowRight, User, Info } from 'lucide-react';
+import React, { useRef } from 'react';
+import { CheckCircle2, Package, ArrowRight, User, Info, X } from 'lucide-react';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 interface OrderSuccessModalProps {
   isOpen: boolean;
@@ -18,15 +19,43 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   onGoToAccount,
   onContinueShopping,
 }) => {
+  // É uma confirmação de fluxo de compra: `alertdialog` com foco inicial na
+  // ação de continuar. O backdrop NÃO fecha — o código do pedido aparece só
+  // aqui e um clique acidental no fundo o descartaria sem volta; as saídas são
+  // o ✕, o Escape e o próprio botão continuar.
+  const continueRef = useRef<HTMLButtonElement>(null);
+  // Fechar o diálogo É continuar explorando: este modal não tem outra saída de
+  // produto — Escape, ✕ e botão principal fazem o mesmo caminho.
+  const handleClose = () => onContinueShopping();
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({
+    isOpen,
+    onClose: handleClose,
+    role: 'alertdialog',
+    closeOnBackdrop: false,
+    initialFocusRef: continueRef,
+  });
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in" />
+    <div
+      {...dialogProps}
+      aria-describedby={`${titleId}-desc`}
+      className="fixed inset-0 z-50 overflow-y-auto"
+    >
+      <div {...backdropProps} className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in" />
 
       <div className="min-h-full flex items-center justify-center p-4 text-center sm:p-0">
         <div className="relative bg-white rounded-3xl max-w-lg w-full text-left overflow-hidden shadow-2xl border border-[#E7DED3] my-8 animate-in zoom-in-95 duration-200 p-8 space-y-6">
           
+          <button
+            onClick={handleClose}
+            aria-label="Fechar"
+            className="absolute top-4 right-4 p-1.5 rounded-full text-[#766D64] hover:text-[#2A211B] hover:bg-black/5 cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-[#F1E8DC] text-[#2A211B] flex items-center justify-center border border-[#E7DED3]">
               <CheckCircle2 className="w-9 h-9 text-[#C49A5A]" />
@@ -36,10 +65,10 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
               <span className="text-[11px] font-semibold text-[#C49A5A] uppercase tracking-widest">
                 PRÉ-PEDIDO REGISTRADO
               </span>
-              <h3 className="font-serif-brand text-2xl sm:text-3xl font-semibold text-[#241F1B]">
+              <h3 id={titleId} className="font-serif-brand text-2xl sm:text-3xl font-semibold text-[#241F1B]">
                 Solicitação registrada
               </h3>
-              <p className="text-xs sm:text-sm text-[#766D64] max-w-sm">
+              <p id={`${titleId}-desc`} className="text-xs sm:text-sm text-[#766D64] max-w-sm">
                 Código {orderNumber || 'indisponível'}. Nenhum pagamento foi processado; esta solicitação não confirma a venda nem reserva as unidades.
               </p>
             </div>
@@ -62,6 +91,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 
           <div className="space-y-2.5 pt-2">
             <button
+              ref={continueRef}
               onClick={onContinueShopping}
               className="w-full py-3.5 px-4 rounded-xl bg-[#2A211B] hover:bg-[#C49A5A] text-white text-xs font-semibold tracking-wider uppercase transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >

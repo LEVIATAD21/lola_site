@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Truck, X, Check, MapPin } from 'lucide-react';
 import { listShippingOptions, quoteShipping } from '../../data/shippingOptions';
 import type { ShippingOption } from '../../data/shippingOptions';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 // Reexportados para os consumidores históricos do modal (carrinho/checkout).
 export type { ShippingOption };
@@ -24,7 +25,10 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
 }) => {
   const [cep, setCep] = useState('');
   const [calculated, setCalculated] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string>(currentShipping?.id || 'pac');
+
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -34,7 +38,13 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
   const handleCalculate = (e: React.FormEvent) => {
     e.preventDefault();
     if (cep.replace(/\D/g, '').length >= 8) {
+      setCepError(null);
       setCalculated(true);
+    } else {
+      // CEP curto não fazia nada: sem mensagem, quem usa leitor de tela
+      // submetia e ouvia silêncio (3.3.1 / 4.1.3).
+      setCepError('Informe um CEP com 8 dígitos, no formato 00000-000.');
+      setCalculated(false);
     }
   };
 
@@ -45,10 +55,10 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -59,12 +69,13 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
           <div className="flex items-center justify-between pb-3 border-b border-[#E7DED3]">
             <div className="flex items-center gap-2.5">
               <Truck className="w-5 h-5 text-[#C49A5A]" />
-              <h3 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+              <h3 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
                 Calcular Frete e Prazos
               </h3>
             </div>
             <button
               onClick={onClose}
+              aria-label="Fechar"
               className="p-1 rounded-full text-[#766D64] hover:text-[#2A211B] hover:bg-black/5 cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -73,12 +84,13 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
 
           {/* Form CEP */}
           <form onSubmit={handleCalculate} className="space-y-3">
-            <label className="block text-xs font-semibold text-[#241F1B]">
+            <label htmlFor="frete-cep" className="block text-xs font-semibold text-[#241F1B]">
               Informe o CEP de entrega:
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <input
+                  id="frete-cep"
                   type="text"
                   placeholder="00000-000"
                   value={cep}
@@ -87,7 +99,10 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
                     const raw = e.target.value.replace(/\D/g, '');
                     const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5, 8)}` : raw;
                     setCep(formatted);
+                    if (cepError) setCepError(null);
                   }}
+                  aria-invalid={!!cepError}
+                  aria-describedby={cepError ? 'frete-cep-erro' : undefined}
                   className="w-full h-10 px-3.5 pl-9 rounded-xl border border-[#E7DED3] text-sm text-[#241F1B] focus:outline-none focus:border-[#C49A5A]"
                 />
                 <MapPin className="w-4 h-4 text-[#766D64] absolute left-3 top-3" />
@@ -99,10 +114,21 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
                 Calcular
               </button>
             </div>
+            {cepError && (
+              <p id="frete-cep-erro" role="alert" className="text-[11px] text-red-600 font-medium">
+                {cepError}
+              </p>
+            )}
             <p className="text-[11px] text-[#766D64]">
               Simulação válida para capitais e cidades de todo o Brasil.
             </p>
           </form>
+
+          {/* Anúncio do resultado: a região viva já existe no DOM antes do
+              submit, único jeito de o leitor de tela anunciar a troca. */}
+          <p role="status" className="sr-only">
+            {calculated ? `Opções de frete disponíveis para o CEP ${cep}.` : ''}
+          </p>
 
           {/* Options Result */}
           {calculated && (
@@ -121,15 +147,35 @@ export const ShippingCalculatorModal: React.FC<ShippingCalculatorModalProps> = (
                 return (
                   <div
                     key={opt.id}
+                    id={`frete-opcao-${opt.id}`}
                     role="radio"
                     aria-checked={isSelected}
-                    tabIndex={0}
+                    // Roving tabindex: uma única parada de Tab no grupo, como
+                    // exige o padrão ARIA de radiogroup.
+                    tabIndex={isSelected ? 0 : -1}
                     onClick={() => setSelectedOptionId(opt.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setSelectedOptionId(opt.id);
+                        return;
                       }
+                      const delta =
+                        e.key === 'ArrowDown' || e.key === 'ArrowRight'
+                          ? 1
+                          : e.key === 'ArrowUp' || e.key === 'ArrowLeft'
+                            ? -1
+                            : 0;
+                      if (delta === 0) return;
+                      e.preventDefault();
+                      const current = options.findIndex((o) => o.id === selectedOptionId);
+                      const next = options[(current + delta + options.length) % options.length];
+                      setSelectedOptionId(next.id);
+                      // O foco acompanha a seleção; sem isso, o Tab seguinte
+                      // sairia do grupo com o rádio antigo ainda focado.
+                      requestAnimationFrame(() => {
+                        document.getElementById(`frete-opcao-${next.id}`)?.focus();
+                      });
                     }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C49A5A] ${
                       isSelected

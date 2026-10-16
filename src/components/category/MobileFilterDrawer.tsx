@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, RotateCcw, Check } from 'lucide-react';
 import { FilterSidebar, FilterState } from './FilterSidebar';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 interface MobileFilterDrawerProps {
   isOpen: boolean;
@@ -26,13 +27,15 @@ export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
   totalFilteredCount,
   counts,
 }) => {
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden lg:hidden" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-hidden lg:hidden">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -41,7 +44,7 @@ export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
           
           {/* Header */}
           <div className="p-4 border-b border-[#E7DED3] flex items-center justify-between bg-[#F8F4ED]">
-            <h3 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+            <h3 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
               Filtrar Brincos
             </h3>
             <button

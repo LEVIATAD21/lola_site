@@ -3,6 +3,7 @@ import { Sparkles, X, Send, Bot, User, ArrowRight, Loader2, RefreshCw, ShoppingB
 import { consultAI, AIRef } from '../services/api';
 import { Product } from '../data/mockData';
 import { CartItem } from '../types';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface Message {
   id: string;
@@ -44,15 +45,27 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Janela flutuante não modal: sem aria-modal, sem trap e sem trava de rolagem,
+  // mas com foco inicial no campo de digitação e devolução ao botão flutuante
+  // (que fica montado, só oculto, para poder receber o foco de volta).
+  const { dialogProps } = useDialogA11y({
+    isOpen,
+    onClose: () => setIsOpen(false),
+    isModal: false,
+    label: 'Assistente Virtual de Vendas Lola',
+    initialFocusRef: inputRef,
+    returnFocusRef: triggerRef,
+  });
+
   useEffect(() => {
     if (isOpen) {
       scrollToBottom();
-      setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen, messages]);
 
@@ -129,34 +142,34 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Trigger Button — fica montado (só oculto) enquanto o chat
+          está aberto, para o hook devolver o foco a ele ao fechar. */}
       <div className="fixed bottom-5 right-5 z-40">
-        {!isOpen && (
-          <button
-            onClick={() => setIsOpen(true)}
-            aria-label="Abrir assistente virtual Lola"
-            className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-[#2A211B] text-[#F8F4ED] hover:bg-[#C49A5A] transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 cursor-pointer border border-[#C49A5A]/30"
-          >
-            <div className="w-6 h-6 rounded-full bg-[#C49A5A] text-white flex items-center justify-center group-hover:bg-[#2A211B] transition-colors">
-              <Sparkles className="w-3.5 h-3.5 fill-current animate-spin" style={{ animationDuration: '6s' }} />
-            </div>
-            <div className="text-left hidden sm:block">
-              <span className="text-[10px] tracking-widest uppercase font-semibold text-[#DCC7B0] block">
-                Atendimento
-              </span>
-              <span className="text-xs font-serif-brand font-medium tracking-wide">
-                Dúvidas & Estoque
-              </span>
-            </div>
-          </button>
-        )}
+        <button
+          ref={triggerRef}
+          onClick={() => setIsOpen(true)}
+          aria-label="Abrir assistente virtual Lola"
+          hidden={isOpen}
+          className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-[#2A211B] text-[#F8F4ED] hover:bg-[#C49A5A] transition-all shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 cursor-pointer border border-[#C49A5A]/30"
+        >
+          <div className="w-6 h-6 rounded-full bg-[#C49A5A] text-white flex items-center justify-center group-hover:bg-[#2A211B] transition-colors">
+            <Sparkles className="w-3.5 h-3.5 fill-current animate-spin" style={{ animationDuration: '6s' }} />
+          </div>
+          <div className="text-left hidden sm:block">
+            <span className="text-[10px] tracking-widest uppercase font-semibold text-[#DCC7B0] block">
+              Atendimento
+            </span>
+            <span className="text-xs font-serif-brand font-medium tracking-wide">
+              Dúvidas & Estoque
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* Chat Window */}
       {isOpen && (
         <div
-          role="dialog"
-          aria-label="Assistente Virtual de Vendas Lola"
+          {...dialogProps}
           className="fixed bottom-5 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-96 max-h-[85vh] h-[540px] bg-white rounded-3xl shadow-2xl border border-[#E7DED3] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         >
           {/* Header */}
@@ -205,8 +218,12 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
             </div>
           )}
 
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F8F4ED]/30 text-left text-xs">
+          {/* Messages Area — `role="log"`: respostas novas são anunciadas sem
+              roubar o foco de quem está digitando. */}
+          <div
+            role="log"
+            className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F8F4ED]/30 text-left text-xs"
+          >
             {messages.map((msg) => {
               const isUser = msg.sender === 'user';
               return (
@@ -257,7 +274,7 @@ export const ChatbotAssistente: React.FC<ChatbotAssistenteProps> = ({
 
             {/* Loading Indicator */}
             {isLoading && (
-              <div className="flex gap-2.5 justify-start">
+              <div role="status" className="flex gap-2.5 justify-start">
                 <div className="w-6 h-6 rounded-full bg-[#2A211B] text-[#C49A5A] flex items-center justify-center shrink-0 mt-0.5">
                   <Sparkles className="w-3 h-3 fill-current" />
                 </div>
