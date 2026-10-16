@@ -74,6 +74,7 @@ describe('createAdminKeyMiddleware', () => {
 
     expect(missing.status).toBe(401);
     expect(incorrect.status).toBe(401);
+    expect(await missing.json()).toEqual(await incorrect.json());
     expect(endpoint.mutations()).toBe(0);
   });
 

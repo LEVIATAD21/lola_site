@@ -6,9 +6,11 @@ import { canonicalPath, createRateLimitMiddleware } from '../rateLimit';
 
 const servers: Server[] = [];
 
-async function startLimitedEndpoint() {
+async function startLimitedEndpoint(route = '/limited') {
   const app = express();
-  app.get('/limited', createRateLimitMiddleware({
+  // app.all: parte da suíte faz GET (testes do main) e parte POST (revisão de
+  // segurança) — o middleware é indiferente ao método.
+  app.all(route, createRateLimitMiddleware({
     windowMs: 60_000,
     maxRequests: 2,
     message: 'Too many test requests',
@@ -40,6 +42,15 @@ describe('createRateLimitMiddleware', () => {
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('retry-after')).toBeTruthy();
     expect(blocked.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('shares one bucket across case and trailing-slash variants handled by the same Express route', async () => {
+    const base = await startLimitedEndpoint('/api/pedidos/rascunho');
+    const url = base + '/api/pedidos/rascunho';
+    expect((await fetch(url, { method: 'POST' })).status).toBe(200);
+    expect((await fetch(base + '/API/PEDIDOS/RASCUNHO/', { method: 'POST' })).status).toBe(200);
+    const blocked = await fetch(base + '/Api/Pedidos/Rascunho/', { method: 'POST' });
+    expect(blocked.status).toBe(429);
   });
 
   it('does not trust caller-supplied X-Forwarded-For by default', async () => {

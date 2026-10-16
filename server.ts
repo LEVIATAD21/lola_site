@@ -18,6 +18,7 @@ import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { resolveTrustProxy } from './src/server/trustedProxy';
 import { createJsonErrorHandler } from './src/server/httpError';
 import { envInt } from './src/server/envConfig';
+import { PersistentDailyBudget } from './src/server/dailyBudget';
 
 // `quiet` remove o banner de divulgação do dotenv, que poluía o log do servidor
 // a cada reinício — e um anúncio dentro do log de produção é anúncio no lugar
@@ -71,6 +72,13 @@ const MOUNT_ADMIN = WANTS_ADMIN && (!PRODUCTION || !ADMIN_BEHIND_PROXY || ADMIN_
 // VUL-03: janela em que um pré-pedido segura o estoque. Ao vencer, a reserva
 // expira e as unidades voltam para a vitrine automaticamente.
 const RESERVATION_TTL_MS = envInt('LOLA_RESERVATION_TTL_MS', 1_800_000, 60_000, 7 * 24 * 60 * 60_000);
+// Teto diário das chamadas pagas ao Gemini. O contador é por instância (cada
+// processo tem o seu), fail-closed: se o arquivo não puder ser persistido, as
+// chamadas pagas ficam desativadas e o motor local responde. O teto de provedor
+// no console do Google continua sendo a defesa que vale entre reinícios.
+const DATA_DIR = path.resolve(process.env.LOLA_DATA_DIR || path.join(__dirname, '.data'));
+const dailyAILimit = Number.parseInt(process.env.LOLA_AI_DAILY_REQUEST_LIMIT || '200', 10);
+const aiBudget = new PersistentDailyBudget(DATA_DIR, Number.isSafeInteger(dailyAILimit) && dailyAILimit > 0 ? dailyAILimit : 200);
 // Estoque, pré-pedidos cifrados e a varredura de reservas agora vivem dentro de
 // `createLocalDataPlane`, que só é chamado pelo processo que realmente tem os
 // arquivos (o `data-server.ts`, ou este em modo embutido). O site público em
@@ -410,6 +418,14 @@ async function startServer() {
 
     try {
       if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
+        const budget = aiBudget.consume();
+        if (!budget.allowed) {
+          return res.status(aiBudget.ready ? 429 : 503).json({
+            error: aiBudget.ready
+              ? 'Limite diário de consultas ao assistente atingido. Tente novamente amanhã.'
+              : 'Assistente temporariamente indisponível por proteção de orçamento.',
+          });
+        }
         const ai = new GoogleGenAI({ apiKey });
 
         const systemInstruction = `

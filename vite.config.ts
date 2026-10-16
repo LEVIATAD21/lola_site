@@ -31,6 +31,11 @@ export const DEV_DENY = [
   '.yarnrc.yml',
   '**/.npmrc',
   '**/.yarnrc.yml',
+  // Cofre local e pedido cifrado: `**/.data/**` já cobre o dado em disco, mas
+  // estes padrões seguram cópia que alguém deixe fora do diretório de dados.
+  '**/*.enc.json',
+  '**/.local-secrets/**',
+  '*.cer',
   'package-lock.json',
   'package.json',
   'tsconfig*.json',
@@ -62,6 +67,9 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // 127.0.0.1 de propósito: rodar exposto em 0.0.0.0 entregaria o
+      // transformador do Vite (e com ele o backend) a qualquer um na rede.
+      host: '127.0.0.1',
       fs: { deny: DEV_DENY },
     },
   };
