@@ -17,6 +17,7 @@ import { ProductDetailPage } from './components/product/ProductDetailPage';
 import { CartPage } from './components/cart/CartPage';
 import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
+import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { FileText } from 'lucide-react';
 import { CustomerAccountPage } from './components/CustomerAccountPage';
@@ -32,9 +33,10 @@ export default function App() {
     [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((p) => p.id === id);
 
   // Inicialização segura de rota a partir de window.location.pathname
-  const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' => {
+  const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking' => {
     if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname.toLowerCase();
+    if (path === '/rastreio') return 'tracking';
     if (path === '/categoria/brincos') return 'category-earrings';
     if (path.startsWith('/produto/')) {
       const id = path.replace('/produto/', '').trim();
@@ -56,7 +58,7 @@ export default function App() {
     return EARRINGS_CATALOG[0];
   };
 
-  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout'>(getInitialView);
+  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking'>(getInitialView);
   const [activeProduct, setActiveProduct] = useState<Product>(getInitialProduct);
 
   // Favorites State (stored in localStorage) - starts empty if none saved
@@ -144,7 +146,11 @@ export default function App() {
     let description = 'Loja online de semijoias e acessórios em aço inoxidável com design elegante e acabamento refinado.';
     let routePath = '/';
 
-    if (pageView === 'category-earrings') {
+    if (pageView === 'tracking') {
+      title = 'Rastreamento do Pedido | LOLA';
+      description = 'Acompanhe as atualizações disponíveis do seu pedido LOLA.';
+      routePath = '/rastreio' + window.location.search;
+    } else if (pageView === 'category-earrings') {
       title = 'Brincos em Aço Inox | LOLA Aço Inox & Acessórios';
       description = 'Descubra nossa coleção de brincos em aço inoxidável: argolas clássicas, pontos de luz e ear cuffs.';
       routePath = '/categoria/brincos';
@@ -168,7 +174,7 @@ export default function App() {
       metaDesc.setAttribute('content', description);
     }
 
-    if (window.location.pathname !== routePath) {
+    if (pageView !== 'tracking' && window.location.pathname !== routePath) {
       window.history.pushState({ pageView, productId: activeProduct.id }, title, routePath);
     }
   }, [pageView, activeProduct]);
@@ -185,7 +191,9 @@ export default function App() {
         }
       } else {
         const path = window.location.pathname.toLowerCase();
-        if (path === '/categoria/brincos') {
+        if (path === '/rastreio') {
+          setPageView('tracking');
+        } else if (path === '/categoria/brincos') {
           setPageView('category-earrings');
         } else if (path.startsWith('/produto/')) {
           const id = path.replace('/produto/', '').trim();
@@ -608,6 +616,8 @@ export default function App() {
             onSelectShipping={setAppliedShipping}
           />
         </main>
+      ) : pageView === 'tracking' ? (
+        <OrderTrackingPage onBackHome={navigateToHome} />
       ) : (
         <main className="flex-1">
           {/* Design 05: Finalização de Compra (Checkout) */}

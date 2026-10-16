@@ -138,6 +138,9 @@ async function startServer() {
       reservationTtlMs: RESERVATION_TTL_MS,
       encryptionKey: process.env.LOLA_ORDERS_ENCRYPTION_KEY,
       keyFilePath: process.env.LOLA_ORDERS_KEY_FILE,
+      // Rastreamento de envio: chave própria; vazia, reutiliza a de pedidos —
+      // mesmo fallback do data-server.ts.
+      trackingEncryptionKey: process.env.LOLA_TRACKING_ENCRYPTION_KEY,
       // LGPD, art. 15, II: pré-pedido acima da retenção é descartado, não
       // "rotacionado quando o arquivo enche". 0 (desligado) é opt-in explícito.
       retentionDays: envInt('LOLA_ORDER_RETENTION_DAYS', 90, 0, 3650),
@@ -310,6 +313,23 @@ async function startServer() {
       return res.status(503).json({ error: 'O registro de pré-pedidos está temporariamente indisponível. Tente novamente mais tarde ou fale com o atendimento.' });
     }
     return res.status(result.status).json(result.body);
+  });
+
+  // Shipment tracking: a consulta pública usa token não adivinhável e expõe só
+  // logística — nunca nome, telefone ou endereço. A escrita (criar/atualizar)
+  // vive no router administrativo, atrás da chave e da allowlist de origem.
+  // No modo dividido o arquivo mora no servidor de dados; a vitrine responde o
+  // mesmo 404 de rota desconhecida em vez de carregar uma segunda cópia.
+  const limitTrackingLookup = createRateLimitMiddleware({
+    windowMs: 60_000, maxRequests: 20, message: 'Muitas consultas de rastreamento. Tente novamente em um minuto.',
+  });
+  app.get('/api/rastreio/:token', limitTrackingLookup, (req, res) => {
+    const tracking = localPlane?.tracking;
+    if (!tracking) return res.status(404).json({ error: 'Endpoint de API não encontrado.' });
+    if (!tracking.ready) return res.status(503).json({ error: 'Rastreamento indisponível: configure a chave de criptografia.' });
+    const result = tracking.lookup(req.params.token);
+    if (!result) return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
+    return res.json({ tracking: result });
   });
 
   // 4. GET /api/produtos (busca ou lista por categoria)

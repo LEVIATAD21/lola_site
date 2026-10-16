@@ -2,6 +2,7 @@ import path from 'node:path';
 import { InventoryStore, type HoldLimits } from './inventory';
 import { CATALOG_INFO } from './catalog';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
+import { TrackingStore } from './tracking';
 import { createInitialStock } from './stock';
 import { log, loggableIp } from './logger';
 
@@ -56,11 +57,19 @@ export const PEDIDOS_PERSISTENCIA_FALHOU =
 export class LocalDataPlane implements DataPlane {
   readonly inventory: InventoryStore;
   readonly orders: EncryptedOrderStore;
+  /**
+   * Rastreamento de envio (`.data/tracking.enc.json`). A consulta pública usa
+   * token não adivinhável e devolve só logística — nunca nome, telefone ou
+   * endereço. A escrita fica atrás da chave administrativa, no router de
+   * administração.
+   */
+  readonly tracking: TrackingStore;
   private readonly reservationTtlMs: number;
 
-  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, reservationTtlMs: number) {
+  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, tracking: TrackingStore, reservationTtlMs: number) {
     this.inventory = inventory;
     this.orders = orders;
+    this.tracking = tracking;
     this.reservationTtlMs = reservationTtlMs;
   }
 
@@ -138,6 +147,11 @@ export interface LocalDataPlaneOptions {
   retentionDays?: number;
   /** Tetos de pré-reserva simultânea. O chamador decide, porque no modo dividido não há origem de cliente. */
   holdLimits?: HoldLimits;
+  /**
+   * Chave do rastreamento de envio (64 hex). Vazia, reutiliza `encryptionKey` —
+   * o token de consulta pública nunca é gravado junto do arquivo cifrado.
+   */
+  trackingEncryptionKey?: string;
 }
 
 /**
@@ -198,5 +212,14 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
   }, Math.min(options.reservationTtlMs, 60_000));
   reservationSweep.unref();
 
-  return new LocalDataPlane(inventory, orders, options.reservationTtlMs);
+  // Rastreamento de envio: arquivo próprio, cifrado com AES-256-GCM. Em
+  // produção sem chave declarada o store nasce indisponível (a rota de
+  // consulta responde 503) — nunca gera segredo sozinho onde dado real mora.
+  const tracking = new TrackingStore(
+    options.dataDir,
+    options.trackingEncryptionKey ?? options.encryptionKey,
+    options.production,
+  );
+
+  return new LocalDataPlane(inventory, orders, tracking, options.reservationTtlMs);
 }

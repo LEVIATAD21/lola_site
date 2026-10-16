@@ -4,6 +4,7 @@ import { auditAdminAccess, log } from './logger';
 import { type AdminAllowlist } from './ipAllow';
 import { toAdminOrder } from './orders';
 import { type LocalDataPlane } from './dataPlane';
+import { type InternalShippingStatus } from './tracking';
 
 /** Formato do número de pré-pedido emitido por `buildOrderDraft`. */
 const ORDER_NUMBER_PATTERN = /^LOLA-\d{8}-[A-F0-9]{12}$/;
@@ -129,6 +130,54 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     log('info', 'pedido.eliminado', { numero: req.params.orderNumber, via: 'admin' });
     return res.json({ success: true, orderNumber: req.params.orderNumber, acao: 'eliminado' });
+  });
+
+  /**
+   * POST /api/admin/rastreios/:orderNumber — rastreamento de envio.
+   *
+   * Sem corpo de atualização, cria o link do pedido: o token aleatório é
+   * devolvido UMA vez (guarde e envie ao cliente por canal confiável) e só o
+   * hash dele persiste. Com `status`, registra o evento logístico. A consulta
+   * pública (`GET /api/rastreio/:token`) expõe apenas logística — nunca nome,
+   * telefone ou endereço do cliente.
+   */
+  router.post('/admin/rastreios/:orderNumber', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    if (!plane.orders.ready || !plane.tracking.ready) {
+      return res.status(503).json({ error: 'Armazenamento seguro indisponível.' });
+    }
+    const { orderNumber } = req.params;
+    if (!ORDER_NUMBER_PATTERN.test(orderNumber)) {
+      return res.status(400).json({ error: 'Número do pedido inválido.' });
+    }
+    if (!plane.orders.findByOrderNumber(orderNumber)) {
+      return res.status(404).json({ error: 'Pedido não encontrado.' });
+    }
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (body.status !== undefined || body.carrierCode !== undefined || body.description !== undefined || body.location !== undefined) {
+      if (typeof body.status !== 'string') {
+        return res.status(400).json({ error: 'Informe um status de rastreamento válido.' });
+      }
+      const updated = plane.tracking.update(orderNumber, {
+        status: body.status as InternalShippingStatus,
+        ...(typeof body.carrierCode === 'string' ? { carrierCode: body.carrierCode } : {}),
+        ...(typeof body.description === 'string' ? { description: body.description } : {}),
+        ...(typeof body.location === 'string' ? { location: body.location } : {}),
+      });
+      if (!updated) {
+        return res.status(400).json({ error: 'Não foi possível atualizar o rastreamento. Confira o status e o código.' });
+      }
+      return res.json({ tracking: updated });
+    }
+    const created = plane.tracking.create(orderNumber);
+    if (!created) {
+      return res.status(500).json({ error: 'Não foi possível criar o link de rastreamento.' });
+    }
+    log('info', 'rastreamento.criado', { numero: orderNumber, via: 'admin' });
+    return res.status(201).json({
+      tracking: created.tracking,
+      trackingUrl: '/rastreio?token=' + encodeURIComponent(created.token),
+      token: created.token,
+    });
   });
 
   return router;
