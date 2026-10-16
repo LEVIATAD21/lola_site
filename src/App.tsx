@@ -8,7 +8,6 @@ import { BenefitsStrip } from './components/BenefitsStrip';
 import { SocialSection } from './components/SocialSection';
 import { SiteFooter } from './components/SiteFooter';
 import { CartDrawer } from './components/CartDrawer';
-import { ProductDetailModal } from './components/ProductDetailModal';
 import { FavoritesModal } from './components/FavoritesModal';
 import { InfoModal } from './components/InfoModal';
 import { ToastNotification } from './components/ToastNotification';
@@ -19,7 +18,6 @@ import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
 import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
-import { FileText } from 'lucide-react';
 import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
@@ -87,8 +85,6 @@ export default function App() {
   // Modal & Drawer visibility states
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
-  const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   
   // Info Modal states
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -434,14 +430,6 @@ export default function App() {
     setIsInfoModalOpen(true);
   };
 
-  const handleCheckoutDemo = () => {
-    setIsCartOpen(false);
-    handleOpenInfo(
-      'Checkout em Desenvolvimento (Protótipo)',
-      'Parabéns pela seleção das suas peças Lola!\n\nNesta etapa do protótipo, a conexão com gateway de pagamentos (Pix / Cartão) e cálculo oficial de frete com transportadoras será implementada na fase seguinte.\n\nTodos os seus itens foram contabilizados corretamente na interface!'
-    );
-  };
-
   const handleSelectCategory = (categorySlug: string) => {
     if (categorySlug.toLowerCase() === 'brincos') {
       setPageView('category-earrings');
@@ -475,11 +463,6 @@ export default function App() {
   const navigateToEarrings = () => {
     setIsAccountOpen(false);
     setPageView('category-earrings');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const navigateToProduct = () => {
-    setPageView('product-detail');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -660,15 +643,6 @@ export default function App() {
           }
         }}
         onGoToCartPage={navigateToCart}
-      />
-
-      <ProductDetailModal
-        product={selectedProductForModal}
-        isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
-        isFavorite={selectedProductForModal ? favorites.includes(selectedProductForModal.id) : false}
-        onToggleFavorite={handleToggleFavorite}
-        onAddToCart={handleAddToCart}
       />
 
       <FavoritesModal
