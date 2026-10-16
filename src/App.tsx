@@ -26,38 +26,69 @@ import { parseStoredCart } from './utils/cartStorage';
 import { parseStoredCoupon, parseStoredFavorites, parseStoredShipping } from './utils/checkoutStorage';
 import type { ShippingOption } from './data/shippingOptions';
 
+export type PageView = 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
+
+type FindProductById = (id: string) => Product | undefined;
+
+const findProductById: FindProductById = (id) =>
+  [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((product) => product.id === id);
+
+/**
+ * Ponto único de caminho → tela. Carregamento inicial, deep link e o botão
+ * voltar/avançar do navegador usam exatamente a mesma regra.
+ */
+export const resolveRoute = (
+  pathname: string,
+  findProduct: FindProductById
+): { view: PageView; productId?: string } => {
+  const path = pathname.toLowerCase();
+  if (path === '/rastreio') return { view: 'tracking' };
+  if (path === '/categoria/brincos') return { view: 'category-earrings' };
+  if (path.startsWith('/produto/')) {
+    const id = path.replace('/produto/', '').trim();
+    const product = findProduct(id);
+    return product ? { view: 'product-detail', productId: product.id } : { view: 'home' };
+  }
+  if (path === '/carrinho') return { view: 'cart' };
+  if (path === '/checkout') return { view: 'checkout' };
+  return { view: 'home' };
+};
+
+/** Ponto único de tela → caminho, usado ao sincronizar a URL com o history. */
+export const routePathFor = (view: PageView, activeProduct: Product): string => {
+  switch (view) {
+    case 'category-earrings':
+      return '/categoria/brincos';
+    case 'product-detail':
+      return `/produto/${activeProduct.id}`;
+    case 'cart':
+      return '/carrinho';
+    case 'checkout':
+      return '/checkout';
+    case 'tracking':
+      return '/rastreio';
+    case 'home':
+      return '/';
+  }
+};
+
 export default function App() {
-  const findProductById = (id: string): Product | undefined =>
-    [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((p) => p.id === id);
-
   // Inicialização segura de rota a partir de window.location.pathname
-  const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking' => {
+  const [pageView, setPageView] = useState<PageView>(() => {
     if (typeof window === 'undefined') return 'home';
-    const path = window.location.pathname.toLowerCase();
-    if (path === '/rastreio') return 'tracking';
-    if (path === '/categoria/brincos') return 'category-earrings';
-    if (path.startsWith('/produto/')) {
-      const id = path.replace('/produto/', '').trim();
-      return findProductById(id) ? 'product-detail' : 'home';
-    }
-    if (path === '/carrinho') return 'cart';
-    if (path === '/checkout') return 'checkout';
-    return 'home';
-  };
+    return resolveRoute(window.location.pathname, findProductById).view;
+  });
 
-  const getInitialProduct = (): Product => {
+  const [activeProduct, setActiveProduct] = useState<Product>(() => {
     if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.startsWith('/produto/')) {
-        const found = findProductById(path.replace('/produto/', '').trim());
+      const { productId } = resolveRoute(window.location.pathname, findProductById);
+      if (productId) {
+        const found = findProductById(productId);
         if (found) return found;
       }
     }
     return EARRINGS_CATALOG[0];
-  };
-
-  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking'>(getInitialView);
-  const [activeProduct, setActiveProduct] = useState<Product>(getInitialProduct);
+  });
 
   // Favorites State (stored in localStorage) - starts empty if none saved
   const [favorites, setFavorites] = useState<string[]>(() =>
@@ -140,28 +171,22 @@ export default function App() {
   useEffect(() => {
     let title = 'LOLA Aço Inox & Acessórios | Semijoias em Aço Inoxidável';
     let description = 'Loja online de semijoias e acessórios em aço inoxidável com design elegante e acabamento refinado.';
-    let routePath = '/';
 
     if (pageView === 'tracking') {
       title = 'Rastreamento do Pedido | LOLA';
       description = 'Acompanhe as atualizações disponíveis do seu pedido LOLA.';
-      routePath = '/rastreio' + window.location.search;
     } else if (pageView === 'category-earrings') {
       title = 'Brincos em Aço Inox | LOLA Aço Inox & Acessórios';
       description = 'Descubra nossa coleção de brincos em aço inoxidável: argolas clássicas, pontos de luz e ear cuffs.';
-      routePath = '/categoria/brincos';
     } else if (pageView === 'product-detail') {
       title = `${activeProduct.name} | LOLA Aço Inox & Acessórios`;
       description = `${activeProduct.name} - Conheça os detalhes desta peça contemporânea da coleção LOLA.`;
-      routePath = `/produto/${activeProduct.id}`;
     } else if (pageView === 'cart') {
       title = 'Sua Sacola de Compras | LOLA Aço Inox';
       description = 'Revise seus itens na sacola de compras com cálculo de frete.';
-      routePath = '/carrinho';
     } else if (pageView === 'checkout') {
       title = 'Finalizar Compra | LOLA Aço Inox';
       description = 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
-      routePath = '/checkout';
     }
 
     document.title = title;
@@ -169,6 +194,11 @@ export default function App() {
     if (metaDesc) {
       metaDesc.setAttribute('content', description);
     }
+
+    // O rastreio é aberto com a query string do token, então a URL dele já
+    // nasce certa e não ganha uma entrada extra no histórico.
+    const routePath =
+      routePathFor(pageView, activeProduct) + (pageView === 'tracking' ? window.location.search : '');
 
     if (pageView !== 'tracking' && window.location.pathname !== routePath) {
       window.history.pushState({ pageView, productId: activeProduct.id }, title, routePath);
@@ -181,34 +211,17 @@ export default function App() {
       if (e.state?.pageView) {
         setPageView(e.state.pageView);
         if (e.state.pageView === 'product-detail' && e.state.productId) {
-          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
-          const found = all.find((p) => p.id === e.state.productId);
+          const found = findProductById(e.state.productId);
           if (found) setActiveProduct(found);
         }
-      } else {
-        const path = window.location.pathname.toLowerCase();
-        if (path === '/rastreio') {
-          setPageView('tracking');
-        } else if (path === '/categoria/brincos') {
-          setPageView('category-earrings');
-        } else if (path.startsWith('/produto/')) {
-          const id = path.replace('/produto/', '').trim();
-          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
-          const found = all.find((p) => p.id === id);
-          if (found) {
-            setActiveProduct(found);
-            setPageView('product-detail');
-          } else {
-            setPageView('home');
-          }
-        } else if (path === '/carrinho') {
-          setPageView('cart');
-        } else if (path === '/checkout') {
-          setPageView('checkout');
-        } else {
-          setPageView('home');
-        }
+        return;
       }
+      const route = resolveRoute(window.location.pathname, findProductById);
+      if (route.productId) {
+        const found = findProductById(route.productId);
+        if (found) setActiveProduct(found);
+      }
+      setPageView(route.view);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
