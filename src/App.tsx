@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AnnouncementBar } from './components/AnnouncementBar';
 import { SiteHeader } from './components/SiteHeader';
 import { HeroCarousel } from './components/HeroCarousel';
@@ -8,19 +8,12 @@ import { BenefitsStrip } from './components/BenefitsStrip';
 import { SocialSection } from './components/SocialSection';
 import { SiteFooter } from './components/SiteFooter';
 import { CartDrawer } from './components/CartDrawer';
-import { ProductDetailModal } from './components/ProductDetailModal';
 import { FavoritesModal } from './components/FavoritesModal';
 import { InfoModal } from './components/InfoModal';
 import { ToastNotification } from './components/ToastNotification';
-import { EarringsCategoryPage } from './components/category/EarringsCategoryPage';
-import { ProductDetailPage } from './components/product/ProductDetailPage';
-import { CartPage } from './components/cart/CartPage';
-import { CheckoutPage } from './components/checkout/CheckoutPage';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
-import { OrderTrackingPage } from './components/OrderTrackingPage';
+import { LoaderCircle } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
-import { FileText } from 'lucide-react';
-import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
 import { CartItem, ToastMessage } from './types';
 import { getProductStock } from './services/api';
@@ -28,38 +21,103 @@ import { parseStoredCart } from './utils/cartStorage';
 import { parseStoredCoupon, parseStoredFavorites, parseStoredShipping } from './utils/checkoutStorage';
 import type { ShippingOption } from './data/shippingOptions';
 
+// Cada página que existe em uma única rota é baixada só quando essa rota é
+// aberta; o bundle inicial fica com o shell (cabeçalho, home, drawer, modais
+// e chatbot), que é o que a primeira visita de fato precisa.
+const EarringsCategoryPage = lazy(() =>
+  import('./components/category/EarringsCategoryPage').then((module) => ({ default: module.EarringsCategoryPage }))
+);
+const ProductDetailPage = lazy(() =>
+  import('./components/product/ProductDetailPage').then((module) => ({ default: module.ProductDetailPage }))
+);
+const CartPage = lazy(() =>
+  import('./components/cart/CartPage').then((module) => ({ default: module.CartPage }))
+);
+const CheckoutPage = lazy(() =>
+  import('./components/checkout/CheckoutPage').then((module) => ({ default: module.CheckoutPage }))
+);
+const OrderTrackingPage = lazy(() =>
+  import('./components/OrderTrackingPage').then((module) => ({ default: module.OrderTrackingPage }))
+);
+const CustomerAccountPage = lazy(() =>
+  import('./components/CustomerAccountPage').then((module) => ({ default: module.CustomerAccountPage }))
+);
+
+export type PageView = 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
+
+type FindProductById = (id: string) => Product | undefined;
+
+const findProductById: FindProductById = (id) =>
+  [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((product) => product.id === id);
+
+/**
+ * Ponto único de caminho → tela. Carregamento inicial, deep link e o botão
+ * voltar/avançar do navegador usam exatamente a mesma regra.
+ */
+export const resolveRoute = (
+  pathname: string,
+  findProduct: FindProductById
+): { view: PageView; productId?: string } => {
+  const path = pathname.toLowerCase();
+  if (path === '/rastreio') return { view: 'tracking' };
+  if (path === '/categoria/brincos') return { view: 'category-earrings' };
+  if (path.startsWith('/produto/')) {
+    const id = path.replace('/produto/', '').trim();
+    const product = findProduct(id);
+    return product ? { view: 'product-detail', productId: product.id } : { view: 'home' };
+  }
+  if (path === '/carrinho') return { view: 'cart' };
+  if (path === '/checkout') return { view: 'checkout' };
+  return { view: 'home' };
+};
+
+/** Ponto único de tela → caminho, usado ao sincronizar a URL com o history. */
+export const routePathFor = (view: PageView, activeProduct: Product): string => {
+  switch (view) {
+    case 'category-earrings':
+      return '/categoria/brincos';
+    case 'product-detail':
+      return `/produto/${activeProduct.id}`;
+    case 'cart':
+      return '/carrinho';
+    case 'checkout':
+      return '/checkout';
+    case 'tracking':
+      return '/rastreio';
+    case 'home':
+      return '/';
+  }
+};
+
+// Enquanto a página da rota ainda não chegou, o shell permanece montado e a
+// área de conteúdo mostra o mesmo carregamento usado no rastreio: spinner
+// discreto na cor de destaque, com texto apenas para leitores de tela.
+const RouteLoading = () => (
+  <main className="flex-1 flex min-h-[60vh] items-center justify-center">
+    <span className="flex items-center gap-3 text-[#766D64]" role="status">
+      <LoaderCircle className="h-5 w-5 animate-spin text-[#C49A5A]" aria-hidden="true" />
+      <span className="sr-only">Carregando…</span>
+    </span>
+  </main>
+);
+
 export default function App() {
-  const findProductById = (id: string): Product | undefined =>
-    [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].find((p) => p.id === id);
-
   // Inicialização segura de rota a partir de window.location.pathname
-  const getInitialView = (): 'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking' => {
+  const [pageView, setPageView] = useState<PageView>(() => {
     if (typeof window === 'undefined') return 'home';
-    const path = window.location.pathname.toLowerCase();
-    if (path === '/rastreio') return 'tracking';
-    if (path === '/categoria/brincos') return 'category-earrings';
-    if (path.startsWith('/produto/')) {
-      const id = path.replace('/produto/', '').trim();
-      return findProductById(id) ? 'product-detail' : 'home';
-    }
-    if (path === '/carrinho') return 'cart';
-    if (path === '/checkout') return 'checkout';
-    return 'home';
-  };
+    return resolveRoute(window.location.pathname, findProductById).view;
+  });
 
-  const getInitialProduct = (): Product => {
+  const [activeProduct, setActiveProduct] = useState<Product>(() => {
     if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.startsWith('/produto/')) {
-        const found = findProductById(path.replace('/produto/', '').trim());
+      const { productId } = resolveRoute(window.location.pathname, findProductById);
+      if (productId) {
+        const found = findProductById(productId);
         if (found) return found;
       }
     }
     return EARRINGS_CATALOG[0];
-  };
-
-  const [pageView, setPageView] = useState<'home' | 'category-earrings' | 'product-detail' | 'cart' |'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking'>(getInitialView);
-  const [activeProduct, setActiveProduct] = useState<Product>(getInitialProduct);
+  });
 
   // Favorites State (stored in localStorage) - starts empty if none saved
   const [favorites, setFavorites] = useState<string[]>(() =>
@@ -87,8 +145,6 @@ export default function App() {
   // Modal & Drawer visibility states
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
-  const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   
   // Info Modal states
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -144,28 +200,22 @@ export default function App() {
   useEffect(() => {
     let title = 'LOLA Aço Inox & Acessórios | Semijoias em Aço Inoxidável';
     let description = 'Loja online de semijoias e acessórios em aço inoxidável com design elegante e acabamento refinado.';
-    let routePath = '/';
 
     if (pageView === 'tracking') {
       title = 'Rastreamento do Pedido | LOLA';
       description = 'Acompanhe as atualizações disponíveis do seu pedido LOLA.';
-      routePath = '/rastreio' + window.location.search;
     } else if (pageView === 'category-earrings') {
       title = 'Brincos em Aço Inox | LOLA Aço Inox & Acessórios';
       description = 'Descubra nossa coleção de brincos em aço inoxidável: argolas clássicas, pontos de luz e ear cuffs.';
-      routePath = '/categoria/brincos';
     } else if (pageView === 'product-detail') {
       title = `${activeProduct.name} | LOLA Aço Inox & Acessórios`;
       description = `${activeProduct.name} - Conheça os detalhes desta peça contemporânea da coleção LOLA.`;
-      routePath = `/produto/${activeProduct.id}`;
     } else if (pageView === 'cart') {
       title = 'Sua Sacola de Compras | LOLA Aço Inox';
       description = 'Revise seus itens na sacola de compras com cálculo de frete.';
-      routePath = '/carrinho';
     } else if (pageView === 'checkout') {
       title = 'Finalizar Compra | LOLA Aço Inox';
       description = 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
-      routePath = '/checkout';
     }
 
     document.title = title;
@@ -173,6 +223,11 @@ export default function App() {
     if (metaDesc) {
       metaDesc.setAttribute('content', description);
     }
+
+    // O rastreio é aberto com a query string do token, então a URL dele já
+    // nasce certa e não ganha uma entrada extra no histórico.
+    const routePath =
+      routePathFor(pageView, activeProduct) + (pageView === 'tracking' ? window.location.search : '');
 
     if (pageView !== 'tracking' && window.location.pathname !== routePath) {
       window.history.pushState({ pageView, productId: activeProduct.id }, title, routePath);
@@ -185,34 +240,17 @@ export default function App() {
       if (e.state?.pageView) {
         setPageView(e.state.pageView);
         if (e.state.pageView === 'product-detail' && e.state.productId) {
-          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
-          const found = all.find((p) => p.id === e.state.productId);
+          const found = findProductById(e.state.productId);
           if (found) setActiveProduct(found);
         }
-      } else {
-        const path = window.location.pathname.toLowerCase();
-        if (path === '/rastreio') {
-          setPageView('tracking');
-        } else if (path === '/categoria/brincos') {
-          setPageView('category-earrings');
-        } else if (path.startsWith('/produto/')) {
-          const id = path.replace('/produto/', '').trim();
-          const all = [...EARRINGS_CATALOG, ...FEATURED_PRODUCTS];
-          const found = all.find((p) => p.id === id);
-          if (found) {
-            setActiveProduct(found);
-            setPageView('product-detail');
-          } else {
-            setPageView('home');
-          }
-        } else if (path === '/carrinho') {
-          setPageView('cart');
-        } else if (path === '/checkout') {
-          setPageView('checkout');
-        } else {
-          setPageView('home');
-        }
+        return;
       }
+      const route = resolveRoute(window.location.pathname, findProductById);
+      if (route.productId) {
+        const found = findProductById(route.productId);
+        if (found) setActiveProduct(found);
+      }
+      setPageView(route.view);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -434,14 +472,6 @@ export default function App() {
     setIsInfoModalOpen(true);
   };
 
-  const handleCheckoutDemo = () => {
-    setIsCartOpen(false);
-    handleOpenInfo(
-      'Checkout em Desenvolvimento (Protótipo)',
-      'Parabéns pela seleção das suas peças Lola!\n\nNesta etapa do protótipo, a conexão com gateway de pagamentos (Pix / Cartão) e cálculo oficial de frete com transportadoras será implementada na fase seguinte.\n\nTodos os seus itens foram contabilizados corretamente na interface!'
-    );
-  };
-
   const handleSelectCategory = (categorySlug: string) => {
     if (categorySlug.toLowerCase() === 'brincos') {
       setPageView('category-earrings');
@@ -475,11 +505,6 @@ export default function App() {
   const navigateToEarrings = () => {
     setIsAccountOpen(false);
     setPageView('category-earrings');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const navigateToProduct = () => {
-    setPageView('product-detail');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -521,124 +546,126 @@ export default function App() {
       />
 
       {/* Main page content based on pageView */}
-      {isAccountOpen ? (
-        <CustomerAccountPage
-          favorites={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].filter((product) => favorites.includes(product.id))}
-          onToggleFavorite={handleToggleFavorite}
-          onSelectProduct={handleSelectProduct}
-          onBackToStore={() => {
-            setIsAccountOpen(false);
-            navigateToHome();
-          }}
-          onOpenInfo={handleOpenInfo}
-        />
-      ) : pageView === 'home' ? (
-        <main className="flex-1">
-          {/* Design 01: Home Page */}
-          <HeroCarousel
-            onExploreClick={() => {
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
+      <Suspense fallback={<RouteLoading />}>
+        {isAccountOpen ? (
+          <CustomerAccountPage
+            favorites={[...EARRINGS_CATALOG, ...FEATURED_PRODUCTS].filter((product) => favorites.includes(product.id))}
+            onToggleFavorite={handleToggleFavorite}
+            onSelectProduct={handleSelectProduct}
+            onBackToStore={() => {
+              setIsAccountOpen(false);
+              navigateToHome();
             }}
+            onOpenInfo={handleOpenInfo}
           />
+        ) : pageView === 'home' ? (
+          <main className="flex-1">
+            {/* Design 01: Home Page */}
+            <HeroCarousel
+              onExploreClick={() => {
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
 
-          <CategorySection
-            onSelectCategory={handleSelectCategory}
-            onViewAllCategories={() => {
-              setSelectedCategoryFilter(null);
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          />
+            <CategorySection
+              onSelectCategory={handleSelectCategory}
+              onViewAllCategories={() => {
+                setSelectedCategoryFilter(null);
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
 
-          <FeaturedProductsSection
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onSelectProduct={handleSelectProduct}
-            onViewAllProducts={() => {
-              setSelectedCategoryFilter(null);
-              const el = document.getElementById('destaques');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            selectedCategoryFilter={selectedCategoryFilter}
-            onClearFilter={() => setSelectedCategoryFilter(null)}
-          />
+            <FeaturedProductsSection
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onSelectProduct={handleSelectProduct}
+              onViewAllProducts={() => {
+                setSelectedCategoryFilter(null);
+                const el = document.getElementById('destaques');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              selectedCategoryFilter={selectedCategoryFilter}
+              onClearFilter={() => setSelectedCategoryFilter(null)}
+            />
 
-          <BenefitsStrip onOpenBenefitInfo={handleOpenBenefit} />
-          <SocialSection onOpenPost={handleOpenPost} />
-        </main>
-      ) : pageView === 'category-earrings' ? (
-        <main className="flex-1">
-          {/* Design 02: Página de Categoria "Brincos" */}
-          <EarringsCategoryPage
-            onNavigateHome={navigateToHome}
-            onNavigateCategories={navigateToHome}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={(product) => handleAddToCart(product, 1)}
-            onSelectProduct={handleSelectProduct}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      ) : pageView === 'product-detail' ? (
-        <main className="flex-1">
-          {/* Design 03: Página Individual de Produto */}
-          <ProductDetailPage
-            product={activeProduct}
-            onNavigateHome={navigateToHome}
-            onNavigateCategories={navigateToHome}
-            onNavigateEarrings={navigateToEarrings}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            onSelectProduct={handleSelectProduct}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      ) : pageView === 'cart' ? (
-        <main className="flex-1">
-          {/* Design 04: Página do Carrinho de Compras (Sacola) */}
-          <CartPage
-            items={cartItems}
-            onUpdateQuantity={handleUpdateCartQuantity}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onContinueShopping={navigateToEarrings}
-            onSelectProduct={handleSelectProduct}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            onCheckout={navigateToCheckout}
-            onOpenInfo={handleOpenInfo}
-            coupon={appliedCoupon}
-            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
-            shipping={appliedShipping}
-            onSelectShipping={setAppliedShipping}
-          />
-        </main>
-      ) : pageView === 'tracking' ? (
-        <OrderTrackingPage onBackHome={navigateToHome} />
-      ) : (
-        <main className="flex-1">
-          {/* Design 05: Finalização de Compra (Checkout) */}
-          <CheckoutPage
-            items={cartItems}
-            onRemoveItem={handleRemoveCartItem}
-            onClearCart={handleClearCart}
-            onBackToCart={navigateToCart}
-            onGoToAccount={handleOpenAccount}
-            onContinueShopping={navigateToEarrings}
-            onSelectProduct={handleSelectProduct}
-            favorites={favorites}
-            onToggleFavorite={handleToggleFavorite}
-            onAddToCart={handleAddToCart}
-            coupon={appliedCoupon}
-            onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
-            shipping={appliedShipping}
-            onOpenInfo={handleOpenInfo}
-          />
-        </main>
-      )}
+            <BenefitsStrip onOpenBenefitInfo={handleOpenBenefit} />
+            <SocialSection onOpenPost={handleOpenPost} />
+          </main>
+        ) : pageView === 'category-earrings' ? (
+          <main className="flex-1">
+            {/* Design 02: Página de Categoria "Brincos" */}
+            <EarringsCategoryPage
+              onNavigateHome={navigateToHome}
+              onNavigateCategories={navigateToHome}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={(product) => handleAddToCart(product, 1)}
+              onSelectProduct={handleSelectProduct}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        ) : pageView === 'product-detail' ? (
+          <main className="flex-1">
+            {/* Design 03: Página Individual de Produto */}
+            <ProductDetailPage
+              product={activeProduct}
+              onNavigateHome={navigateToHome}
+              onNavigateCategories={navigateToHome}
+              onNavigateEarrings={navigateToEarrings}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              onSelectProduct={handleSelectProduct}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        ) : pageView === 'cart' ? (
+          <main className="flex-1">
+            {/* Design 04: Página do Carrinho de Compras (Sacola) */}
+            <CartPage
+              items={cartItems}
+              onUpdateQuantity={handleUpdateCartQuantity}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              onContinueShopping={navigateToEarrings}
+              onSelectProduct={handleSelectProduct}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              onCheckout={navigateToCheckout}
+              onOpenInfo={handleOpenInfo}
+              coupon={appliedCoupon}
+              onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+              shipping={appliedShipping}
+              onSelectShipping={setAppliedShipping}
+            />
+          </main>
+        ) : pageView === 'tracking' ? (
+          <OrderTrackingPage onBackHome={navigateToHome} />
+        ) : (
+          <main className="flex-1">
+            {/* Design 05: Finalização de Compra (Checkout) */}
+            <CheckoutPage
+              items={cartItems}
+              onRemoveItem={handleRemoveCartItem}
+              onClearCart={handleClearCart}
+              onBackToCart={navigateToCart}
+              onGoToAccount={handleOpenAccount}
+              onContinueShopping={navigateToEarrings}
+              onSelectProduct={handleSelectProduct}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onAddToCart={handleAddToCart}
+              coupon={appliedCoupon}
+              onApplyCoupon={(code, percentage) => setAppliedCoupon({ code, percentage })}
+              shipping={appliedShipping}
+              onOpenInfo={handleOpenInfo}
+            />
+          </main>
+        )}
+      </Suspense>
 
       {/* 3. Rodapé institucional compartilhado */}
       <SiteFooter onOpenInfo={handleOpenInfo} />
@@ -660,15 +687,6 @@ export default function App() {
           }
         }}
         onGoToCartPage={navigateToCart}
-      />
-
-      <ProductDetailModal
-        product={selectedProductForModal}
-        isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
-        isFavorite={selectedProductForModal ? favorites.includes(selectedProductForModal.id) : false}
-        onToggleFavorite={handleToggleFavorite}
-        onAddToCart={handleAddToCart}
       />
 
       <FavoritesModal
