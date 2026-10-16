@@ -10,7 +10,10 @@ interface CheckoutOrderSummaryProps {
   shippingLabel?: string;
   discountAmount: number;
   appliedCoupon?: string | null;
-  onApplyCoupon: (code: string) => boolean;
+  /** Motivo da recusa do cupom aplicado, quando ele deixou de valer (expirou, abaixo do mínimo). */
+  couponNotice?: string | null;
+  /** Aplica o cupom; devolve o motivo da recusa ou `null` quando aceito. */
+  onApplyCoupon: (code: string) => string | null;
   onRemoveItem: (id: string) => void;
   onFinalizeOrder: () => void;
   onOpenWhatsApp: () => void;
@@ -25,6 +28,7 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
   shippingLabel,
   discountAmount,
   appliedCoupon,
+  couponNotice,
   onApplyCoupon,
   onRemoveItem,
   onFinalizeOrder,
@@ -45,11 +49,11 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
     e.preventDefault();
     if (!couponInput.trim()) return;
     const code = couponInput.trim().toUpperCase();
-    const ok = onApplyCoupon(code);
+    const refusal = onApplyCoupon(code);
     setCouponFeedback(
-      ok
-        ? { type: 'success', message: `Cupom ${code} aplicado!` }
-        : { type: 'error', message: `Cupom ${code} inválido ou expirado.` }
+      refusal
+        ? { type: 'error', message: refusal }
+        : { type: 'success', message: `Cupom ${code} aplicado!` }
     );
     setCouponInput('');
     setTimeout(() => setCouponFeedback(null), 3000);
@@ -162,6 +166,12 @@ export const CheckoutOrderSummary: React.FC<CheckoutOrderSummaryProps> = ({
               <span>Cupom de desconto ({appliedCoupon})</span>
               <span>- R$ {discountAmount.toFixed(2).replace('.', ',')}</span>
             </div>
+          )}
+
+          {appliedCoupon && discountAmount <= 0 && couponNotice && (
+            <p role="status" className="text-[10px] leading-snug text-amber-700">
+              {couponNotice} O desconto do cupom {appliedCoupon} não está contado no total desta página.
+            </p>
           )}
 
           <p className="text-[10px] text-[#766D64] leading-snug pt-1">

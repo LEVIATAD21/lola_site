@@ -1,12 +1,33 @@
 import React, { useState } from 'react';
 import { Tag, X, Check, AlertCircle } from 'lucide-react';
-import { COUPON_LIST, getCouponPercentage, COUPON_CODE_MAX_LENGTH } from '../../data/coupons';
+import { checkCoupon, getActiveCouponList, COUPON_CODE_MAX_LENGTH } from '../../data/coupons';
+import { parseStoredCart } from '../../utils/cartStorage';
 
 interface CouponModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApplyCoupon: (code: string, discountPercentage: number) => void;
   appliedCoupon?: string | null;
+  /** Subtotal em centavos dos itens da sacola; sem a prop, a sacola persistida é lida aqui. */
+  subtotalCents?: number;
+}
+
+/**
+ * Subtotal da sacola em centavos quando quem abriu o modal não informa.
+ *
+ * A recusa precisa do valor real: `BEMVINDA` abaixo do mínimo tem que morrer
+ * aqui, com o motivo na tela, e não no envio do pedido. Com a sacola ilegível
+ * o subtotal é 0 — nenhum desconto sai da tela nesse estado, e recusar é
+ * sempre o lado seguro.
+ */
+function readStoredSubtotalCents(): number {
+  try {
+    const items = parseStoredCart(localStorage.getItem('lola_cart'));
+    const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    return Math.round(subtotal * 100);
+  } catch {
+    return 0;
+  }
 }
 
 export const CouponModal: React.FC<CouponModalProps> = ({
@@ -14,11 +35,18 @@ export const CouponModal: React.FC<CouponModalProps> = ({
   onClose,
   onApplyCoupon,
   appliedCoupon,
+  subtotalCents,
 }) => {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
+
+  const subtotalEmCentavos = subtotalCents ?? readStoredSubtotalCents();
+  const cuponsAtivos = getActiveCouponList();
+  const appliedVerdict = appliedCoupon
+    ? checkCoupon({ code: appliedCoupon, subtotalCents: subtotalEmCentavos })
+    : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,15 +57,17 @@ export const CouponModal: React.FC<CouponModalProps> = ({
       return;
     }
 
-    // A autoridade é a tabela oficial (checando propriedade própria); o valor
-    // digitado pelo cliente nunca vira percentual direto.
-    const percentage = getCouponPercentage(cleanCode);
-    if (percentage > 0) {
+    // Mesma autoridade do servidor, conferida no momento da aplicação: validade
+    // e mínimo são recusados aqui, com o motivo real, em vez de um 400 no envio.
+    // O teto de usos continua sendo do servidor — só ele tem a contagem de
+    // pré-pedidos gravados.
+    const verdict = checkCoupon({ code: cleanCode, subtotalCents: subtotalEmCentavos });
+    if (verdict.ok) {
       setError('');
-      onApplyCoupon(cleanCode, percentage);
+      onApplyCoupon(cleanCode, verdict.percentage);
       onClose();
     } else {
-      setError('Cupom não encontrado. A integração oficial com cupons promocionais será ativada pelo servidor.');
+      setError(verdict.error);
     }
   };
 
@@ -99,20 +129,33 @@ export const CouponModal: React.FC<CouponModalProps> = ({
             )}
           </form>
 
-          {/* Tips for demo testing */}
+          {/* Só anuncia cupom que ainda está dentro da validade */}
           <div className="p-3 bg-[#F8F4ED] rounded-xl border border-[#E7DED3] text-[11px] text-[#766D64] space-y-1">
             <p className="font-semibold text-[#241F1B]">Cupons disponíveis para teste:</p>
-            {COUPON_LIST.map(({ code: couponCode, percentage }) => (
-              <p key={couponCode}>
-                • <strong>{couponCode}</strong> — {percentage}% de desconto no pedido
-              </p>
-            ))}
+            {cuponsAtivos.length > 0 ? (
+              cuponsAtivos.map(({ code: couponCode, percentage }) => (
+                <p key={couponCode}>
+                  • <strong>{couponCode}</strong> — {percentage}% de desconto no pedido
+                </p>
+              ))
+            ) : (
+              <p>Nenhum cupom promocional ativo no momento.</p>
+            )}
           </div>
 
-          {appliedCoupon && (
+          {appliedCoupon && appliedVerdict?.ok && (
             <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-xl">
               <Check className="w-4 h-4" />
               <span>Cupom <strong>{appliedCoupon}</strong> ativo no momento!</span>
+            </div>
+          )}
+
+          {appliedCoupon && appliedVerdict && !appliedVerdict.ok && (
+            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-2.5 rounded-xl">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>
+                Cupom <strong>{appliedCoupon}</strong> não está valendo neste pedido: {appliedVerdict.error}
+              </span>
             </div>
           )}
 

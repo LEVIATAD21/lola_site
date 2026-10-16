@@ -5,6 +5,10 @@
 // aplicava 15% para sempre. As regras abaixo passam a valer NO SERVIDOR; a
 // lista pública continua mostrando só o percentual, porque o desconto de
 // campanha é informação de vitrine, não segredo.
+//
+// A vitrine também conversa com esta tabela no momento em que o cupom é
+// aplicado (`checkCoupon` decide) e toda vez que o desconto é calculado —
+// o que passa aqui é o que o servidor vai aceitar lá na frente.
 
 export interface CouponRule {
   /** Percentual de desconto, de 1 a 100. */
@@ -39,9 +43,33 @@ export const COUPON_LIST = Object.entries(VALID_COUPONS).map(([code, percentage]
   percentage,
 }));
 
+/**
+ * Cupons que ainda valem ser anunciados na vitrine.
+ *
+ * A lista `COUPON_LIST` é constante (vem da tabela), o tempo não: depois da
+ * validade, anunciar o código promete um desconto que `checkCoupon` já recusa.
+ * Percentual aqui é exibição; a regra de quem concede continua sendo `checkCoupon`.
+ */
+export function getActiveCouponList(now?: Date): Array<{ code: string; percentage: number }> {
+  const moment = now ?? new Date();
+  return COUPON_LIST.filter(({ code }) => {
+    if (!Object.prototype.hasOwnProperty.call(COUPON_RULES, code)) return false;
+    return !isCouponRuleExpired(COUPON_RULES[code], moment);
+  });
+}
+
 export type CouponCheck =
   | { ok: true; percentage: number }
   | { ok: false; error: string };
+
+/**
+ * Validade em UTC, inclusive: `new Date('YYYY-MM-DD')` é meia-noite UTC, então
+ * o cupom vale até o fim do dia declarado. Função única para a regra não
+ * envelhecer em dois lugares diferentes.
+ */
+function isCouponRuleExpired(rule: CouponRule, now: Date): boolean {
+  return now.getTime() > new Date(rule.validUntil + 'T23:59:59.999Z').getTime();
+}
 
 /**
  * Decide se um cupom vale para este pedido. É a autoridade: a vitrine mostra o
@@ -64,9 +92,7 @@ export function checkCoupon(options: {
   if (!rule) return { ok: false, error: 'O cupom informado não é válido.' };
 
   const now = options.now ?? new Date();
-  // Comparação por data de calendário em UTC: `new Date('YYYY-MM-DD')` é
-  // meia-noite UTC, então a validade cai no fim do dia declarado.
-  if (now.getTime() > new Date(rule.validUntil + 'T23:59:59.999Z').getTime()) {
+  if (isCouponRuleExpired(rule, now)) {
     return { ok: false, error: 'Este cupom expirou.' };
   }
 
@@ -102,6 +128,12 @@ export function getCouponPercentage(code: string | null | undefined): number {
 }
 
 export function getCouponDiscount(code: string | null | undefined, subtotal: number): number {
-  const pct = getCouponPercentage(code);
-  return pct > 0 ? (subtotal * pct) / 100 : 0;
+  if (typeof code !== 'string') return 0;
+  if (!Number.isFinite(subtotal) || subtotal <= 0) return 0;
+  // Mesma autoridade do servidor, com o subtotal em mãos: cupom vencido ou
+  // abaixo do mínimo não desconta um centavo na vitrine, do jeito que também
+  // não desconta no servidor. O teto de usos fica de fora aqui de propósito —
+  // a contagem de pré-pedidos mora no servidor, que a cobra no envio.
+  const verdict = checkCoupon({ code, subtotalCents: Math.round(subtotal * 100) });
+  return verdict.ok ? (subtotal * verdict.percentage) / 100 : 0;
 }

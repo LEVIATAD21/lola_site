@@ -8,7 +8,7 @@ import { WhatsAppModal } from '../product/WhatsAppModal';
 import { ProductEditorialBanner } from '../product/ProductEditorialBanner';
 import { CartItem, AppliedCoupon } from '../../types';
 import { Product, CART_RECOMMENDED_PRODUCTS } from '../../data/mockData';
-import { getCouponDiscount, getCouponPercentage } from '../../data/coupons';
+import { getCouponDiscount, checkCoupon } from '../../data/coupons';
 import { ShippingOption, quoteShipping } from '../cart/ShippingCalculatorModal';
 import { validateAddress } from '../../utils/checkoutValidation';
 import { createOrderDraft, type DraftOrderConfirmation } from '../../services/api';
@@ -84,6 +84,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   });
 
   const subtotal = items.reduce((acc, i) => acc + i.price * i.quantity, 0);
+  // Veredito do cupom com o subtotal de agora, na mesma autoridade que o
+  // servidor vai chamar no envio: o motivo de uma recusa fica visível aqui,
+  // em vez de virar um 400 no último clique.
+  const couponVerdict = coupon ? checkCoupon({ code: coupon.code, subtotalCents: Math.round(subtotal * 100) }) : null;
+  const couponNotice = couponVerdict && !couponVerdict.ok ? couponVerdict.error : null;
   const discountAmount = getCouponDiscount(coupon?.code, subtotal);
   // Frete escolhido no carrinho é reaproveitado e recalculado para o subtotal atual;
   // sem escolha prévia, usa a estimativa demonstrativa padrão.
@@ -143,18 +148,27 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     }
   };
 
-  const handleApplyCoupon = (code: string): boolean => {
+  /** Aplica o cupom no checkout. Devolve o motivo da recusa, ou `null` quando aceito. */
+  const handleApplyCoupon = (code: string): string | null => {
     const clean = code.trim().toUpperCase();
-    const pct = getCouponPercentage(clean);
-    if (!pct) return false;
-    onApplyCoupon(clean, pct);
-    return true;
+    const verdict = checkCoupon({ code: clean, subtotalCents: Math.round(subtotal * 100) });
+    if (!verdict.ok) return verdict.error;
+    onApplyCoupon(clean, verdict.percentage);
+    return null;
   };
 
   const handleSubmitOrder = async () => {
     if (isSubmitting) return;
     if (!items.length) {
       setOrderError('Sua sacola está vazia. Adicione produtos antes de continuar.');
+      return;
+    }
+    // Recusa o cupom ANTES do envio, com o mesmo veredito que o servidor daria:
+    // expirou, abaixo do mínimo ou desconhecido não vira pedido pela metade.
+    if (coupon?.code && (!couponVerdict || !couponVerdict.ok)) {
+      setOrderError(
+        `O cupom ${coupon.code} não pode ser usado neste pedido: ${couponVerdict?.error ?? 'O cupom informado não é válido.'} Volte à sacola para ajustar os itens ou aplicar outro cupom.`
+      );
       return;
     }
     if (paymentData.method === 'credit_card') {
@@ -327,6 +341,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               shippingLabel={shipping?.name}
               discountAmount={discountAmount}
               appliedCoupon={coupon?.code ?? null}
+              couponNotice={couponNotice}
               onApplyCoupon={handleApplyCoupon}
               onRemoveItem={onRemoveItem}
               onFinalizeOrder={handleSubmitOrder}

@@ -1,11 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   COUPON_RULES,
   checkCoupon,
+  getActiveCouponList,
   getCouponDiscount,
   getCouponPercentage,
   VALID_COUPONS,
 } from '../coupons';
+
+// Relógio fixo: os descontos são conferidos com a validade vigente, e a casa
+// não pode depender da data em que a suíte roda para continuar verde.
+const DENTRO_DA_VALIDADE = new Date('2026-06-15T12:00:00.000Z');
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(DENTRO_DA_VALIDADE);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('cupons de desconto', () => {
   it('reconhece todos os cupons cadastrados', () => {
@@ -114,5 +128,74 @@ describe('regras de cupom no servidor', () => {
       // A lista pública de vitrine tem que bater com a regra do servidor.
       expect(VALID_COUPONS[code], code).toBe(rule.percentage);
     }
+  });
+});
+
+describe('aplicação do cupom na vitrine', () => {
+  // Modal de cupom e checkout chamam esta mesma autoridade no MOMENTO em que o
+  // código é aplicado (e o desconto é recalculado): a recusa aparece com o
+  // motivo na tela, sem esperar o envio do pedido devolver 400.
+
+  it('cupom válido: aplicação aceita e desconto concedido', () => {
+    const verdict = checkCoupon({ code: 'BEMVINDA', subtotalCents: 15_000, now: DENTRO_DA_VALIDADE });
+    expect(verdict).toEqual({ ok: true, percentage: 15 });
+
+    expect(getCouponDiscount('BEMVINDA', 150)).toBeCloseTo(22.5);
+    expect(getCouponDiscount('LOLA10', 100)).toBeCloseTo(10);
+  });
+
+  it('cupom expirado: recusa com o motivo e a vitrine para de descontar', () => {
+    const depois = new Date('2027-01-01T00:00:00.000Z');
+    vi.setSystemTime(depois);
+
+    const verdict = checkCoupon({ code: 'LOLA10', subtotalCents: 100_000, now: depois });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.error).toBe('Este cupom expirou.');
+
+    // Mesmo código, mesmo subtotal: nenhum desconto sai da tela depois do fim.
+    expect(getCouponDiscount('LOLA10', 100)).toBe(0);
+  });
+
+  it('cupom abaixo do mínimo: recusa com o valor mínimo e não desconta', () => {
+    const verdict = checkCoupon({ code: 'BEMVINDA', subtotalCents: 14_999, now: DENTRO_DA_VALIDADE });
+    expect(verdict.ok).toBe(false);
+    if (!verdict.ok) expect(verdict.error).toBe('Este cupom vale a partir de R$ 150,00 em produtos.');
+
+    expect(getCouponDiscount('BEMVINDA', 149.99)).toBe(0);
+    // No mínimo o desconto volta — a mesma fronteira que o servidor cobra.
+    expect(getCouponDiscount('BEMVINDA', 150)).toBeCloseTo(22.5);
+  });
+
+  it('teto de usos estourado: recusa quando a contagem acompanha o código', () => {
+    const limite = COUPON_RULES.LOLA10.maxUses;
+
+    const estourado = checkCoupon({ code: 'LOLA10', subtotalCents: 10_000, now: DENTRO_DA_VALIDADE, uses: limite });
+    expect(estourado.ok).toBe(false);
+    if (!estourado.ok) expect(estourado.error).toBe('Este cupom já atingiu o limite de usos.');
+
+    const umAntes = checkCoupon({ code: 'LOLA10', subtotalCents: 10_000, now: DENTRO_DA_VALIDADE, uses: limite - 1 });
+    expect(umAntes.ok).toBe(true);
+
+    // A vitrine não tem a contagem de pré-pedidos e não finge ter: sem `uses`
+    // o teto não é prometido aqui — quem cobra é o servidor, no envio.
+    expect(checkCoupon({ code: 'LOLA10', subtotalCents: 10_000, now: DENTRO_DA_VALIDADE }).ok).toBe(true);
+  });
+});
+
+describe('anúncio de cupons ativos na vitrine', () => {
+  it('mostra os cupons dentro da validade', () => {
+    const ativos = getActiveCouponList(DENTRO_DA_VALIDADE);
+    expect(ativos.map((c) => c.code).sort()).toEqual(['BEMVINDA', 'BRILHO5', 'LOLA10']);
+    for (const { percentage, code } of ativos) {
+      expect(percentage).toBe(VALID_COUPONS[code]);
+    }
+  });
+
+  it('não anuncia cupom vencido, nem no dia seguinte à validade', () => {
+    const ultimoDia = new Date(COUPON_RULES.LOLA10.validUntil + 'T23:59:59.999Z');
+    expect(getActiveCouponList(ultimoDia)).toHaveLength(Object.keys(COUPON_RULES).length);
+
+    const depois = new Date(ultimoDia.getTime() + 1);
+    expect(getActiveCouponList(depois)).toEqual([]);
   });
 });
