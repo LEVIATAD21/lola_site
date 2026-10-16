@@ -282,6 +282,11 @@ operador lê de dentro do container) e contém só placeholders.
    B2 já pendência de controlador). Self-host das fontes (baixadas no build,
    servidas de `public/`) resolve os dois lados. Território de `seo-eng` /
    `data-eng` na onda 2.
+
+   **Resolvido na onda 2** (`8f36fc4`): 10 `.woff2` (SIL OFL) em
+   `public/fonts/` com `@font-face`, preload dos críticos e
+   `font-display: swap`; o `<link>` do CDN saiu do `index.html`; as origens
+   do Google saíram do CSP em seguida.
 4. **`get.docker.com | sh`** aparece em `deploy/CHECKLIST.md:14` como
    instrução de instalação do Docker. É doc de operação, não código do build —
    mas é pipe remoto para shell, e vale a alternativa de instalar pelo

@@ -33,8 +33,11 @@ export function createSecurityHeadersMiddleware(
         "frame-ancestors 'none'",
         "form-action 'self'",
         "script-src 'self'",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' data: https://fonts.gstatic.com",
+        // Fontes auto-hospedadas em public/fonts/: as origens do Google saem
+        // do CSP — sem elas, um <link> acidental para o CDN não vira fuga de
+        // IP em runtime (SUPPLY-CHAIN, achado 3).
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
         "img-src 'self' data: blob: https:",
         "connect-src 'self'",
         "manifest-src 'self'",

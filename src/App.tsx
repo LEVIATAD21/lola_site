@@ -12,6 +12,7 @@ import { FavoritesModal } from './components/FavoritesModal';
 import { InfoModal } from './components/InfoModal';
 import { ToastNotification } from './components/ToastNotification';
 import { ChatbotAssistente } from './components/ChatbotAssistente';
+import { ProductJsonLd } from './components/seo/ProductJsonLd';
 import { LoaderCircle } from 'lucide-react';
 import { Product, Benefit, InstagramPost, EARRINGS_CATALOG, FEATURED_PRODUCTS } from './data/mockData';
 import { INSTAGRAM_HANDLE } from './data/siteConfig';
@@ -609,6 +610,7 @@ export default function App() {
         ) : pageView === 'product-detail' ? (
           <main className="flex-1">
             {/* Design 03: Página Individual de Produto */}
+            <ProductJsonLd product={activeProduct} />
             <ProductDetailPage
               product={activeProduct}
               onNavigateHome={navigateToHome}
