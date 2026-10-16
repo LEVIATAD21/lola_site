@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, MessageCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Product } from '../../data/mockData';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 interface WhatsAppModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   product,
   selectedSize = 'P (1,5 cm)',
 }) => {
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const productName = product?.name || 'Acessórios Lola';
@@ -26,10 +29,10 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -40,7 +43,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
           <div className="p-5 border-b border-[#E7DED3] flex items-center justify-between bg-[#128C7E] text-white">
             <div className="flex items-center gap-2.5">
               <MessageCircle className="w-5 h-5 fill-white text-[#128C7E]" />
-              <h3 className="font-semibold text-base">
+              <h3 id={titleId} className="font-semibold text-base">
                 Comprar pelo WhatsApp
               </h3>
             </div>
@@ -71,6 +74,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Iniciar conversa no WhatsApp (abre em nova aba)"
                 className="w-full py-3.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-xs sm:text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 fill-white" />

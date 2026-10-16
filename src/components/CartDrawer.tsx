@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, ShoppingBag, Plus, Minus, Trash2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { CartItem } from '../types';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -23,6 +24,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onExplore,
   onGoToCartPage,
 }) => {
+  // Antes do `return null`: o hook precisa rodar em todo render, inclusive com a
+  // sacola fechada, para montar/desmontar o trap junto com o diálogo.
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -31,10 +36,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const progressPercent = Math.min(100, (subtotal / freeShippingThreshold) * 100);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
       />
 
@@ -45,7 +50,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           <div className="p-5 border-b border-[#E7DED3] flex items-center justify-between bg-[#F8F4ED]">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-[#2A211B]" />
-              <h2 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+              <h2 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
                 Sua Sacola ({items.reduce((acc, i) => acc + i.quantity, 0)})
               </h2>
             </div>
@@ -116,9 +121,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span className="text-[10px] text-[#766D64] uppercase tracking-wider block">
                         {item.category}
                       </span>
-                      <h4 className="font-medium text-xs sm:text-sm text-[#241F1B] truncate">
+                      {/* h3 (não h4): sem o nível intermediário, o título do item
+                          ficaria logo após o h2 do diálogo, pulando um nível. */}
+                      <h3 className="font-medium text-xs sm:text-sm text-[#241F1B] truncate">
                         {item.name}
-                      </h4>
+                      </h3>
                       <p className="font-semibold text-xs text-[#2A211B] mt-0.5">
                         R$ {item.price.toFixed(2).replace('.', ',')}
                       </p>

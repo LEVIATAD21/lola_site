@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Heart, ShoppingBag, Trash2, ArrowRight } from 'lucide-react';
 import { FEATURED_PRODUCTS, Product } from '../data/mockData';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface FavoritesModalProps {
   isOpen: boolean;
@@ -21,15 +22,17 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
   onAddToCart,
   onExplore,
 }) => {
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const favoriteProducts = FEATURED_PRODUCTS.filter((p) => favorites.includes(p.id));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -40,7 +43,7 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
           <div className="p-5 border-b border-[#E7DED3] flex items-center justify-between bg-[#F8F4ED]">
             <div className="flex items-center gap-2">
               <Heart className="w-5 h-5 text-[#C49A5A] fill-[#C49A5A]" />
-              <h2 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+              <h2 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
                 Meus Favoritos ({favoriteProducts.length})
               </h2>
             </div>
@@ -82,29 +85,40 @@ export const FavoritesModal: React.FC<FavoritesModalProps> = ({
                   key={product.id}
                   className="flex gap-4 p-3 rounded-xl border border-[#E7DED3] bg-[#F8F4ED]/30"
                 >
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-20 h-20 rounded-lg object-cover bg-white border border-[#E7DED3] cursor-pointer"
+                  {/* Miniatura e nome são botões de verdade: com só `onClick` em
+                      `img`/`h4`, o produto só abria pelo mouse (2.1.1). */}
+                  <button
+                    type="button"
                     onClick={() => {
                       onClose();
                       onSelectProduct(product);
                     }}
-                  />
+                    aria-label={`Ver detalhes de ${product.name}`}
+                    className="shrink-0 cursor-pointer"
+                  >
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-20 h-20 rounded-lg object-cover bg-white border border-[#E7DED3]"
+                    />
+                  </button>
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
                     <div>
                       <span className="text-[10px] text-[#766D64] uppercase tracking-wider block">
                         {product.category}
                       </span>
-                      <h4
-                        onClick={() => {
-                          onClose();
-                          onSelectProduct(product);
-                        }}
-                        className="font-medium text-xs sm:text-sm text-[#241F1B] truncate cursor-pointer hover:text-[#C49A5A]"
-                      >
-                        {product.name}
-                      </h4>
+                      <h3 className="font-medium text-xs sm:text-sm text-[#241F1B] truncate">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onSelectProduct(product);
+                          }}
+                          className="block w-full text-left truncate cursor-pointer hover:text-[#C49A5A] transition-colors"
+                        >
+                          {product.name}
+                        </button>
+                      </h3>
                       <p className="font-semibold text-xs text-[#2A211B] mt-0.5">
                         R$ {product.price.toFixed(2).replace('.', ',')}
                       </p>
