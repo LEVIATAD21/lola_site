@@ -41,6 +41,21 @@ function normalize(address: string): string[] {
   return [address];
 }
 
+/**
+ * Prefixo do CIDR: só dígitos, dentro do limite da família.
+ *
+ * `10.0.0.0/` (barra sem número) virava prefixo `/0` — `Number('')` é `0` — e a
+ * allowlist inteira passava a aceitar QUALQUER origem, inclusive pública
+ * (RT-E-01 do red-team). Prefixo vazio ou fora do formato agora invalida a
+ * entrada, como já acontecia com endereço inválido.
+ */
+function cidrPrefix(entry: string, slash: number, family: 4 | 6): number | null {
+  const raw = entry.slice(slash + 1);
+  if (!/^\d{1,3}$/.test(raw)) return null;
+  const prefix = Number(raw);
+  return prefix <= (family === 4 ? 32 : 128) ? prefix : null;
+}
+
 function buildList(entries: string[]): BlockList {
   const list = new BlockList();
   for (const entry of entries) {
@@ -53,9 +68,8 @@ function buildList(entries: string[]): BlockList {
       list.addAddress(address, type);
       continue;
     }
-    const prefix = Number(entry.slice(slash + 1));
-    const max = family === 4 ? 32 : 128;
-    if (!Number.isInteger(prefix) || prefix < 0 || prefix > max) continue;
+    const prefix = cidrPrefix(entry, slash, family);
+    if (prefix === null) continue;
     list.addSubnet(address, prefix, type);
   }
   return list;
@@ -91,9 +105,7 @@ export function resolveAdminAllowlist(raw: string | undefined): AdminAllowlist {
     const family = familyOf(address);
     if (!family) return true;
     if (slash === -1) return false;
-    const prefix = Number(entry.slice(slash + 1));
-    const max = family === 4 ? 32 : 128;
-    return !Number.isInteger(prefix) || prefix < 0 || prefix > max;
+    return cidrPrefix(entry, slash, family) === null;
   });
 
   // Falha para a faixa privada: é o padrão seguro, e um digitaço no ambiente não

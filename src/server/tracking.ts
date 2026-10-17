@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
+import { log } from './logger';
 
 export type InternalShippingStatus = 'preparing' | 'posted' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'exception';
 export interface TrackingEvent {
@@ -34,8 +35,9 @@ const TITLES: Record<InternalShippingStatus,string> = {
   in_transit: 'Pedido em trânsito', out_for_delivery: 'Saiu para entrega',
   delivered: 'Pedido entregue', exception: 'Ocorrência na entrega',
 };
+/** Texto de logística público: sem controles e sem `<`/`>` — nada de marcação entra no rastreio (RT-E-05). */
 const clean = (value: unknown, max: number) => typeof value === 'string'
-  ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+  ? value.replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
 /** Encrypted, single-process persistence for shipment tracking. Requires a stable 32-byte key in production. */
 export class TrackingStore {
@@ -61,13 +63,29 @@ export class TrackingStore {
       if (existsSync(keyFile)) chmodSync(keyFile, 0o600);
     }
     this.key = key;
-    this.ready = Boolean(key);
-    if (!this.ready || !key || !existsSync(this.file)) return;
-    const envelope = JSON.parse(readFileSync(this.file, 'utf8')) as { iv: string; tag: string; ciphertext: string };
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'hex'));
-    decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
-    this.records = JSON.parse(Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final()]).toString('utf8')) as TrackingRecord[];
-    if (!Array.isArray(this.records)) throw new Error('Arquivo de rastreamento inválido.');
+    if (!key || !existsSync(this.file)) {
+      this.ready = Boolean(key);
+      return;
+    }
+    try {
+      const envelope = JSON.parse(readFileSync(this.file, 'utf8')) as { iv: string; tag: string; ciphertext: string };
+      const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'hex'));
+      decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+      const parsed = JSON.parse(Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'hex')), decipher.final()]).toString('utf8')) as TrackingRecord[];
+      if (!Array.isArray(parsed)) throw new Error('Arquivo de rastreamento inválido.');
+      this.records = parsed;
+      this.ready = true;
+    } catch (error) {
+      // Arquivo corrompido ou chave trocada NÃO pode derrubar o processo no
+      // boot (RT-E-02): sobe sem rastreio público, preserva o arquivo como
+      // está para recuperação manual e registra o motivo em evento.
+      this.ready = false;
+      log('error', 'rastreio.arquivo_ilegivel', {
+        motivo: error instanceof Error ? error.message : String(error),
+        arquivo: 'tracking.enc.json',
+        acao: 'servindo_sem_rastreio_ate_correcao_manual',
+      });
+    }
   }
   private persist() {
     if (!this.key) throw new Error('Armazenamento de rastreamento indisponível.');

@@ -2,7 +2,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
 
 /**
  * Arquivos que o servidor de desenvolvimento NUNCA deve servir por HTTP.
@@ -57,7 +57,31 @@ export const DEV_DENY = [
   'src/server/*.ts.map',
   '**/src/server/**/*.ts.map',
   '**/src/server/**',
+  // Documentação interna, material de deploy e templates de infraestrutura:
+  // não são conteúdo do site, e o transformador do Vite os entregava em dev
+  // (RT-E-03/RT-D-01 do red-team — o README.md foi servido ao vivo).
+  '**/docs/**',
+  '**/deploy/**',
+  '**/.github/**',
+  '**/README.md',
+  '**/*.http',
+  '**/docker-compose.yml',
+  '**/Dockerfile',
+  '**/.dockerignore',
 ];
+
+/**
+ * Remove os comentários HTML do `index.html` no build de produção (RT-R-01):
+ * as notas internas de desenvolvimento (bloqueios, decisões de preload) ficam
+ * visíveis no HTML publicado. Em dev os comentários continuam no lugar.
+ */
+const stripHtmlComments: Plugin = {
+  name: 'lola-strip-html-comments',
+  apply: 'build',
+  transformIndexHtml(html) {
+    return html.replace(/<!--[\s\S]*?-->\s*/g, '');
+  },
+};
 
 export default defineConfig(() => {
   return {
@@ -73,7 +97,7 @@ export default defineConfig(() => {
         'e2e/**',
       ],
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), stripHtmlComments],
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname ?? '.', '.'),

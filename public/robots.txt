@@ -1,19 +1,11 @@
 # Regras de rastreamento da LOLA Aço Inox & Acessórios.
-# Permitido o rastreio de tudo que é vitrine; barrado o que é infraestrutura.
+# Permitido o rastreio de tudo que é vitrine; a negação real de acesso é do
+# servidor. O robots.txt não lista caminhos internos nem padrões de arquivo
+# sensível — isso só serviria de mapa de reconhecimento (RT-R-02 do red-team).
 
 User-agent: *
 Allow: /
-
-# Infraestrutura da aplicação — nunca é conteúdo público.
 Disallow: /api/
-Disallow: /internal/
-
-# Dados e chaves locais, mesmo que algum dia apareçam servidos por engano.
-Disallow: /*.enc
-Disallow: /*.enc.json
-Disallow: /*.key
-Disallow: /.data/
-Disallow: /.env
 
 # Sem linha "Sitemap:" por enquanto: o sitemap.xml ainda não existe e o
 # domínio canônico de produção não foi definido. Acrescentar

@@ -606,7 +606,10 @@ ${JSON.stringify(pergunta)}
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      // HMR sem host explícito abre o WebSocket em todas as interfaces
+      // (RT-D-02 do red-team). Loopback por padrão; para testar em outro
+      // aparelho da rede, suba com LOLA_HMR_HOST=<ip-desta-máquina>.
+      server: { middlewareMode: true, hmr: { host: process.env.LOLA_HMR_HOST || '127.0.0.1' } },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -628,9 +631,16 @@ ${JSON.stringify(pergunta)}
   // do data-server.ts, extraído para src/server/httpError.ts e testado lá.
   app.use(createJsonErrorHandler());
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Loopback por padrão no modo dev: o transformador do Vite e a própria API
+  // de desenvolvimento não ficam expostos à rede local (RT-E-03/RT-D-02 do
+  // red-team). Produção mantém 0.0.0.0 (atrás do proxy/container) e
+  // LOLA_BIND_HOST sobrescreve os dois — o data-server usa a mesma variável.
+  const bindHost = (process.env.LOLA_BIND_HOST ?? '').trim()
+    || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+  app.listen(PORT, bindHost, () => {
     log('info', 'servidor.iniciado', {
       porta: PORT,
+      endereco: bindHost,
       ambiente: process.env.NODE_ENV || 'development',
       estatico: process.env.NODE_ENV === 'production' ? 'sim' : 'nao',
       trustProxy: trustProxy === undefined ? 'nao' : String(trustProxy),

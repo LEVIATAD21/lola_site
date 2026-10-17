@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TrackingStore } from '../tracking';
 
 const dirs: string[] = [];
@@ -10,7 +10,10 @@ function setup() {
   dirs.push(directory);
   return new TrackingStore(directory, 'a'.repeat(64), true);
 }
-afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
+afterEach(() => {
+  vi.restoreAllMocks();
+  while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+});
 
 describe('TrackingStore', () => {
   const orderNumber = 'LOLA-20261011-ABCDEF123456';
@@ -36,5 +39,34 @@ describe('TrackingStore', () => {
     expect(created).not.toBeNull();
     const reloaded = new TrackingStore(dirs[dirs.length - 1], 'a'.repeat(64), true);
     expect(reloaded.lookup(created!.token)?.orderNumber).toBe(orderNumber);
+  });
+  // RT-E-02: arquivo corrompido derrubava o processo inteiro no boot com
+  // exit(1); agora sobe degradado, preserva o arquivo e registra o evento.
+  it('arquivo corrompido não derruba o boot e é preservado (RT-E-02)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const store = setup();
+    expect(store.create(orderNumber)).not.toBeNull();
+    const dir = dirs[dirs.length - 1];
+    const file = join(dir, 'tracking.enc.json');
+    writeFileSync(file, '{ envelope quebrado');
+    const quebrado = new TrackingStore(dir, 'a'.repeat(64), true);
+    expect(quebrado.ready).toBe(false);
+    expect(quebrado.lookup('qualquer-token')).toBeNull();
+    expect(readFileSync(file, 'utf8')).toBe('{ envelope quebrado');
+  });
+  // RT-E-05: `<`/`>` quebravam o padrão do resto da casa — nada de marcação
+  // nos textos de logística exibidos na página pública de rastreio.
+  it('neutraliza marcação nos textos de logística (RT-E-05)', () => {
+    const store = setup();
+    expect(store.create(orderNumber)).not.toBeNull();
+    const updated = store.update(orderNumber, {
+      status: 'posted',
+      description: '<img src=x onerror=alert(1)> enviado',
+      location: '<b>Centro</b>',
+    });
+    expect(updated).not.toBeNull();
+    const ultimo = updated!.events[updated!.events.length - 1];
+    expect(ultimo.description).not.toMatch(/[<>]/);
+    expect(ultimo.location ?? '').not.toMatch(/[<>]/);
   });
 });

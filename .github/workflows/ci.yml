@@ -6,13 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+# RT-S-09: o job só precisa ler o repositório; sem este bloco o token fica
+# com o padrão do repositório.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinadas por SHA (RT-S-01): tag móvel muda de conteúdo sem aviso
+      # e roda com o token do workflow.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -22,6 +29,11 @@ jobs:
 
       - name: Dependency audit
         run: npm audit
+
+      # RT-S-02: a árvore npm do e2e/ tem lockfile próprio e ficaria fora do
+      # portão; audit limpo hoje, gate contínuo a partir de agora.
+      - name: Dependency audit (e2e)
+        run: cd e2e && npm ci && npm audit
 
       - name: Typecheck
         run: npm run lint

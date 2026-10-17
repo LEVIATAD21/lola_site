@@ -34,11 +34,23 @@ const menuItems: { id: AccountSection; label: string; icon: React.ElementType }[
   { id: 'support', label: 'Ajuda e suporte', icon: CircleHelp },
 ];
 
+/** Perfil local de conveniência: 90 dias bastam; sem prazo o dado ficaria no
+ * navegador para sempre (RT-R-03 do red-team). */
+const PROFILE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
 const readProfile = (): CustomerProfile => {
   const empty = { name: '', email: '', phone: '', birthDate: '' };
   try {
     const saved = localStorage.getItem('lola_customer_profile');
-    return saved ? { ...empty, ...JSON.parse(saved) } : empty;
+    if (!saved) return empty;
+    const parsed = JSON.parse(saved) as Partial<CustomerProfile> & { savedAt?: number };
+    if (typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > PROFILE_TTL_MS) {
+      localStorage.removeItem('lola_customer_profile');
+      return empty;
+    }
+    return {
+      name: parsed.name ?? '', email: parsed.email ?? '', phone: parsed.phone ?? '', birthDate: parsed.birthDate ?? '',
+    };
   } catch {
     return empty;
   }
@@ -66,7 +78,7 @@ export const CustomerAccountPage: React.FC<CustomerAccountPageProps> = ({
   const saveProfile = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      localStorage.setItem('lola_customer_profile', JSON.stringify(profile));
+      localStorage.setItem('lola_customer_profile', JSON.stringify({ ...profile, savedAt: Date.now() }));
       setSavedMessage('Seus dados foram salvos neste dispositivo.');
       window.setTimeout(() => setSavedMessage(''), 3500);
     } catch {

@@ -54,6 +54,25 @@ describe('resolveAdminAllowlist', () => {
     expect(allowlist.check('::ffff:192.168.1.11')).toBe(false);
   });
 
+  // RT-E-01: `10.0.0.0/` virava prefixo `/0` (`Number('')` é `0`) e a lista
+  // inteira passava a aceitar qualquer origem, inclusive pública. Entrada com
+  // prefixo vazio ou fora da faixa agora derruba para a faixa privada, como a
+  // documentação sempre prometeu.
+  it('prefixo de CIDR vazio ou fora da faixa invalida a entrada (RT-E-01)', () => {
+    const vazio = resolveAdminAllowlist('10.0.0.0/');
+    expect(vazio.check('8.8.8.8')).toBe(false);
+    expect(vazio.check('127.0.0.1')).toBe(true);
+    expect(vazio.check('10.0.0.9')).toBe(true);
+
+    const vazioV6 = resolveAdminAllowlist('fc00::/');
+    expect(vazioV6.check('2001:4860:4860::8888')).toBe(false);
+    expect(vazioV6.check('fd00::1')).toBe(true);
+
+    const foraDaFaixa = resolveAdminAllowlist('10.0.0.0/33');
+    expect(foraDaFaixa.check('8.8.8.8')).toBe(false);
+    expect(foraDaFaixa.check('10.0.0.9')).toBe(true);
+  });
+
   it('cai para a faixa privada quando a configuração é inválida', () => {
     const allowlist = resolveAdminAllowlist('8.8.8.8,nao-e-ip');
 

@@ -33,4 +33,17 @@ describe('DEV_DENY do servidor de desenvolvimento', () => {
     expect(denied('src/server/*.ts.map')).toBe(true);
     expect(denied('**/src/server/**/*.ts.map')).toBe(true);
   });
+
+  // RT-E-03/RT-D-01: o README e os templates de infraestrutura eram servidos
+  // ao vivo na :3000; documentação interna é mapa de reconhecimento.
+  it('nega documentação interna e material de deploy (RT-E-03/RT-D-01)', () => {
+    expect(denied('**/docs/**')).toBe(true);
+    expect(denied('**/deploy/**')).toBe(true);
+    expect(denied('**/.github/**')).toBe(true);
+    expect(denied('**/README.md')).toBe(true);
+    expect(denied('**/*.http')).toBe(true);
+    expect(denied('**/docker-compose.yml')).toBe(true);
+    expect(denied('**/Dockerfile')).toBe(true);
+    expect(denied('**/.dockerignore')).toBe(true);
+  });
 });
