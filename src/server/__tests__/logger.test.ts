@@ -1,4 +1,5 @@
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,24 @@ import { configureIpLogging, configureIpLoggingFromEnv, createRequestLogger, log
 
 const servers: Server[] = [];
 const logged = () => vi.mocked(console.log).mock.calls.map((call) => String(call[0]));
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+/**
+ * Respostas cujo `finish` ainda não foi aguardado.
+ *
+ * D10: o `settle` era um sono fixo de 50 ms — em máquina lenta o handler de
+ * log ainda não tinha rodado e o teste ficava vermelho falso. O contador abaixo
+ * é montado DEPOIS do logger de propósito: o EventEmitter chama os listeners de
+ * `finish` na ordem de registro, então quando estes promises resolvem a linha
+ * já foi emitida. A espera é pelo evento, não pelo relógio.
+ */
+const respostasTerminadas: Promise<void>[] = [];
+
+function acompanharFim(_req: Request, res: Response, next: NextFunction) {
+  respostasTerminadas.push(new Promise((resolve) => res.on('finish', () => resolve())));
+  next();
+}
+
+const settle = () => Promise.all(respostasTerminadas.splice(0));
 
 async function listen(app: express.Express) {
   const server = app.listen(0, '127.0.0.1');
@@ -22,6 +40,7 @@ async function listen(app: express.Express) {
 function sampleApp(logger = createRequestLogger()) {
   const app = express();
   app.use(logger);
+  app.use(acompanharFim);
   app.get('/api/ok', (_req, res) => res.json({ ok: true }));
   app.get('/assets/app.css', (_req, res) => res.type('text/css').send('body{}'));
   return app;
@@ -29,7 +48,9 @@ function sampleApp(logger = createRequestLogger()) {
 
 afterEach(() => {
   configureIpLogging('mask');
+  vi.useRealTimers();
   vi.restoreAllMocks();
+  respostasTerminadas.length = 0;
   return Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   ));
@@ -79,6 +100,10 @@ describe('createRequestLogger', () => {
   });
 
   it('limita o volume de linhas para um flood não encher o disco', async () => {
+    // D10: relógio parado — a janela de 60 s do logger não pode virar no meio
+    // do flood, então a contagem (60 gravadas, 30 suprimidas) não depende da
+    // máquina.
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const base = await listen(sampleApp(createRequestLogger({ maxPerMinute: 60 })));
 
@@ -95,6 +120,7 @@ describe('createRequestLogger', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const app = express();
     app.use(createRequestLogger());
+    app.use(acompanharFim);
     app.use('/api', (_req, res) => res.status(404).json({ error: 'não encontrado' }));
     const base = await listen(app);
 
