@@ -68,37 +68,40 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
     onChange({ ...filters, materials: updated });
   };
 
+  // Contagens reais, inclusive zero: quando o total é 0 a barra mostra (0) em
+  // vez de inventar número. Nenhuma opção é ocultada — o filtro não pode se
+  // reconfigurar sozinho nem anunciar peça onde não há.
   const categoryOptions = [
-    { label: 'Todos os brincos', value: 'all', count: counts.types.all || 48 },
-    { label: 'Argolas', value: 'Argolas', count: counts.types['Argolas'] || 12 },
-    { label: 'Pontos de luz', value: 'Pontos de luz', count: counts.types['Pontos de luz'] || 10 },
-    { label: 'Ear cuffs', value: 'Ear cuffs', count: counts.types['Ear cuffs'] || 6 },
-    { label: 'Estilo minimalista', value: 'Estilo minimalista', count: counts.types['Estilo minimalista'] || 8 },
-    { label: 'Com pedras', value: 'Com pedras', count: counts.types['Com pedras'] || 5 },
-    { label: 'Tendências', value: 'Tendências', count: counts.types['Tendências'] || 7 },
+    { label: 'Todos os brincos', value: 'all', count: counts.types.all ?? 0 },
+    { label: 'Argolas', value: 'Argolas', count: counts.types['Argolas'] ?? 0 },
+    { label: 'Pontos de luz', value: 'Pontos de luz', count: counts.types['Pontos de luz'] ?? 0 },
+    { label: 'Ear cuffs', value: 'Ear cuffs', count: counts.types['Ear cuffs'] ?? 0 },
+    { label: 'Estilo minimalista', value: 'Estilo minimalista', count: counts.types['Estilo minimalista'] ?? 0 },
+    { label: 'Com pedras', value: 'Com pedras', count: counts.types['Com pedras'] ?? 0 },
+    { label: 'Tendências', value: 'Tendências', count: counts.types['Tendências'] ?? 0 },
   ];
 
   const priceOptions = [
-    { label: 'Até R$ 29,90', value: 'under-30', count: counts.priceRanges['under-30'] || 12 },
-    { label: 'R$ 30,00 - R$ 59,90', value: '30-60', count: counts.priceRanges['30-60'] || 18 },
-    { label: 'R$ 60,00 - R$ 89,90', value: '60-90', count: counts.priceRanges['60-90'] || 14 },
-    { label: 'R$ 90,00 - R$ 129,90', value: '90-130', count: counts.priceRanges['90-130'] || 10 },
-    { label: 'Acima de R$ 130,00', value: 'over-130', count: counts.priceRanges['over-130'] || 6 },
+    { label: 'Até R$ 29,90', value: 'under-30', count: counts.priceRanges['under-30'] ?? 0 },
+    { label: 'R$ 30,00 - R$ 59,90', value: '30-60', count: counts.priceRanges['30-60'] ?? 0 },
+    { label: 'R$ 60,00 - R$ 89,90', value: '60-90', count: counts.priceRanges['60-90'] ?? 0 },
+    { label: 'R$ 90,00 - R$ 129,90', value: '90-130', count: counts.priceRanges['90-130'] ?? 0 },
+    { label: 'Acima de R$ 130,00', value: 'over-130', count: counts.priceRanges['over-130'] ?? 0 },
   ];
 
   const colorOptions = [
-    { label: 'Dourado', value: 'Dourado', colorHex: '#C49A5A', count: counts.colors['Dourado'] || 42 },
-    { label: 'Prateado', value: 'Prateado', colorHex: '#9CA3AF', count: counts.colors['Prateado'] || 8 },
-    { label: 'Rosé', value: 'Rosé', colorHex: '#E0A899', count: counts.colors['Rosé'] || 4 },
-    { label: 'Preto', value: 'Preto', colorHex: '#1F2937', count: counts.colors['Preto'] || 2 },
-    { label: 'Colorido', value: 'Colorido', colorHex: 'rainbow', count: counts.colors['Colorido'] || 1 },
+    { label: 'Dourado', value: 'Dourado', colorHex: '#C49A5A', count: counts.colors['Dourado'] ?? 0 },
+    { label: 'Prateado', value: 'Prateado', colorHex: '#9CA3AF', count: counts.colors['Prateado'] ?? 0 },
+    { label: 'Rosé', value: 'Rosé', colorHex: '#E0A899', count: counts.colors['Rosé'] ?? 0 },
+    { label: 'Preto', value: 'Preto', colorHex: '#1F2937', count: counts.colors['Preto'] ?? 0 },
+    { label: 'Colorido', value: 'Colorido', colorHex: 'rainbow', count: counts.colors['Colorido'] ?? 0 },
   ];
 
   const materialOptions = [
-    { label: 'Aço inox', value: 'Aço inox', count: counts.materials['Aço inox'] || 48 },
-    { label: 'Aço cirúrgico', value: 'Aço cirúrgico', count: counts.materials['Aço cirúrgico'] || 6 },
-    { label: 'Com zircônia', value: 'Com zircônia', count: counts.materials['Com zircônia'] || 9 },
-    { label: 'Pérola artificial', value: 'Pérola artificial', count: counts.materials['Pérola artificial'] || 3 },
+    { label: 'Aço inox', value: 'Aço inox', count: counts.materials['Aço inox'] ?? 0 },
+    { label: 'Aço cirúrgico', value: 'Aço cirúrgico', count: counts.materials['Aço cirúrgico'] ?? 0 },
+    { label: 'Com zircônia', value: 'Com zircônia', count: counts.materials['Com zircônia'] ?? 0 },
+    { label: 'Pérola artificial', value: 'Pérola artificial', count: counts.materials['Pérola artificial'] ?? 0 },
   ];
 
   const hasActiveFilters =

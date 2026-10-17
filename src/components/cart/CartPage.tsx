@@ -288,6 +288,9 @@ export const CartPage: React.FC<CartPageProps> = ({
         onClose={() => setIsCouponModalOpen(false)}
         onApplyCoupon={onApplyCoupon}
         appliedCoupon={coupon?.code}
+        // Subtotal em centavos direto da sacola aberta: o modal não depende do
+        // storage para aplicar o mínimo do cupom.
+        subtotalCents={Math.round(subtotal * 100)}
       />
 
       <WhatsAppModal

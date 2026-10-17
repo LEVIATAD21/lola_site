@@ -1,6 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, User, ShoppingBag, ChevronDown, Menu, X, ArrowRight, Heart } from 'lucide-react';
-import { CATEGORIES, FEATURED_PRODUCTS, Product, Category } from '../data/mockData';
+import { CATEGORIES, ALL_PRODUCTS, Product, Category } from '../data/mockData';
+
+/**
+ * Busca da vitrine: varre o catálogo consolidado (`ALL_PRODUCTS`, 25 peças),
+ * não só os destaques — peça que existe no catálogo não pode sumir da busca.
+ * A via por `GET /api/produtos` continua travada em B7/D15.
+ */
+export function searchProducts(query: string): Product[] {
+  if (!query.trim()) return [];
+  const term = query.toLowerCase();
+  return ALL_PRODUCTS.filter(
+    (p) => p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term)
+  );
+}
 
 interface SiteHeaderProps {
   currentPageView: 'home' | 'category-earrings' | 'product-detail' | 'cart' | 'checkout' | 'tracking';
@@ -54,13 +67,7 @@ export const SiteHeader: React.FC<SiteHeaderProps> = ({
   }, []);
 
   // Filter products based on search query
-  const searchResults = searchQuery.trim()
-    ? FEATURED_PRODUCTS.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.category.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : [];
+  const searchResults = searchProducts(searchQuery);
 
   const handleCategoryClick = (category: Category) => {
     setIsCategoryMenuOpen(false);
