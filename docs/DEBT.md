@@ -461,6 +461,37 @@ Notas de fechamento:
   RT-S-03 segue bloqueado em **B3** (decisão do Gemini). Relatório consolidado
   em `~/lola_coord/relatorios/redteam-onda2.md`.
 
-Continua na fila: D6, D5 e D10 (próxima onda, papéis na fila), D7 e D15
-(primeira reserva), D12–D20, e os itens de SUPPLY-CHAIN pendentes de decisão
-(*ver* `docs/SUPPLY-CHAIN.md` §9.1).
+### Onda 3 (17/10/2026) — fechamento
+
+Fechados na onda 3 (mesclados na `main`):
+
+| # | ID | O quê | Onde fechou |
+|---|---|---|---|
+| 6 | D5 | Referências mortas de `REPORT.md` e linhas velhas corrigidas (README, auditorias, GO-LIVE, deploy) | `doc-changelog` (`dc2ceca`); resíduos de `server.ts`/`.env.example` na limpeza do integrador |
+| 7 | D9 | **Completo 18/18:** os 9 `console.*` de `orders.ts` viraram eventos `pedidos.*` | `be-idem` (`0e585b3`) |
+| 8 | D10 | Os 3 testes de relógio ficaram determinísticos (`finish` no logger, `setSystemTime`, `write→destroy` encadeado) | `be-idem` (`0e585b3`) |
+| 10 | D8 | **12/12:** `CouponModal` adotou `useDialogA11y` junto com os remendos F08/F09 (label e erro associados) | `a11y-2` (`30437cf`) |
+| 18 | D18 | `name` honesto (`lola-aco-inox`) e `clean` corrigido para `rm -rf dist` | `supply-hyg` (`1574d93`) |
+
+Notas de fechamento da onda 3:
+
+- **D5:** o `.dockerignore` mantém `REPORT.md` de propósito — é padrão
+  defensivo para o arquivo não ressuscitar dentro do contexto de build; não é
+  referência de leitura.
+- **D8:** fecha também o pedido do outbox `fe-a11y`; a cobertura E2E do ciclo
+  de vida dos diálogos (`inert`, Tab preso, devolução de foco) fica para a
+  próxima onda de E2E.
+- **Red-team (onda 2, adiados):** fechados na onda 3 RT-R-04 (rota interna
+  `GET /api/cep/:cep`), RT-R-05 (falso-positivo validado em Chromium real),
+  RT-D-04 (403 do dev sem caminho absoluto), RT-S-04/05/06/07/12
+  (deps/dependabot/digest) e RT-R-07/RT-S-08 (docs); seguem **RT-E-04**
+  (decisão de produto), **RT-S-03** (B3) e **RT-S-13** (exige Docker).
+- **Axe (onda 3):** novo gate E2E de acessibilidade (`critical` reprova;
+  4 telas) — verde, com **8 achados `serious` genuínos** (contraste
+  `#766D64` 4,43:1 no `BenefitsStrip`, selo "pix" 2,14:1, botão do chat
+  label-in-name etc.) que viram dívida de a11y da próxima onda; laudos
+  `axe-*.json` anexados ao relatório do Playwright.
+
+Continua na fila: D6 (`fe-i18n`, onda 4), D7 e D15 (primeira reserva),
+D12–D17, D19–D20, a a11y `serious` do axe (contraste/label-in-name) e os
+itens de SUPPLY-CHAIN pendentes de decisão (*ver* `docs/SUPPLY-CHAIN.md` §9.1).

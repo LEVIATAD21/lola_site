@@ -391,7 +391,8 @@ async function startServer() {
   //
   // Base legal provisória: consentimento (art. 7º, I) c/c dever de informação
   // (art. 9º) — o titular precisa SABER antes de perguntar que a conversa vai
-  // para um terceiro. Hoje não há aviso na UI nem consentimento (ver REPORT.md);
+  // para um terceiro. Hoje não há aviso na UI nem consentimento (ver
+  // docs/auditorias/lgpd.md);
   // enquanto isso, a chave deve ficar vazia em produção. Enquanto o aviso não
   // existir, esta rota também não pode virar consentimento tácito por uso.
   app.post('/api/ai/consulta', limitAI, limitAIHourly, limitAIDaily, async (req, res) => {
