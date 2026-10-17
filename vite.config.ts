@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -60,6 +61,18 @@ export const DEV_DENY = [
 
 export default defineConfig(() => {
   return {
+    test: {
+      // A suíte E2E do dono vive em e2e/ com toolchain própria (Playwright,
+      // package.json separado) e roda fora do vitest — sem esta exclusão o
+      // runner da raiz passaria a colecionar os specs dela.
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/cypress/**',
+        '**/.{idea,git,cache,temp,output}/**',
+        'e2e/**',
+      ],
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
