@@ -67,8 +67,8 @@ preencher os dados e publicar.
 
 ### 3. Gemini: manter ou desligar ⛔
 
-O texto digitado no chat vai para o **Google** (`server.ts:449`) hoje **sem aviso
-nem consentimento** da cliente.
+O texto digitado no chat vai para o **Google** (`server.ts`, rota
+`POST /api/ai/consulta`) hoje **sem aviso nem consentimento** da cliente.
 
 | Opção | O que fazer |
 |---|---|

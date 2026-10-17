@@ -1,4 +1,4 @@
-# 📦 REPORT.md — infraestrutura de produção do lola_site
+# 📦 Infraestrutura de produção do lola_site
 
 Data: 2026-10-13 · Branch: `agente/prod` · Worktree: `/tmp/opencode/lola-prod`
 
