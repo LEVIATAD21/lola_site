@@ -10,6 +10,7 @@ import {
 import { HttpDataPlane } from './src/server/httpDataPlane';
 import { InternalClient } from './src/server/internalClient';
 import { createAdminRouter } from './src/server/adminRoutes';
+import { createCepLookupRouter } from './src/server/cepLookup';
 import { resolveAdminAllowlist } from './src/server/ipAllow';
 import { configureIpLoggingFromEnv, createRequestLogger, log } from './src/server/logger';
 import { createRateLimitMiddleware } from './src/server/rateLimit';
@@ -333,6 +334,12 @@ async function startServer() {
     if (!result) return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
     return res.json({ tracking: result });
   });
+
+  // CEP (RT-R-04): a consulta sai do navegador. Em produção o CSP da vitrine só
+  // permite `connect-src 'self'`, então o fetch direto do front para o
+  // viacep.com.br era bloqueado pelo próprio navegador. O router faz a chamada
+  // externa neste processo, com timeout e teto próprio por IP.
+  app.use('/api', createCepLookupRouter());
 
   // 4. GET /api/produtos (busca ou lista por categoria)
   app.get('/api/produtos', limitRead, async (req, res) => {

@@ -10,7 +10,8 @@ Fontes: `server.ts`, `data-server.ts`, `src/server/httpDataPlane.ts`,
 `src/server/adminAuth.ts`, `src/server/dataPlane.ts`, `src/server/orders.ts`,
 `src/server/inventory.ts`, `src/server/rateLimit.ts`,
 `src/server/requestGuard.ts`, `src/server/httpError.ts`,
-`src/server/ipAllow.ts`, `src/server/securityHeaders.ts`, `api-test.http`.
+`src/server/cepLookup.ts`, `src/server/ipAllow.ts`,
+`src/server/securityHeaders.ts`, `api-test.http`.
 
 ---
 
@@ -292,7 +293,36 @@ quantidades fora de 1–99. Campos extras (ex.: `sessaoCliente`) são ignorados.
 > definida, o texto digitado mais produto/sacola viajam para a API do Gemini.
 > Sem a chave, nada sai da máquina. Ver `BLOCKERS.md`, B3.
 
-### 2.7 Rotas inexistentes
+### 2.7 `GET /api/cep/:cep`
+
+Consulta de endereço pelo CEP (RT-R-04). O navegador **nunca** fala com o
+ViaCEP: em produção o CSP da vitrine (`connect-src 'self'`) bloquearia o fetch
+cross-origin, então a chamada externa acontece no servidor (`cepLookup.ts`) e
+o front consome a mesma origem (`src/services/cep.ts`).
+
+| | |
+|---|---|
+| Serve | vitrine — chama `https://viacep.com.br/ws/<cep>/json/` no servidor |
+| Quem | público |
+| Limite | `20/min` por IP — mensagem `"Muitas consultas de CEP. Tente novamente em um minuto."` |
+| Timeout do ViaCEP | `5.000 ms` (`AbortSignal.timeout(5000)`) |
+
+`:cep` aceita com ou sem hífen (`01310-100` ou `01310100`); qualquer outro
+formato é recusado sem chamar o ViaCEP.
+
+| Status | Corpo |
+|---|---|
+| `200` | `{"cep":"01310100","street":"Avenida Paulista","neighborhood":"Bela Vista","city":"São Paulo","state":"SP"}` |
+| `400` | `{"error":"Informe um CEP brasileiro válido com 8 dígitos."}` — formato inválido |
+| `404` | `{"error":"CEP não encontrado."}` — ViaCEP respondeu `{"erro": true}` |
+| `429` | `{"error":"Muitas consultas de CEP. Tente novamente em um minuto."}` |
+| `502` | `{"error":"Não foi possível consultar o CEP agora. Tente novamente."}` — falha de rede, timeout, status fora do `200` ou payload incompleto |
+
+Os nomes de campo são os do front (`street`/`neighborhood`/`city`/`state`), não
+os do ViaCEP (`logradouro`/`bairro`/`localidade`/`uf`). A resposta sai com
+`Cache-Control: no-store`.
+
+### 2.8 Rotas inexistentes
 
 - Qualquer caminho sob `/api/` sem handler → **`404 {"error":"Endpoint de API não encontrado."}`**
 - Qualquer caminho sob `/internal/` na vitrine → **`404 {"error":"Endpoint de API não encontrado."}`**
@@ -556,6 +586,7 @@ deploy.
 |---|---|---|---|---|---|
 | Orçamento bruto `/api` | 60 s | 600 | `LOLA_API_BUDGET_PER_MINUTE` (30–100000) | `Muitas requisições. Aguarde um minuto e tente novamente.` | vitrine, antes do body parser |
 | Leitura de catálogo/estoque | 60 s | 300 | `LOLA_READ_PER_MINUTE` (10–100000) | `Limite temporário de consultas atingido. Aguarde um instante e tente novamente.` | vitrine |
+| Consulta de CEP | 60 s | 20 | fixo | `Muitas consultas de CEP. Tente novamente em um minuto.` | vitrine |
 | Pré-pedido | 60 s | 10 | `LOLA_ORDER_PER_MINUTE` (1–10000) | `Limite temporário de pré-pedidos atingido. Tente novamente em um minuto.` | vitrine |
 | IA — minuto | 60 s | 20 | `LOLA_AI_PER_MINUTE` (1–10000) | `Limite temporário de consultas atingido. Tente novamente em um minuto.` | vitrine |
 | IA — hora | 60 min | 120 | `LOLA_AI_PER_HOUR` (1–100000) | `Limite horário de consultas atingido. Tente novamente mais tarde.` | vitrine |
