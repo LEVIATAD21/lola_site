@@ -606,10 +606,10 @@ ${JSON.stringify(pergunta)}
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      // HMR sem host explícito abre o WebSocket em todas as interfaces
+      // WebSocket do HMR sem host explícito abre em todas as interfaces
       // (RT-D-02 do red-team). Loopback por padrão; para testar em outro
       // aparelho da rede, suba com LOLA_HMR_HOST=<ip-desta-máquina>.
-      server: { middlewareMode: true, hmr: { host: process.env.LOLA_HMR_HOST || '127.0.0.1' } },
+      server: { middlewareMode: true, ws: { host: process.env.LOLA_HMR_HOST || '127.0.0.1' } },
       appType: 'spa',
     });
     app.use(vite.middlewares);
