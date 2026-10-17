@@ -232,6 +232,13 @@ export default defineConfig(() => {
       // 127.0.0.1 de propósito: rodar exposto em 0.0.0.0 entregaria o
       // transformador do Vite (e com ele o backend) a qualquer um na rede.
       host: '127.0.0.1',
+      // Artefatos do E2E e dados locais mudam durante a suíte — que roda
+      // contra ESTE dev server. Sem ignorá-los, cada escrita em
+      // `e2e/test-results`, `e2e/playwright-report` e `.data` dispara um
+      // full-reload que recarrega a página no meio de um teste.
+      watch: {
+        ignored: ['**/e2e/test-results/**', '**/e2e/playwright-report/**', '**/.data/**'],
+      },
       fs: { deny: DEV_DENY },
     },
   };
