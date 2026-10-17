@@ -31,6 +31,10 @@ O relatório HTML fica em `e2e/playwright-report/` (`npm run relatorio`).
 | Pré-pedido válido chega à tela de sucesso | `tests/checkout.spec.ts` |
 | `/rastreio?token=<inválido>` mostra recusa | `tests/api.spec.ts` |
 | `GET /api/health` responde 200 | `tests/api.spec.ts` |
+| Axe: `/` sem violação crítica (WCAG 2.0/2.1 A+AA) | `tests/a11y.spec.ts` |
+| Axe: `/produto/<id>` sem violação crítica | `tests/a11y.spec.ts` |
+| Axe: `/carrinho` sem violação crítica | `tests/a11y.spec.ts` |
+| Axe: `/checkout` sem violação crítica | `tests/a11y.spec.ts` |
 
 Dados de produto, preço e cupom vêm de `src/data/mockData.ts` e
 `src/data/coupons.ts`; nada é inventado (ver `tests/support/catalogo.ts`).
@@ -56,6 +60,13 @@ Dados de produto, preço e cupom vêm de `src/data/mockData.ts` e
 - Locators do formulário de entrega aceitam rótulo associado **ou** placeholder
   (`tests/support/formulario.ts`): a superfície da tela mudou uma vez durante
   esta onda e a suíte não deve quebrar quando mudar de novo.
+- A camada do axe (`tests/a11y.spec.ts`) audita `/`, `/produto/<id>`,
+  `/carrinho` e `/checkout` no recorte WCAG 2.0/2.1 A+AA. Só violação de impacto
+  **`critical`** reprova a cena; `serious`/`moderate`/`minor` saem no console e
+  num anexo JSON do relatório como dívida documentada para a próxima onda — a
+  suíte não conserta componente de acessibilidade.
+- A rota da sacola é `/carrinho`: `/cart` não existe no roteador da aplicação e
+  cairia na home.
 
 ## Observação sobre `/rastreio`
 
