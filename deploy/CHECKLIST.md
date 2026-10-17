@@ -10,9 +10,24 @@ seus domínios reais.
 
 - [ ] `docker --version` ≥ **28** (obrigatório: a partir daí o Docker exige
       declarar a faixa de rede; sem isso `docker compose up` falha com
-      *"no matching subnetwork for IPv4 address"*). Se for mais antigo:
-      `curl -fsSL https://get.docker.com | sh` e revise `COMPOSE_DOCKER_NETWORK`
-      no `.env`.
+      *"no matching subnetwork for IPv4 address"*). Se for mais antigo, instale
+      pelo **repositório oficial do Docker** — pacote apt com chave GPG
+      verificada, nunca `curl … | sh` (pipe de URL para shell executa conteúdo
+      externo mutável como root):
+
+      ```bash
+      # exemplo em Ubuntu; em Debian troque `ubuntu` por `debian` nos dois caminhos
+      sudo apt-get update && sudo apt-get install -y ca-certificates curl
+      sudo install -m 0755 -d /etc/apt/keyrings
+      sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      sudo chmod a+r /etc/apt/keyrings/docker.asc
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+      sudo apt-get update
+      sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      ```
+
+      Passo a passo oficial por distribuição: <https://docs.docker.com/engine/install/>.
+      Depois, revise `COMPOSE_DOCKER_NETWORK` no `.env`.
 - [ ] `docker compose version` (v2, não v1 — o `docker-compose` legado não
       entende `env_file.path/required`).
 - [ ] `git clone <repo> /srv/lola && cd /srv/lola && git checkout <tag>`
