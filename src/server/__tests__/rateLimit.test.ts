@@ -1,7 +1,7 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canonicalPath, createRateLimitMiddleware } from '../rateLimit';
 
 const servers: Server[] = [];
@@ -27,6 +27,7 @@ async function startLimitedEndpoint(route = '/limited') {
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   ));
@@ -160,6 +161,13 @@ describe('createRateLimitMiddleware — lotação da tabela', () => {
   });
 
   it('volta a aceitar bucket novo quando as janelas vencem', async () => {
+    // D10: relógio do middleware sob controle (só `Date`), sem sono real de
+    // 1,1 s. A janela vence instantaneamente e o resultado não depende da
+    // máquina; `setTimeout` e a rede continuam reais.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const T0 = new Date('2026-10-13T12:00:00.000Z');
+    vi.setSystemTime(T0);
+
     const app = express();
     app.get('/short', createRateLimitMiddleware({
       windowMs: 1_000,
@@ -177,14 +185,14 @@ describe('createRateLimitMiddleware — lotação da tabela', () => {
     const address = server.address() as AddressInfo;
     const url = `http://127.0.0.1:${address.port}/short`;
 
-    // Enche a tabela com chaves distintas.
+    // Enche a tabela com chaves distintas, todas dentro da mesma janela.
     for (let index = 0; index < 100; index += 1) {
       await fetch(url, { headers: { 'x-test-key': 'preencher-' + index } });
     }
 
     // A recusa falha FECHADA, não para sempre: vencidas as janelas, a varredura
     // libera espaço e um cliente novo entra normalmente.
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    vi.setSystemTime(new Date(T0.getTime() + 1_100));
     const afterExpiry = await fetch(url, { headers: { 'x-test-key': 'novo-cliente' } });
     expect(afterExpiry.status).toBe(200);
   });

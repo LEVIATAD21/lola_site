@@ -116,8 +116,10 @@ describe('HttpDataPlane com rede falhando de verdade', () => {
     const base = await servidorFalho((req, res) => {
       // Promete 4 kB e entrega um pedaço: a leitura falha no meio do corpo.
       res.writeHead(200, { 'content-type': 'application/json', 'content-length': '4096' });
-      res.write('{"stock": {"brinco-1": 5');
-      setTimeout(() => res.destroy(), 10);
+      // D10: o corte é encadeado no callback do write — quando o trecho já foi
+      // entregue ao socket — em vez de disputar 10 ms com um temporizador. O
+      // desfecho não depende da máquina: resposta truncada vira 503.
+      res.write('{"stock": {"brinco-1": 5', () => res.destroy());
     });
     const plane = montarPlane(base);
 
