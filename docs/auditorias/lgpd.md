@@ -6,7 +6,7 @@
 **Escopo legal:** Lei 13.709/2018 (LGPD). O site **não está no ar** — este é o momento de decisão estrutural.
 
 > **Como ler:** toda afirmação traz evidência `arquivo:linha`. Onde a linha não vem de código,
-> vem de `REPORT.md` como proposta. Bases legais marcadas como **provisórias** precisam da
+> vem deste relatório como proposta. Bases legais marcadas como **provisórias** precisam da
 > validação do controlador (e, se quiser, de jurista) antes do go-live — elas estão escritas para
 > serem discutidas, não para serem aceitas de presente.
 

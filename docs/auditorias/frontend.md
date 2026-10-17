@@ -21,7 +21,7 @@ O problema sistemático encontrado é outro: **o `localStorage` era tratado como
 | ACH-04 | Baixo | Item do carrinho: texto e `image` sem limite de tamanho nem restrição de origem | ✅ Corrigido |
 | ACH-05 | Informativo | Lookup de cupom pela cadeia de protótipo (`VALID_COUPONS[...]`) | ✅ Corrigido (hardening) |
 | ACH-06 | Informativo | Modais sem focus trap e sem fechamento por `Escape` | 📄 Documentado |
-| ACH-07 | Informativo | `ReportModal` é código morto no bundle e documenta endpoints internos | 📄 Decisão de produto |
+| ACH-07 | Informativo | `ReportModal` é código morto no bundle e documenta endpoints internos | ✅ Removido (commit `daecdd2`) |
 
 ---
 
@@ -129,9 +129,9 @@ O `<img src={item.image}>` da sacola (`CartItemCard.tsx:32`, `CartDrawer.tsx:110
 
 ## ACH-06 — Informativo — Modais sem focus trap e sem fechamento por `Escape` (acessibilidade)
 
-**Arquivos:** 12 componentes com `role="dialog" aria-modal="true"` — `InfoModal`, `CartDrawer`, `FavoritesModal`, `ProductDetailModal`, `CouponModal`, `ClearCartModal`, `ShippingCalculatorModal`, `WhatsAppModal`, `OrderSuccessModal`, `MobileFilterDrawer`, `ChatbotAssistente`, `ReportModal`.
+**Arquivos:** 12 componentes com `role="dialog" aria-modal="true"` — `InfoModal`, `CartDrawer`, `FavoritesModal`, `ProductDetailModal`, `CouponModal`, `ClearCartModal`, `ShippingCalculatorModal`, `WhatsAppModal`, `OrderSuccessModal`, `MobileFilterDrawer`, `ChatbotAssistente`, `ProductLightboxModal`. A lista original citava `ReportModal` e omitia o `ProductLightboxModal`; o `ReportModal` foi removido do projeto depois da auditoria (ver ACH-07).
 
-**O que acontece.** Nenhum deles prende o foco nem fecha com `Escape`. Só `ProductLightboxModal.tsx:24` trata `Escape`. O foco do teclado continua livre no conteúdo atrás do backdrop.
+**O que acontece.** Nenhum deles prende o foco; só `ProductLightboxModal.tsx:24` trata `Escape`. O foco do teclado continua livre no conteúdo atrás do backdrop.
 
 **Impacto.** Usuário de teclado/leitor de tela fica preso em navegação fora do diálogo. **Não é falha de segurança explorável**, e pedi para reportar acessibilidade "só se for grave" — por isso fica documentado, não corrigido.
 
@@ -140,6 +140,8 @@ O `<img src={item.image}>` da sacola (`CartItemCard.tsx:32`, `CartDrawer.tsx:110
 ---
 
 ## ACH-07 — Informativo — `ReportModal` é código morto no bundle e documenta endpoints internos
+
+> **Atualização (resolvido):** o `ReportModal` e o estado morto no `App.tsx` foram removidos do projeto (commit `daecdd2`) — os caminhos e linhas citados abaixo são do estado registrado na auditoria e não existem mais; a pergunta ao produto no fim da seção foi respondida pela remoção.
 
 **Arquivos:** `src/components/ReportModal.tsx` (477 linhas), `src/App.tsx:122` e `src/App.tsx:709-716`.
 
@@ -210,6 +212,6 @@ Prova de que os vetores pedidos foram inspecionados, não apenas presumidos.
 
 ## Decisões pendentes (não corrigidas de propósito)
 
-1. **`ReportModal` (ACH-07):** manter o painel no bundle com gatilho previsto, ou remover junto com o estado morto em `App.tsx`?
+1. **`ReportModal` (ACH-07):** manter o painel no bundle com gatilho previsto, ou remover junto com o estado morto em `App.tsx`? — **resolvido:** removido no commit `daecdd2`.
 2. **Focus trap global (ACH-06):** introduzir o hook compartilhado `useDialogA11y` nos 12 modais, ou deixar para quando houver time de acessibilidade?
 3. **Catálogo estático vs. `/api/produtos`:** o front-end ainda renderiza `EARRINGS_CATALOG`/`FEATURED_PRODUCTS` de `mockData.ts`; a rota `GET /api/produtos` existe no backend mas **não é chamada por nenhum componente**. Quando a integração acontecer, o `image` vindo do servidor precisará da mesma restrição de caminho local aplicada aqui ao carrinho — vale registrar essa regra no contrato da API antes da migração.
