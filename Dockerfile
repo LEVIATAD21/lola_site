@@ -19,13 +19,24 @@
 # piso do Vite 8, a restrição mais estrita das dependências. A variante slim já
 # traz o glibc que os binários nativos (esbuild, oxide do Tailwind) exigem,
 # sem precisar de toolchain de compilação.
+#
+# Tag pinada pelo digest do índice multi-arch (RT-S-07): a tag `22-bookworm-slim`
+# é móvel e pode ser remapeada a qualquer momento; o digest congela o conteúdo.
+# Digest conferido em 17/10/2026 via Docker Hub (índice OCI de linux/amd64,
+# arm64 e outras plataformas). Para atualizar quando sair security patch:
+#   TOKEN=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/node:pull" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+#   curl -fsSI -H "Authorization: Bearer $TOKEN" \
+#     -H "Accept: application/vnd.oci.image.index.v1+json" \
+#     "https://registry-1.docker.io/v2/library/node/manifests/22-bookworm-slim" \
+#     | grep -i docker-content-digest
+# e troque o sha256 nos dois FROMs abaixo.
 # =============================================================================
 
 
 # -----------------------------------------------------------------------------
 # Estágio 1 — build da vitrine
 # -----------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS build
 
 WORKDIR /app
 
@@ -51,7 +62,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Estágio 2 — runtime
 # -----------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS runtime
 
 WORKDIR /app
 
@@ -64,10 +75,13 @@ ENV NODE_ENV=production \
     npm_config_update_notifier=false \
     npm_config_cache=/tmp/.npm
 
-# Somente dependências de produção. `vite`/`tsx` são `dependencies` no
-# package.json (o `tsx` é quem executa os entrypoints TS em produção), então a
-# lista é maior que o estrito necessário — mexer nisso altera package.json e o
-# CI, então fica para um próximo passo.
+# Somente dependências de produção. Depois da higiene de dependências, as
+# ferramentas de build (`vite`, `@tailwindcss/vite`, `@vitejs/plugin-react`)
+# vivem em devDependencies e não entram mais aqui; o `tsx` fica em
+# `dependencies` de propósito porque é ele quem executa os entrypoints TS em
+# produção (`node --import tsx`). O `vite` só é importado dinamicamente pelo
+# server.ts quando NODE_ENV não é produção — nesta imagem NODE_ENV=production,
+# então o import nunca acontece e a ausência da devDep é segura.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund \
     && npm cache clean --force

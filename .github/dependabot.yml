@@ -1,0 +1,37 @@
+# Cadeia de suprimentos (RT-S-12): alertas de versão sem o ruído de um PR por
+# atualização. Minor/patch são agrupados por ecossistema — major continua vindo
+# avulso, porque major é onde mora o risco de quebra e merece PR dedicado.
+# O `e2e/` tem lockfile próprio e ficaria fora do radar sem a sua entrada.
+version: 2
+
+updates:
+  # Aplicação (raiz).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Suíte ponta a ponta (Playwright, árvore npm separada).
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    groups:
+      e2e-npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Actions dos workflows — hoje pinadas por SHA (RT-S-01); é o Dependabot que
+  # mantém os SHAs vivos, abrindo PR para mover o pin de versão.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gh-actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

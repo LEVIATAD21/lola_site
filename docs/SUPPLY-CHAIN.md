@@ -352,9 +352,33 @@ Verificação pós-qualquer ação acima: `npm audit` continuando limpo e
   `cd e2e && npm ci && npm audit` a cada push/PR e o `e2e/README.md` passou a
   instruir `npm ci` (RT-S-02). Lockfile próprio, 0 vulnerabilidades em 17/10.
 - **Ação 8 — feita** (`seo-eng`): fontes self-hosted em `public/fonts/`.
-- **Pendentes:** ações 1–5 (higiene de dependências + faixa do `@google/genai`
-  — travada em **B3**) e ação 7 (gate de audit do build de imagem — sem Docker
-  em execução no host; RT-S-13). RT-S-07 (digest da base) segue registrado.
+- **Ações 1–3 — feitas (onda 3 `supply-hyg`, 17/10):**
+  - `motion`, `autoprefixer` e `esbuild` removidos do `package.json` (grep
+    confirmou zero imports fora de `node_modules`; as três árvores saíram do
+    lockfile — `esbuild` continua na árvore apenas como transitiva de `tsx`).
+  - `vite`, `@tailwindcss/vite` e `@vitejs/plugin-react` movidas para
+    `devDependencies` (mesmas faixas). Runtime de produção não importa `vite`:
+    o `await import('vite')` do `server.ts:609` só executa quando
+    `NODE_ENV !== 'production'`, e a imagem runtime roda com
+    `NODE_ENV=production` + `npm ci --omit=dev` — confirmado no Dockerfile.
+  - Lockfile regenerado com `npm install --package-lock-only`: nenhuma versão
+    resolvida mudou; o diff são as remoções acima e `"dev": true` no ramo
+    transitivo do `vite`. Verificado com `tsc --noEmit`, `vite build` e
+    `npm audit` (0 vulnerabilidades).
+  - **D18:** `name` de `react-example` para `lola-aco-inox` e script `clean`
+    de `rm -rf dist server.js` para `rm -rf dist` (`server.js` nunca é
+    gerado — `noEmit: true`; nenhum CI/doc chama o script).
+- **RT-S-12 — feita:** `.github/dependabot.yml` (npm na raiz, npm em `/e2e` e
+  github-actions, semanal, minor/patch agrupados por ecossistema para reduzir
+  ruído; major segue em PR avulso). Também é o que mantém os SHAs das actions
+  pinadas vivos.
+- **RT-S-07 — feita:** os dois `FROM` do Dockerfile pinados por digest
+  (`node:22-bookworm-slim@sha256:c3de60bf…`, índice multi-arch conferido em
+  17/10 via API do Docker Hub) com receita de atualização em comentário no
+  topo do arquivo.
+- **Pendentes:** ações 4–5 (faixa do `@google/genai` — travada em **B3**) e
+  ação 7 (gate de audit do build de imagem — sem Docker em execução no host;
+  RT-S-13).
 - Frente completa: `~/lola_coord/relatorios/redteam-onda2.md` (frente supply
   chain: `~/lola_coord/status/rt-supply.md`).
 
