@@ -15,7 +15,7 @@ rodou (protocolo).
 
 | Onde | Node | npm |
 |---|---|---|
-| `.nvmrc` | `22` | — |
+| `.nvmrc` | `22.14.0` | — |
 | `package.json` `engines` | `>=22.12.0` | — |
 | CI (`.github/workflows/ci.yml:15-17`) | `node-version: 22` | vem com a action |
 | `Dockerfile` (linhas 28 e 54) | `node:22-bookworm-slim` | vem com a imagem |
@@ -340,5 +340,25 @@ Verificação pós-qualquer ação acima: `npm audit` continuando limpo e
 
 ---
 
+## 9.1 Atualização — onda 2 + red-team (17/10/2026)
+
+- **Ação 6 — feita:** as 3 actions dos 2 workflows estão pinadas por SHA com
+  comentário de versão (`actions/checkout@11d5960a… # v4.4.0`,
+  `actions/setup-node@49933ea5… # v4.4.0`,
+  `github/codeql-action/{init,analyze}@6f2ac81f… # v4.39.0`; SHAs conferidos por
+  `git ls-remote` em 17/10). Junto: `permissions: contents: read` no `ci.yml`
+  (RT-S-09) e o `engines` duplicado removido do `package.json` (RT-S-11).
+- **Árvore npm do `e2e/` — registrada e com portão:** o CI agora roda
+  `cd e2e && npm ci && npm audit` a cada push/PR e o `e2e/README.md` passou a
+  instruir `npm ci` (RT-S-02). Lockfile próprio, 0 vulnerabilidades em 17/10.
+- **Ação 8 — feita** (`seo-eng`): fontes self-hosted em `public/fonts/`.
+- **Pendentes:** ações 1–5 (higiene de dependências + faixa do `@google/genai`
+  — travada em **B3**) e ação 7 (gate de audit do build de imagem — sem Docker
+  em execução no host; RT-S-13). RT-S-07 (digest da base) segue registrado.
+- Frente completa: `~/lola_coord/relatorios/redteam-onda2.md` (frente supply
+  chain: `~/lola_coord/status/rt-supply.md`).
+
+---
+
 *Escrito por supply-eng — Onda 1 (diagnóstico). Nenhum arquivo de código ou de
-configuração foi alterado.*
+configuração foi alterado. §9.1 acrescentada pelo integrador em 17/10.*

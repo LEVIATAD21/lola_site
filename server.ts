@@ -290,11 +290,13 @@ async function startServer() {
     return res.json({ productId: req.params.productId, disponivel });
   });
 
-  // 2. POST /api/estoque/atualizar — NÃO existe mais aqui. É escrita de estoque,
-  //    e escrita pertence ao servidor de dados, atrás da chave administrativa e
-  //    da allowlist de origem. No site público esta URL cai no 404 da API, com a
-  //    mesma resposta de qualquer rota inexistente: nem com a chave administrativa
-  //    certa em mão existe superfície de administração na vitrine.
+  // 2. POST /api/estoque/atualizar — escrita de estoque, que pertence ao
+  //    servidor de dados, atrás da chave administrativa e da allowlist de
+  //    origem. No modo dividido/produção esta URL cai no 404 da API (a vitrine
+  //    não tem superfície de administração); no dev embutido
+  //    (LOLA_EMBEDDED_ADMIN=true) o router administrativo está montado aqui e a
+  //    rota responde 401 sem a chave — nunca 200. (Ajuste do outbox api-eng:
+  //    o comentário anterior dizia "não existe" sem ressalvar o modo embutido.)
 
   // 3. POST /api/pedidos/rascunho — encaminha ao plano de dados.
   //    Validação, reserva e persistência acontecem do outro lado: este processo

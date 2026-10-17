@@ -430,3 +430,37 @@ lá que eu mandaria.
 5. **Dona da loja** — B1 (gateway), B5 (frete real), B7 (sim/não do catálogo),
    B8 (art. 18, IV). **Nenhum dos quatro é dívida de engenharia** e nenhum dos
    quatro deve entrar na fila de remediação como se fosse.
+
+---
+
+## 8. Status pós-onda 2 (atualização do integrador — 17/10/2026)
+
+Fechados na onda 2 (mesclados na `main`):
+
+| # | ID | O quê | Onde fechou |
+|---|---|---|---|
+| 1 | D2 | `ProductDetailModal` morto removido | `fe-perf` (onda 2) |
+| 2 | D1 | Cupom: a vitrine passou a cobrar validade e mínimo (`checkCoupon`) | `fe-catalog` (`eca3f1a`) |
+| 3 | D3 | Busca do cabeçalho varre o catálogo consolidado (`ALL_PRODUCTS`) | `fe-search` (`cac3463`) |
+| 4 | D4 | Contagens do filtro honestas (`?? 0`; opção `(0)` fica visível) | `fe-search` (`cac3463`) |
+| 7 | D9 | **Parcial:** 8 dos 18 `console.*` (5 arquivos do `be-obs`) | `be-obs` (onda 2); os 9 de `orders.ts` ficam com `be-idem` |
+| 9 | D11 | Rota→tela deduplicada em `App.tsx` | `fe-perf` (onda 2) |
+| 10 | D8 | 10 modais com `useDialogA11y` (trap/Escape/rolagem/retorno de foco) | `fe-a11y` (onda 2) |
+
+Notas de fechamento:
+
+- **D8:** o rótulo original tinha 12 modais; `ProductDetailModal` saiu junto com
+  D2 e `CouponModal` fica para a próxima onda (`a11y-2`), já com a lógica de
+  cupom estabilizada. O `ReportModal.tsx` (sem nenhum importador, morto desde
+  10/10) foi removido pelo integrador, a pedido do outbox do `fe-a11y`.
+- **D1:** o teto de usos continua sendo cobrado no envio, com mensagem honesta;
+  levá-lo ao momento da aplicação na vitrine exige rota pública de consulta de
+  cupom — próxima onda (`be-idem`), conforme outbox `fe-catalog` item 3.
+- **Red-team (onda 2.5):** os cinco achados médios (RT-E-01, RT-E-02, RT-S-01,
+  RT-S-02, RT-S-03) tratados em 17/10 — quatro corrigidos no commit `b6290ba`;
+  RT-S-03 segue bloqueado em **B3** (decisão do Gemini). Relatório consolidado
+  em `~/lola_coord/relatorios/redteam-onda2.md`.
+
+Continua na fila: D6, D5 e D10 (próxima onda, papéis na fila), D7 e D15
+(primeira reserva), D12–D20, e os itens de SUPPLY-CHAIN pendentes de decisão
+(*ver* `docs/SUPPLY-CHAIN.md` §9.1).

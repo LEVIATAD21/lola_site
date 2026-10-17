@@ -43,9 +43,15 @@ GET {{host}}/.env
 GET {{host}}/nao-existe-{{now}}
 
 ### 3. Arquivos de segredo negados pelo Vite em desenvolvimento.
-# Esperado: 404 em todos. Um 200 aqui entrega a chave AES dos pedidos.
+# Esperado: 403 nos que existem e estão negados (/.data/orders.key,
+# /.data/orders.enc.json, /server.ts, /data-server.ts). NUNCA 200 com
+# text/javascript ou text/plain — um 200 aqui entrega a chave AES dos pedidos.
+# /orders.key e /cert.pem não existem: caem no fallback da SPA (200 text/html)
+# — nessa dupla o teste é de Content-Type e corpo, não de status (api-eng, 17/10).
 GET {{host}}/.data/orders.key
 GET {{host}}/.data/orders.enc.json
+GET {{host}}/server.ts
+GET {{host}}/data-server.ts
 GET {{host}}/orders.key
 GET {{host}}/cert.pem
 

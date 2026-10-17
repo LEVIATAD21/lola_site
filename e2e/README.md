@@ -7,14 +7,14 @@ desenvolvimento que já está de pé em `http://127.0.0.1:3000`.
 
 ```bash
 cd e2e
-npm install                 # gera e2e/node_modules e e2e/package-lock.json
+npm ci                      # instala exatamente o lockfile de e2e/
 npx playwright install chromium   # baixa o navegador para ~/.cache/ms-playwright
 npx playwright test --workers=1
 ```
 
 O relatório HTML fica em `e2e/playwright-report/` (`npm run relatorio`).
 
-> O `npm install` só pode ser rodado **de dentro de `e2e/`**. A raiz do
+> O `npm ci` só pode ser rodado **de dentro de `e2e/`**. A raiz do
 > repositório compartilha o mesmo `node_modules` entre worktrees e instalar lá
 > derruba o ambiente de todo mundo.
 
@@ -66,3 +66,8 @@ referência, a API responde `404 {"error":"Endpoint de API não encontrado."}`
 para token desconhecido — o texto amigável `Link de rastreamento inválido ou
 expirado.` só existe quando o store de rastreamento do servidor está
 disponível. Isso é achado de comportamento, não da suíte.
+
+> **Atualização (17/10):** o dev server foi reiniciado no HEAD da `main`; a
+> rota existe e responde `404 {"error":"Link de rastreamento inválido ou
+> expirado."}` para token desconhecido. A observação acima fica como registro
+> histórico da suíte contra o processo defasado.
