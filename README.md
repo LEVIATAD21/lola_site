@@ -203,6 +203,8 @@ Os exemplos de ambiente explicam, variável por variável, o que trocar e por qu
 
 O compose sobe o Caddy automaticamente (perfil `dividido`/`embutido`, serviço `proxy-caddy`) lendo [`deploy/Caddyfile`](deploy/Caddyfile): TLS automático, redirect HTTP→HTTPS e o painel administrativo bloqueado no host público. Prefere nginx? Descomente o serviço `proxy-nginx`, tire o `proxy-caddy` e aponte para [`deploy/nginx.conf`](deploy/nginx.conf).
 
+> **`dist/` não é um deploy completo em segurança.** CSP, HSTS, `X-Frame-Options` e `X-Content-Type-Options` são emitidos pela aplicação Express (`src/server/securityHeaders.ts`) e reforçados pelo proxy — não estão dentro dos arquivos estáticos. Servir o diretório `dist/` cru (CDN de estáticos, S3, pré-visualização) entrega a loja **sem essas proteções**; o caminho suportado é sempre a aplicação Node atrás do proxy, como neste roteiro.
+
 ### 4. Backup (sem plano de restore, não é backup)
 
 ```bash

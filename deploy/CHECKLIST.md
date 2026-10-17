@@ -58,6 +58,12 @@ seus domínios reais.
 
 ## 3. Domínio e TLS
 
+> **`dist/` não é um deploy completo em segurança.** Os cabeçalhos (CSP, HSTS,
+> `X-Frame-Options`, `nosniff`) são emitidos pela aplicação Express e pelo
+> proxy, não pelos arquivos estáticos: servir o `dist/` cru (CDN, S3,
+> pré-visualização) entrega o site sem essas proteções. O caminho suportado é
+> o deste checklist — aplicação atrás do proxy.
+
 - [ ] `www`, `apes` (ou o domínio da loja) e `pedidos` apontando para o IP do
       servidor (A/AAAA; se usar Cloudflare, proxy pode ficar ligado, mas aí
       `LOLA_TRUSTED_PROXY` precisa incluir também as faixas do Cloudflare).
