@@ -6,6 +6,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { VALID_COUPONS, checkCoupon } from '../data/coupons';
+import { log } from './logger';
 
 export type PaymentMethod = 'pix' | 'boleto';
 export type ShippingOptionId = 'pac' | 'sedex' | 'transportadora';
@@ -505,14 +506,19 @@ export class EncryptedOrderStore {
         // dados, na mesma pasta do ciphertext. Qualquer cópia de backup do
         // diretório leva os dois juntos, e qualquer leitura de arquivo resolve
         // a cifra. Aceitável só em dev; em produção a chave vem de fora.
-        console.warn('[pedidos] Chave local ao lado dos dados cifrados: ' + keyPath
-          + ' — aceitavel apenas em desenvolvimento. Em producao use LOLA_ORDERS_ENCRYPTION_KEY'
-          + ' ou LOLA_ORDERS_KEY_FILE apontando para fora do diretorio de dados.');
+        log('warn', 'pedidos.chave_local_ao_lado_dos_dados', {
+          caminho: keyPath,
+          impacto: 'aceitavel_apenas_em_desenvolvimento',
+          acao: 'em_producao_use_LOLA_ORDERS_ENCRYPTION_KEY_ou_LOLA_ORDERS_KEY_FILE_fora_do_diretorio_de_dados',
+        });
       } catch (error) {
         // VUL-05: erro de E/S no diretório local também reiniciava o processo em loop.
         // Motivo fica genérico porque ele é devolvido ao cliente via 503.
         reason = 'Não foi possível preparar o armazenamento local de pré-pedidos.';
-        console.error('[pedidos] Falha ao preparar diretório local:', (error as Error)?.message);
+        log('error', 'pedidos.diretorio_local_falhou', {
+          motivo: (error as Error)?.message,
+          impacto: 'pre_pedidos_indisponiveis',
+        });
       }
     }
 
@@ -547,7 +553,10 @@ export class EncryptedOrderStore {
         reason = 'Não foi possível decifrar o arquivo de pré-pedidos (.data/orders.enc.json). '
           + 'Verifique LOLA_ORDERS_ENCRYPTION_KEY / LOLA_ORDERS_KEY_FILE ou restaure o backup do arquivo. '
           + 'O arquivo não foi alterado.';
-        console.error('[pedidos] Falha ao decifrar orders.enc.json:', (error as Error)?.message);
+        log('error', 'pedidos.arquivo_nao_decifrado', {
+          motivo: (error as Error)?.message,
+          impacto: 'pre_pedidos_indisponiveis_arquivo_intacto',
+        });
       }
     }
 
@@ -602,7 +611,10 @@ export class EncryptedOrderStore {
       return before.length - kept.length;
     } catch (error) {
       this.records = before;
-      console.error('[pedidos] Falha ao gravar a expiração de pré-pedidos:', (error as Error)?.message);
+      log('error', 'pedidos.retencao_falhou_gravar', {
+        motivo: (error as Error)?.message,
+        impacto: 'registros_expirados_permanecem_em_memoria_e_no_disco',
+      });
       return 0;
     }
   }
@@ -627,10 +639,11 @@ export class EncryptedOrderStore {
   save(order: StoredOrderDraft): boolean {
     if (!this.ready) return false;
     if (this.atCapacity) {
-      console.error(
-        `[pedidos] Pré-pedido recusado: teto de ${EncryptedOrderStore.MAX_RECORDS} registros atingido. `
-        + 'Rotacione o arquivo ou migre o armazenamento.',
-      );
+      log('error', 'pedidos.capacidade_esgotada', {
+        teto: EncryptedOrderStore.MAX_RECORDS,
+        impacto: 'pre_pedido_recusado',
+        acao: 'rotacione_o_arquivo_ou_migre_o_armazenamento',
+      });
       return false;
     }
     this.records.push(order);
@@ -639,15 +652,19 @@ export class EncryptedOrderStore {
       this.addToPhoneIndex(order);
       if (!this.capacityWarned && this.records.length >= EncryptedOrderStore.CAPACITY_WARNING) {
         this.capacityWarned = true;
-        console.warn(
-          `[pedidos] ${this.records.length}/${EncryptedOrderStore.MAX_RECORDS} pré-pedidos armazenados. `
-          + 'Programe a rotação antes de esgotar a capacidade.',
-        );
+        log('warn', 'pedidos.capacidade_quase_esgotada', {
+          registros: this.records.length,
+          teto: EncryptedOrderStore.MAX_RECORDS,
+          acao: 'programe_a_rotacao_antes_de_esgotar_a_capacidade',
+        });
       }
       return true;
     } catch (error) {
       this.records.pop();
-      console.error('[pedidos] Falha ao persistir pré-pedido:', (error as Error)?.message);
+      log('error', 'pedidos.persistencia_falhou', {
+        motivo: (error as Error)?.message,
+        impacto: 'pre_pedido_nao_gravado',
+      });
       return false;
     }
   }
@@ -748,7 +765,10 @@ export class EncryptedOrderStore {
       return true;
     } catch (error) {
       this.records = before;
-      console.error('[pedidos] Falha ao eliminar pré-pedido:', (error as Error)?.message);
+      log('error', 'pedidos.eliminacao_falhou', {
+        motivo: (error as Error)?.message,
+        impacto: 'registro_permanece_em_memoria_e_no_disco',
+      });
       return false;
     }
   }
@@ -782,7 +802,10 @@ export class EncryptedOrderStore {
       return true;
     } catch (error) {
       this.records = before;
-      console.error('[pedidos] Falha ao anonimizar pré-pedido:', (error as Error)?.message);
+      log('error', 'pedidos.anonimizacao_falhou', {
+        motivo: (error as Error)?.message,
+        impacto: 'dados_pessoais_permanecem_no_arquivo_e_na_memoria',
+      });
       return false;
     }
   }
