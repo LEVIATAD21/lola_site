@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Tag, X, Check, AlertCircle } from 'lucide-react';
 import { checkCoupon, getActiveCouponList, COUPON_CODE_MAX_LENGTH } from '../../data/coupons';
 import { parseStoredCart } from '../../utils/cartStorage';
+import { useDialogA11y } from '../../hooks/useDialogA11y';
 
 interface CouponModalProps {
   isOpen: boolean;
@@ -40,6 +41,16 @@ export const CouponModal: React.FC<CouponModalProps> = ({
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
+  // O diálogo existe para digitar o código: o foco inicial é do campo, não do ✕.
+  const couponInputRef = useRef<HTMLInputElement>(null);
+  // Antes do `return null`: o hook precisa rodar em todo render, inclusive com
+  // o modal fechado, para montar/desmontar o trap junto com o diálogo.
+  const { dialogProps, backdropProps, titleId } = useDialogA11y({
+    isOpen,
+    onClose,
+    initialFocusRef: couponInputRef,
+  });
+
   if (!isOpen) return null;
 
   const subtotalEmCentavos = subtotalCents ?? readStoredSubtotalCents();
@@ -72,10 +83,10 @@ export const CouponModal: React.FC<CouponModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+    <div {...dialogProps} className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        {...backdropProps}
         className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
       />
 
@@ -85,12 +96,13 @@ export const CouponModal: React.FC<CouponModalProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-[#E7DED3]">
             <div className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-[#C49A5A]" />
-              <h3 className="font-serif-brand text-lg font-semibold text-[#241F1B]">
+              <h3 id={titleId} className="font-serif-brand text-lg font-semibold text-[#241F1B]">
                 Cupom de Desconto
               </h3>
             </div>
             <button
               onClick={onClose}
+              aria-label="Fechar"
               className="p-1 rounded-full text-[#766D64] hover:text-[#2A211B] hover:bg-black/5 cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -98,15 +110,21 @@ export const CouponModal: React.FC<CouponModalProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            <label className="block text-xs font-semibold text-[#241F1B]">
+            <label htmlFor="cupom-codigo" className="block text-xs font-semibold text-[#241F1B]">
               Digite o seu cupom:
             </label>
             <div className="flex gap-2">
+              {/* Label associado e recusa anunciada: o campo tirava o nome do
+                  placeholder e o erro era mudo para leitor de tela (F08/F09). */}
               <input
+                ref={couponInputRef}
+                id="cupom-codigo"
                 type="text"
                 placeholder="Ex: LOLA10"
                 value={code}
                 maxLength={COUPON_CODE_MAX_LENGTH}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'cupom-erro' : undefined}
                 onChange={(e) => {
                   setCode(e.target.value.toUpperCase());
                   setError('');
@@ -122,7 +140,7 @@ export const CouponModal: React.FC<CouponModalProps> = ({
             </div>
 
             {error && (
-              <div className="flex items-center gap-1.5 text-xs text-red-600 pt-1">
+              <div id="cupom-erro" role="alert" className="flex items-center gap-1.5 text-xs text-red-600 pt-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
