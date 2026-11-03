@@ -350,7 +350,8 @@ async function startServer() {
     const { categoria, query } = req.query;
     let list = CATALOG_INFO.map((item) => ({
       ...item,
-      disponivel: snapshot[item.id] ?? item.disponivel,
+      // API pública entrega disponibilidade comercial, nunca saldo numérico.
+      disponivel: (snapshot[item.id] ?? item.disponivel) > 0,
     }));
 
     if (categoria && typeof categoria === 'string') {
@@ -380,7 +381,8 @@ async function startServer() {
     const snapshot = await plane.snapshot().catch(() => null);
     if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const stock = snapshot[productId] ?? item.disponivel;
-    res.json({ ...item, disponivel: stock });
+    // Não divulgar saldo exato nem por endpoint de detalhe.
+    res.json({ ...item, disponivel: stock > 0 });
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
@@ -421,7 +423,7 @@ async function startServer() {
       preco: `R$ ${prod.price.toFixed(2).replace('.', ',')}`,
       material: prod.material,
       cor: prod.color,
-      estoqueDisponivel: stockSnapshot[prod.id] ?? prod.disponivel,
+      estoqueDisponivel: (stockSnapshot[prod.id] ?? prod.disponivel) > 0,
       descricao: prod.desc,
     }));
 
@@ -466,8 +468,8 @@ Seu tom de voz é amigável, atencioso, acolhedor e consultivo, condizente com a
 
 REGRAS CRÍTICAS (ANTI-ALUCINAÇÃO):
 1. Use SOMENTE as informações do catálogo e políticas fornecidas abaixo.
-2. NUNCA invente produtos, coleções, preços, cupons ou estoques que não estejam listados aqui.
-3. Se o cliente perguntar por estoque, informe exatamente o valor de "estoqueDisponivel" oficial. Se estiver baixo (<= 3), avise delicadamente que restam poucas unidades.
+2. NUNCA invente produtos, coleções, preços, cupons ou disponibilidade que não estejam listados aqui.
+3. Se o cliente perguntar por estoque, informe somente se o produto está disponível ou indisponível. Nunca revele quantidades, saldos, reservas ou unidades vendidas.
 4. Se o cliente perguntar por algo que não vendemos ou que não está no catálogo, responda com sinceridade e gentileza: "No momento não temos essa peça específica em nosso catálogo, mas recomendo dar uma olhada em..."
 5. Não prometa resistência à água, propriedades antialérgicas, garantia ou durabilidade sem confirmação nos dados oficiais específicos do produto.
 6. Quando citar produtos específicos do catálogo, mencione o nome exato da peça para que o sistema possa criar links para a cliente.
@@ -552,12 +554,12 @@ ${JSON.stringify(pergunta)}
 
     if (pLow.includes('estoque') || pLow.includes('tem') || pLow.includes('disponivel')) {
       if (activeProduct) {
-        fallbackAnswer = `O catálogo registra ${activeProduct.estoqueDisponivel} unidades disponíveis de ${activeProduct.nome}. O prazo de envio ainda precisa ser confirmado no atendimento.`;
+        fallbackAnswer = `${activeProduct.nome} está ${activeProduct.estoqueDisponivel ? 'disponível' : 'indisponível'} no momento. O prazo de envio ainda precisa ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: activeProduct.id, titulo: activeProduct.nome, link: `/produto/${activeProduct.id}` });
       } else {
         const featured = liveCatalog.find((product) => product.id === 'brinco-1');
         const necklace = liveCatalog.find((product) => product.id === 'prod-colar-1');
-        fallbackAnswer = `O catálogo registra ${featured?.estoqueDisponivel ?? 0} unidades de ${featured?.nome ?? 'Brinco Argola Lisa'} e ${necklace?.estoqueDisponivel ?? 0} unidades de ${necklace?.nome ?? 'Colar Coração Madreperola'}. O prazo de envio deve ser confirmado no atendimento.`;
+        fallbackAnswer = `${featured?.nome ?? 'Brinco Argola Lisa'} está ${featured?.estoqueDisponivel ? 'disponível' : 'indisponível'} e ${necklace?.nome ?? 'Colar Coração Madreperola'} está ${necklace?.estoqueDisponivel ? 'disponível' : 'indisponível'} no momento. O prazo de envio deve ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: featured?.nome ?? 'Brinco Argola Lisa', link: '/produto/brinco-1' });
         if (necklace) fallbackRefs.push({ tipo: 'produto', id: necklace.id, titulo: necklace.nome, link: '/produto/' + necklace.id });
       }
