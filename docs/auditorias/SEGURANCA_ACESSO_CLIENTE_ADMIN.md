@@ -274,3 +274,27 @@ As rotas administrativas ainda usam `x-admin-key` compartilhada e allowlist de o
 - Permissões de armazenamento: commits `84ea588`, `386e958`, `5842fc2`.
 - TLS fail-closed: commits `aa4e0a1`, `9fd00ac`.
 - CI de dependências e qualidade foi aprovado no commit anterior à última rodada; os workflows do head atual ainda precisam concluir antes de declarar esta atualização validada.
+
+
+### A-15 — Serviço de dados iniciava produção sem armazenamento cifrado funcional
+**Severidade: ALTA | CORRIGIDO NA BRANCH | CI aprovado**
+
+O serviço de dados agora falha durante a inicialização em produção se o armazenamento cifrado de pedidos ou rastreamento não estiver pronto. Isso impede que a aplicação anuncie saúde enquanto operações essenciais retornariam 503 por falta de chave. Teste de boot real cobre a ausência da chave de pedidos.
+
+### A-16 — Allowlist administrativa podia ser configurada como `any` em produção
+**Severidade: ALTA | CORRIGIDO NA BRANCH | CI aprovado**
+
+O valor explícito `LOLA_ADMIN_ALLOWED_IPS=any` continua disponível para cenários de desenvolvimento/teste, mas agora encerra a inicialização em produção. O serviço exige IPs/CIDRs específicos e falha fechada. Teste de boot real cobre a configuração insegura.
+
+### Validação automatizada do head atual
+
+Commit validado: `47afe8bab89f55e5b45fb4f4237bc05302d9ffd8`.
+
+- Typecheck: aprovado.
+- Testes unitários e de integração: aprovados.
+- Build de produção: aprovado.
+- Auditoria de dependências: aprovada.
+- Auditoria das dependências E2E: aprovada.
+- CodeQL: execução separada ainda em andamento no momento desta atualização.
+
+A aprovação do CI não substitui testes dinâmicos em infraestrutura real, revisão de identidade humana, verificação de firewall/DNS/segredos, teste de restauração ou pentest autorizado.
