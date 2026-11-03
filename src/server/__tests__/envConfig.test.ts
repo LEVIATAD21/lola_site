@@ -167,18 +167,19 @@ describe('resolveTlsConfig — guarda de TLS do servidor de dados', () => {
 
 describe('allowPrivatePlaintext', () => {
   it('permite somente opt-in explícito em endereço privado unicast', () => {
-    expect(allowPrivatePlaintext('172.31.1.10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
-    expect(allowPrivatePlaintext('10.0.0.5', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
-    expect(allowPrivatePlaintext('192.168.1.2', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
-    expect(allowPrivatePlaintext('fd00::10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('172.31.1.10', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('10.0.0.5', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('192.168.1.2', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('fd00::10', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(true);
   });
 
   it('recusa sem opt-in, endereços públicos, wildcard, loopback e link-local', () => {
     expect(allowPrivatePlaintext('172.31.1.10', {})).toBe(false);
-    expect(allowPrivatePlaintext('8.8.8.8', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
-    expect(allowPrivatePlaintext('0.0.0.0', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
-    expect(allowPrivatePlaintext('127.0.0.1', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
-    expect(allowPrivatePlaintext('169.254.10.10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
-    expect(allowPrivatePlaintext('fe80::1', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('172.31.1.10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('8.8.8.8', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('0.0.0.0', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('127.0.0.1', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('169.254.10.10', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('fe80::1', { LOLA_INTERNAL_PLAINTEXT: 'true', LOLA_PRIVATE_NETWORK_ISOLATED: 'true' })).toBe(false);
   });
 });
