@@ -16,7 +16,7 @@ import type { RequestHandler } from 'express';
  * - `GET`/`HEAD`/`OPTIONS` passam: não mutam estado.
  * - Sem cabeçalho `Origin` passa: cliente sem navegador (curl, monitor de
  *   uptime, webhook) não envia, e exigir Origin quebraria integração legítima.
- * - `Origin` presente com host diferente do `Host` da requisição → 403.
+ * - `Origin` presente com esquema, host ou porta diferente da origem efetiva → 403.
  * - `Origin` malformado também → 403: quem manda Origin inválido não é
  *   navegador legítimo, e não faz sentido arriscar.
  */
