@@ -298,3 +298,9 @@ Commit validado: `47afe8bab89f55e5b45fb4f4237bc05302d9ffd8`.
 - CodeQL: execução separada ainda em andamento no momento desta atualização.
 
 A aprovação do CI não substitui testes dinâmicos em infraestrutura real, revisão de identidade humana, verificação de firewall/DNS/segredos, teste de restauração ou pentest autorizado.
+
+
+### Complemento A-12 — Rotas de catálogo e assistente virtual
+A revisão de fluxo identificou que o saldo numérico também era enviado por `GET /api/produtos`, `GET /api/produto/:productId` e no contexto do assistente virtual. Esses caminhos foram corrigidos: catálogo e detalhe retornam booleano; o assistente recebe apenas disponibilidade booleana e suas respostas locais não revelam contagens. Foram adicionados testes de boot real para os três fluxos.
+
+**Validação:** commit `63b0bddbf68edf1b54ddcbf2a44cf62fbee6150f` — typecheck, testes unitários/integração, build, auditoria de dependências e auditoria E2E aprovados. CodeQL permanece como análise separada.
