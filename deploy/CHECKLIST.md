@@ -139,7 +139,7 @@ público falha na inicialização sem IPs/CIDRs explícitos em `LOLA_TRUSTED_PRO
       `ssh -N -L 4100:172.31.1.10:4100 usuario@servidor`.
 - [ ] No terminal do operador, carregar a chave do cofre/secret store em
       `LOLA_ADMIN_API_KEY` e consultar:
-      `curl -fsS -H "x-admin-key: $LOLA_ADMIN_API_KEY" http://127.0.0.1:4100/api/admin/pre-pedidos`.
+      `curl --config <(printf 'header = "x-admin-key: %s\\n' "$LOLA_ADMIN_API_KEY") -fsS http://127.0.0.1:4100/api/admin/pre-pedidos`.
       Não gravar a chave em histórico de shell, script versionado ou navegador.
 - [ ] `curl -sI http://127.0.0.1:4100/admin | head -1` → `404` (a API não
       serve interface administrativa).
