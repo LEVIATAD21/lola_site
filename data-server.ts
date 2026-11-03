@@ -174,7 +174,14 @@ async function startDataService(): Promise<void> {
   if ('error' in tls) throw new Error(tls.error);
   const { enabled: tlsEnabled, certFile: tlsCertFile, keyFile: tlsKeyFile } = tls;
 
-  if (!tlsEnabled && !bindHost.startsWith('127.') && bindHost !== '::1') {
+  const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
+  if (!tlsEnabled && !loopbackBind) {
+    if (production) {
+      fail(
+        'servidor de dados em produção não pode escutar fora do loopback sem TLS',
+        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE válidos ou restrinja LOLA_BIND_HOST a um IP 127.0.0.0/8 ou ::1',
+      );
+    }
     log('warn', 'dados.sem_tls_em_endereco_publico', {
       bind: bindHost,
       aviso: 'a_chave_administrativa_e_os_dados_dos_clientes_transitam_em_claro',
