@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export interface StockItem {
@@ -55,9 +55,21 @@ export class InventoryStore {
     );
     this.filePath = filePath;
     this.holdsFilePath = holdsFilePath;
+    // Tighten existing data directories/files too: mkdir({mode}) does not
+    // change permissions when the directory already exists.
+    this.securePath(this.filePath);
+    this.securePath(this.holdsFilePath);
     if (this.holdsFilePath && existsSync(this.holdsFilePath)) this.loadHoldsFromDisk();
     if (this.filePath && existsSync(this.filePath)) this.loadFromDisk();
     else if (this.filePath) this.persist();
+  }
+
+  private securePath(filePath?: string): void {
+    if (!filePath) return;
+    const directory = dirname(filePath);
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    chmodSync(directory, 0o700);
+    if (existsSync(filePath)) chmodSync(filePath, 0o600);
   }
 
   private isValidItem(id: string, value: unknown): value is StockItem {
@@ -101,7 +113,7 @@ export class InventoryStore {
     // EncryptedOrderStore, então `LOLA_DATA_DIR` nasceu 0755 e o 0700 posterior
     // não corrigia um diretório já criado. O pai dos arquivos de dados não pode
     // ficar legível por outros usuários do host.
-    mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
+    this.securePath(this.filePath);
     const temporaryPath = this.filePath + '.' + process.pid + '.tmp';
     writeFileSync(temporaryPath, JSON.stringify(this.items, null, 2) + '\n', { mode: 0o600 });
     renameSync(temporaryPath, this.filePath);
@@ -109,7 +121,7 @@ export class InventoryStore {
 
   private persistHolds(): void {
     if (!this.holdsFilePath) return;
-    mkdirSync(dirname(this.holdsFilePath), { recursive: true, mode: 0o700 });
+    this.securePath(this.holdsFilePath);
     const temporaryPath = this.holdsFilePath + '.' + process.pid + '.tmp';
     const serialized = Object.fromEntries([...this.holds].map(([id, entries]) => [id, entries]));
     writeFileSync(temporaryPath, JSON.stringify(serialized) + '\n', { mode: 0o600 });
