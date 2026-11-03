@@ -286,9 +286,11 @@ async function startServer() {
     if (disponivel === undefined) {
       return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
     }
-    // Storefront clients only need availability, not sales/reservation/inventory accounting.
+    // A vitrine precisa saber apenas se pode aceitar itens. O saldo exato é
+    // informação operacional interna e não deve ser exposto publicamente.
+    // A quantidade solicitada será validada novamente no servidor ao criar o pedido.
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ productId: req.params.productId, disponivel });
+    return res.json({ productId: req.params.productId, disponivel: disponivel > 0 });
   });
 
   // 2. POST /api/estoque/atualizar — escrita de estoque, que pertence ao
