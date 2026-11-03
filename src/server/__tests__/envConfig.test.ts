@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { envInt, resolveTlsConfig } from '../envConfig';
+import { allowPrivatePlaintext, envInt, resolveTlsConfig } from '../envConfig';
 
 /**
  * Estas validações viviam INLINE dentro de `startDataService()`, logo antes do
@@ -161,5 +161,24 @@ describe('resolveTlsConfig — guarda de TLS do servidor de dados', () => {
     const chave = arquivoTemporario('key.pem');
     expect(resolveTlsConfig({ LOLA_TLS_CERT_FILE: cert, LOLA_TLS_KEY_FILE: chave }))
       .toEqual({ enabled: true, certFile: cert, keyFile: chave });
+  });
+});
+
+
+describe('allowPrivatePlaintext', () => {
+  it('permite somente opt-in explícito em endereço privado unicast', () => {
+    expect(allowPrivatePlaintext('172.31.1.10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('10.0.0.5', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('192.168.1.2', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
+    expect(allowPrivatePlaintext('fd00::10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(true);
+  });
+
+  it('recusa sem opt-in, endereços públicos, wildcard, loopback e link-local', () => {
+    expect(allowPrivatePlaintext('172.31.1.10', {})).toBe(false);
+    expect(allowPrivatePlaintext('8.8.8.8', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('0.0.0.0', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('127.0.0.1', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('169.254.10.10', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
+    expect(allowPrivatePlaintext('fe80::1', { LOLA_INTERNAL_PLAINTEXT: 'true' })).toBe(false);
   });
 });
