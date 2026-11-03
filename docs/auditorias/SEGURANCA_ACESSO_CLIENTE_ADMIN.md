@@ -236,3 +236,41 @@ O `InventoryStore` persiste o saldo contábil em arquivo, mas as pré-reservas (
 
 **Correção obrigatória antes de depender de reserva de estoque:** persistir reservas com expiração junto ao armazenamento transacional, recuperar e reconciliar reservas no boot, garantir atomicidade entre gravação do pedido e reserva, e usar transações/locks no banco. Até isso existir, tratar o fluxo como pré-pedido sem garantia de reserva durável e comunicar disponibilidade final no momento de confirmação.
 
+
+---
+
+## Atualização de auditoria — 2026-11-03
+
+Esta seção complementa os achados anteriores. Ela não substitui a revisão completa nem representa um pentest de infraestrutura implantada.
+
+### A-11 — Pré-reservas de estoque
+**Status: PARCIALMENTE CORRIGIDO | Risco residual ALTO para concorrência distribuída**
+
+As pré-reservas agora são gravadas em arquivo separado (`inventory-holds.json`), com escrita temporária + rename, permissões restritas, validação estrutural e recuperação de reservas ainda válidas após reinicialização. Testes cobrem recuperação e permissões.
+
+**Limite restante:** pedido e reserva ainda são persistidos em arquivos separados, sem transação ACID entre ambos. O mecanismo é síncrono e consistente apenas dentro de um processo Node. Não garante coordenação entre múltiplas instâncias nem recuperação atômica de falha entre gravações. Antes de operação comercial com concorrência relevante, migrar estoque, pedidos e reservas para banco transacional e testar corrida/rollback.
+
+### A-12 — API pública expunha saldo exato de estoque
+**Status: CORRIGIDO NO CÓDIGO DA BRANCH | Aguardando CI**
+
+`GET /api/estoque/:productId` agora retorna apenas `{ productId, disponivel: boolean }`. O storefront e os componentes de produto usam disponibilidade comercial, não saldo numérico. A quantidade pedida continua sendo validada no servidor ao criar o pré-pedido. Foi incluído teste de boot real para garantir que a resposta pública não contenha contadores internos.
+
+### A-13 — Servidor de dados aceitava produção sem TLS fora do loopback
+**Status: CORRIGIDO NO CÓDIGO DA BRANCH | Aguardando CI**
+
+Antes, o servidor apenas emitia aviso quando `NODE_ENV=production` e o bind não era loopback, embora chave administrativa e dados pessoais trafegassem em claro. Agora a inicialização falha fechada se produção tentar escutar fora de `127.0.0.0/8` ou `::1` sem certificado e chave TLS válidos. O modo local em loopback permanece permitido. Foi adicionado teste de boot negativo.
+
+### A-14 — Administração continua sem identidade humana individual
+**Severidade: ALTA | ABERTO**
+
+As rotas administrativas ainda usam `x-admin-key` compartilhada e allowlist de origem. Isso não equivale a autenticação de operador, sessão revogável, MFA ou RBAC. O painel continua sendo uma demonstração local e não deve ser conectado diretamente a essas rotas.
+
+**Correção obrigatória:** criar identidade individual, hash de senha resistente, MFA, sessão opaca revogável, cookies HttpOnly/Secure/SameSite, proteção CSRF, autorização por permissão, trilha de auditoria e testes negativos. A chave HMAC interna deve continuar exclusiva de serviço para serviço; a chave administrativa compartilhada não deve ser embutida no navegador.
+
+### Evidências desta atualização
+
+- Persistência de reservas: commits `2ac89d0`, `8442f9d`.
+- Remoção de saldo exato da API pública e adaptação do storefront: commits `4475325`, `22ee346`, `02f952f`, `6a4a952`, `213ad33`, `799455e`, `c0a2aae`, `f57d7c4`, `0721bde`, `a5c2946`.
+- Permissões de armazenamento: commits `84ea588`, `386e958`, `5842fc2`.
+- TLS fail-closed: commits `aa4e0a1`, `9fd00ac`.
+- CI de dependências e qualidade foi aprovado no commit anterior à última rodada; os workflows do head atual ainda precisam concluir antes de declarar esta atualização validada.
