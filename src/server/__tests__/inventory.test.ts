@@ -65,12 +65,28 @@ describe('InventoryStore', () => {
     expect(restarted.get('brinco-1')).toMatchObject({ vendido: 4, disponivel: 5 });
   });
 
-  it('cria o arquivo inicial de estoque quando o armazenamento ainda não existe', () => {
+  it('cria o arquivo inicial com permissões restritas', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-seed-'));
     tempDirs.push(dir);
     const file = join(dir, 'inventory.json');
     new InventoryStore(initial, file);
     expect(JSON.parse(readFileSync(file, 'utf8'))['brinco-1'].disponivel).toBe(7);
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+  });
+
+  it('corrige permissões inseguras em diretório e arquivo já existentes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-perms-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'inventory.json');
+    writeFileSync(file, JSON.stringify(initial), { mode: 0o644 });
+    // Simula volume antigo criado com permissões permissivas.
+    const { chmodSync } = require('node:fs');
+    chmodSync(dir, 0o755);
+    chmodSync(file, 0o644);
+    new InventoryStore(initial, file);
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
   it('falha de forma segura se os dados persistidos estiverem inconsistentes', () => {
@@ -211,6 +227,10 @@ describe('InventoryStore — pré-reservas', () => {
     expect(store.placeHold('pedido-1', [{ productId: 'brinco-1', quantity: 6 }], soon)).toEqual({ ok: true });
     expect(JSON.parse(readFileSync(file, 'utf8'))['brinco-1'].disponivel).toBe(7);
     expect(JSON.parse(readFileSync(holds, 'utf8'))['pedido-1'][0]).toMatchObject({ productId: 'brinco-1', quantity: 6 });
+    // O diretório e os dois arquivos contêm estado operacional privado.
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(statSync(holds).mode & 0o777).toBe(0o600);
     // Reiniciar recupera o bloqueio, evitando overselling durante o TTL.
     const restarted = new InventoryStore(initial, file, {}, holds);
     expect(restarted.get('brinco-1')?.disponivel).toBe(1);
