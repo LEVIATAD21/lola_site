@@ -4,6 +4,13 @@ Cada item tem um **comando de verificação**. Rode antes de dizer "está no ar"
 Os comandos usam `example.com`/`loja.exemplo.br` como placeholder — troque pelos
 seus domínios reais.
 
+> **NO-GO administrativo:** o repositório `lola_site_admin` ainda é um painel
+> demonstrativo baseado em `localStorage`, sem autenticação humana individual,
+> sessões revogáveis, MFA ou integração autenticada com a API. As rotas admin do
+> backend ainda usam chave compartilhada + allowlist. Não publique o painel como
+> ferramenta operacional nem coloque a chave no browser até essa arquitetura ser
+> substituída e validada.
+
 ---
 
 ## 1. Antes de qualquer coisa
@@ -47,8 +54,10 @@ seus domínios reais.
 
 ## 2. Segredos e acesso
 
-- [ ] `GEMINI_API_KEY`, `GOOGLE_MAPS_API_KEY` e `LOLA_ORDERS_KEY` com valores
-      reais, **nunca** os placeholders do exemplo.
+- [ ] `LOLA_INTERNAL_SECRET`, `LOLA_ORDERS_ENCRYPTION_KEY` e `LOLA_ADMIN_API_KEY`
+      com valores fortes reais; guarde as chaves fora da máquina. `GEMINI_API_KEY`
+      deve permanecer vazia em produção até existir aviso/consentimento LGPD
+      verificável; mesmo configurada, a chave não habilita chamadas externas.
 - [ ] `~/.ssh/authorized_keys` só com as chaves de quem administra (1 por
       pessoa; sem chave duplicada).
 - [ ] Firewall do provedor (Security Group / UFW) só com **80, 443 e 22** e a
@@ -66,7 +75,8 @@ seus domínios reais.
 
 - [ ] `www`, `apes` (ou o domínio da loja) e `pedidos` apontando para o IP do
       servidor (A/AAAA; se usar Cloudflare, proxy pode ficar ligado, mas aí
-      `LOLA_TRUSTED_PROXY` precisa incluir também as faixas do Cloudflare).
+      `LOLA_TRUSTED_PROXY` precisa incluir faixas oficiais do Cloudflare como
+      IPs/CIDRs explícitos; contagem de saltos e faixas nomeadas são recusadas).
 - [ ] Subiu com `docker compose --profile dividido up -d` (recomendado) ou
       `--profile embutido`.
 - [ ] `curl -sI https://www.example.com/api/health | head -3` → `HTTP/2 200`.
@@ -83,8 +93,9 @@ seus domínios reais.
 
 ## 4. IP real por trás do proxy (obrigatório)
 
-Sem isso, os logs registram o IP do Caddy e a lista branca de `/admin` não
-funciona direito.
+Sem isso, os logs registram o IP do Caddy, o rate limit agrupa clientes e a
+proteção CSRF não consegue validar o esquema HTTPS. Em produção, o servidor
+público falha na inicialização sem IPs/CIDRs explícitos em `LOLA_TRUSTED_PROXY`.
 
 - [ ] `docker compose logs vitrine | grep 'http.request ip=' | tail -3` — tem
       que aparecer o IP **público** de quem fez a requisição, não
@@ -93,8 +104,8 @@ funciona direito.
       e confira no log: tem que continuar aparecendo o **seu IP real** (o
       Express só aceita XFF de quem está na lista `LOLA_TRUSTED_PROXY`).
 - [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://pedidos.example.com/api/admin/pedidos`
-      → `401`/`403` de fora da rede interna (é o esperado: sem sessão e sem
-      estar na allowlist).
+      → `401`/`403` de fora da rede interna (é o esperado: sem chave e sem
+      estar na allowlist). Nunca coloque `LOLA_ADMIN_API_KEY` no navegador.
 
 ## 5. Backup (sem plano de restore, não é backup)
 
@@ -126,10 +137,11 @@ funciona direito.
 
 - [ ] `curl -s https://www.example.com/ | grep -o '<title>[^<]*'` → título
       correto do site.
-- [ ] Assistente virtual: enviar uma mensagem de teste e conferir que chega.
-      Com `GEMINI_API_KEY` **vazia** a resposta vem do motor local — `200`
-      com `{"resposta": ...}`. **Isso não é erro.** Texto só vai para o
-      Google quando a chave está setada (ver B3 em `docs/GO-LIVE.md`).
+- [ ] Assistente virtual: enviar uma mensagem de teste e conferir a resposta
+      local (`200` com `{"resposta": ...}`). Em produção, perguntas/contexto não
+      são enviados ao Google, mesmo que `GEMINI_API_KEY` esteja configurada;
+      chamadas externas ficam bloqueadas até existir aviso e consentimento
+      verificável na interface.
 - [ ] `docker compose logs vitrine 2>&1 | grep -i -e error -e exception | tail`
       → sem erro novo.
 - [ ] `docker stats --no-stream` — memória dos containers estável.
