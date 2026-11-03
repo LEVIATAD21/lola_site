@@ -98,6 +98,16 @@ async function startDataService(): Promise<void> {
     },
   });
 
+  // Produção não pode anunciar serviço saudável com pedidos ou rastreamento
+  // desativados por ausência de chave. Falha na inicialização em vez de aceitar
+  // tráfego enquanto operações essenciais respondem 503.
+  if (production && (!plane.orders.ready || !plane.tracking.ready)) {
+    fail(
+      'armazenamento seguro de pedidos/rastreamento indisponível em produção',
+      'configure LOLA_ORDERS_ENCRYPTION_KEY (32 bytes em hexadecimal) e, se separado, LOLA_TRACKING_ENCRYPTION_KEY',
+    );
+  }
+
   const allowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
 
   const app = express();
