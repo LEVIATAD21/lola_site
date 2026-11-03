@@ -98,6 +98,20 @@ describe('createCrossSiteWriteGuard', () => {
     expect(endpoint.handled()).toBe(0);
   });
 
+  it('recusa Origin com host igual mas esquema diferente', async () => {
+    const endpoint = await startGuardedEndpoint();
+    const host = new URL(endpoint.url).host;
+
+    const response = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: { origin: `https://${host}` },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(403);
+    expect(endpoint.bucket()).toBe(0);
+  });
+
   it('recusa Origin com host igual ao pedido mas porta diferente', async () => {
     const endpoint = await startGuardedEndpoint();
 
