@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseAIResponse, parseDraftOrderConfirmation, parseStockPayload } from '../api';
 
-const validPayload = { productId: 'brinco-1', disponivel: 8 };
+const validPayload = { productId: 'brinco-1', disponivel: true };
 
 describe('parseStockPayload', () => {
   it('aceita apenas a disponibilidade pública do produto', () => {
@@ -29,16 +29,16 @@ describe('parseStockPayload', () => {
     expect(parseStockPayload(validPayload, 'brinco-2')).toBeNull();
   });
 
-  it('rejeita disponibilidade negativa, fracionada ou não numérica', () => {
-    expect(parseStockPayload({ ...validPayload, disponivel: -1 })).toBeNull();
-    expect(parseStockPayload({ ...validPayload, disponivel: '8' })).toBeNull();
-    expect(parseStockPayload({ ...validPayload, disponivel: 1.5 })).toBeNull();
-    expect(parseStockPayload({ ...validPayload, disponivel: NaN })).toBeNull();
+  it('rejeita saldo numérico e valores não booleanos no contrato público', () => {
+    expect(parseStockPayload({ ...validPayload, disponivel: 8 })).toBeNull();
+    expect(parseStockPayload({ ...validPayload, disponivel: 0 })).toBeNull();
+    expect(parseStockPayload({ ...validPayload, disponivel: 'true' })).toBeNull();
+    expect(parseStockPayload({ ...validPayload, disponivel: null })).toBeNull();
   });
 
-  it('não precisa nem expõe contadores internos de estoque', () => {
+  it('ignora campos internos mesmo se um servidor antigo ainda os enviar', () => {
     expect(parseStockPayload({
-      productId: 'brinco-1', disponivel: 8,
+      productId: 'brinco-1', disponivel: true,
       total: 10, reservado: 1, vendido: 1,
     })).toEqual(validPayload);
   });
