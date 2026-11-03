@@ -1,4 +1,5 @@
 import express from 'express';
+import { isIP } from 'node:net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -677,6 +678,12 @@ ${JSON.stringify(pergunta)}
   // LOLA_BIND_HOST sobrescreve os dois — o data-server usa a mesma variável.
   const bindHost = (process.env.LOLA_BIND_HOST ?? '').trim()
     || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+  const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
+  if (PRODUCTION && !loopbackBind && TRUST_PROXY === undefined) {
+    throw new Error(
+      'bind público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs dos proxies confiáveis; sem isso, protocolo e IP de origem não podem ser verificados corretamente.',
+    );
+  }
   app.listen(PORT, bindHost, () => {
     log('info', 'servidor.iniciado', {
       porta: PORT,
