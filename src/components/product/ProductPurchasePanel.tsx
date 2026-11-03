@@ -10,7 +10,7 @@ interface ProductPurchasePanelProps {
   onAddToCart: (product: Product, quantity: number, size: string) => void;
   onOpenWhatsApp: (product: Product, size: string) => void;
   onOpenInfo: (title: string, content: string) => void;
-  availableUnits?: number | null;
+  availableUnits?: boolean | null;
 }
 
 export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
@@ -31,15 +31,16 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
     { label: 'G (2,5 cm)', value: 'G (2,5 cm)' },
   ];
 
-  const hasConfirmedStock = typeof availableUnits === 'number';
-  const isOutOfStock = hasConfirmedStock && availableUnits <= 0;
+  const hasConfirmedStock = typeof availableUnits === 'boolean';
+  const isOutOfStock = availableUnits === false;
   const isStockUnknown = !hasConfirmedStock;
-  const canPurchase = hasConfirmedStock && availableUnits > 0;
-  const maxQuantity = canPurchase ? availableUnits : 0;
+  const canPurchase = availableUnits === true;
+  // O saldo exato é privado; o limite definitivo é aplicado no servidor.
+  const maxQuantity = canPurchase ? 99 : 0;
 
   const handleAdd = () => {
     if (!canPurchase) return;
-    if (quantity <= 0 || quantity > (availableUnits ?? 0)) return;
+    if (quantity <= 0 || quantity > maxQuantity) return;
     onAddToCart(product, quantity, selectedSize);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -106,7 +107,7 @@ export const ProductPurchasePanel: React.FC<ProductPurchasePanelProps> = ({
           </label>
           {hasConfirmedStock ? (
             <span className="text-[11px] text-[#766D64]">
-              {availableUnits > 0 ? `Disponível: ${availableUnits} un.` : 'Sem estoque'}
+              {availableUnits ? 'Disponível' : 'Sem estoque'}
             </span>
           ) : (
             <span className="text-[11px] text-[#766D64]">
