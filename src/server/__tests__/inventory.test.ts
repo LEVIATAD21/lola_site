@@ -202,15 +202,19 @@ describe('InventoryStore — pré-reservas', () => {
     expect(store.get('brinco-1')).toMatchObject({ vendido: 2, disponivel: 2 });
   });
 
-  it('não grava reserva no arquivo de estoque', () => {
+  it('persiste pré-reservas em arquivo separado e recupera após reinicialização', () => {
     const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-hold-'));
     tempDirs.push(dir);
     const file = join(dir, 'inventory.json');
-    const store = new InventoryStore(initial, file);
+    const holds = join(dir, 'inventory-holds.json');
+    const store = new InventoryStore(initial, file, {}, holds);
     expect(store.placeHold('pedido-1', [{ productId: 'brinco-1', quantity: 6 }], soon)).toEqual({ ok: true });
     expect(JSON.parse(readFileSync(file, 'utf8'))['brinco-1'].disponivel).toBe(7);
-    // Reiniciar o processo libera reservas: nada de estoque travado sem registro.
-    const restarted = new InventoryStore(initial, file);
+    expect(JSON.parse(readFileSync(holds, 'utf8'))['pedido-1'][0]).toMatchObject({ productId: 'brinco-1', quantity: 6 });
+    // Reiniciar recupera o bloqueio, evitando overselling durante o TTL.
+    const restarted = new InventoryStore(initial, file, {}, holds);
+    expect(restarted.get('brinco-1')?.disponivel).toBe(1);
+    expect(restarted.removeHold('pedido-1')).toBe(true);
     expect(restarted.get('brinco-1')?.disponivel).toBe(7);
   });
 
