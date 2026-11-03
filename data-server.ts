@@ -109,6 +109,12 @@ async function startDataService(): Promise<void> {
   }
 
   const allowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
+  if (production && allowlist.allowAny) {
+    fail(
+      'allowlist administrativa não pode aceitar qualquer IP em produção',
+      'configure LOLA_ADMIN_ALLOWED_IPS com IPs ou CIDRs privados específicos; o valor any é proibido',
+    );
+  }
 
   const app = express();
   app.disable('x-powered-by');
