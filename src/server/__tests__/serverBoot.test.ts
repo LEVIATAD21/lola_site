@@ -186,12 +186,18 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(listagem.status).toBe(200);
     expect(brincoNaLista?.disponivel).toBe(true);
     expect(typeof brincoNaLista?.disponivel).toBe('boolean');
+    expect(brincoNaLista).not.toHaveProperty('total');
+    expect(brincoNaLista).not.toHaveProperty('custoInterno');
+    expect(brincoNaLista).not.toHaveProperty('observacoesInternas');
 
     const detalhe = await getJson(`${base}/api/produto/brinco-1`);
     const produto = detalhe.corpo as Record<string, unknown>;
     expect(detalhe.status).toBe(200);
     expect(produto.disponivel).toBe(true);
     expect(typeof produto.disponivel).toBe('boolean');
+    expect(produto).not.toHaveProperty('total');
+    expect(produto).not.toHaveProperty('custoInterno');
+    expect(produto).not.toHaveProperty('observacoesInternas');
   });
 
   it('assistente informa disponibilidade sem revelar contagem interna de estoque', async () => {
