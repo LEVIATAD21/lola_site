@@ -62,6 +62,24 @@ describe('data-server.ts — boot real', () => {
     expect(resposta.headers.get('x-content-type-options')).toBe('nosniff');
   }, 30_000);
 
+  it('recusa bind fora do loopback em produção quando TLS não está configurado', async () => {
+    const porta = await portaLivre();
+    const servidor = subirDataServer({
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '10.0.0.5',
+      LOLA_INTERNAL_SECRET: 's'.repeat(64),
+      LOLA_DATA_DIR: diretorioTemporario('lola-no-tls-'),
+    });
+
+    const log = await servidor.esperar(/dados\.falha_configuracao/);
+    expect(log).toContain('sem TLS');
+    expect(log).toContain('LOLA_TLS_CERT_FILE');
+    expect(log).not.toContain('dados.servidor_iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('canal interno existe e recusa requisição sem assinatura com 401', async () => {
     const porta = await portaLivre();
     const servidor = subirDataServer({ PORT: String(porta), LOLA_DATA_DIR: diretorioTemporario('lola-boot-') });
