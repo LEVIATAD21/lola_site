@@ -223,3 +223,16 @@ O canal interno usa timestamp, nonce, HMAC sobre método/caminho/corpo e assinat
 - O painel administrativo estático foi inspecionado; páginas de demonstração não equivalem a uma API protegida.
 
 **Conclusão:** a vitrine tem algumas proteções úteis e o canal interno foi desenhado com boas propriedades criptográficas. Porém, o painel real, a identidade dos operadores e a autorização granular ainda não existem. Até resolver os itens P0 e validar a infraestrutura, não liberar dados reais nem considerar a administração pronta para produção.
+
+
+### A-11 — Pré-reservas de estoque são mantidas apenas em memória
+**Severidade: ALTA para integridade de pedidos | Confirmado**
+
+Arquivos: `lola_site/src/server/inventory.ts`, `src/server/dataPlane.ts`, `src/server/orders.ts`.
+
+O `InventoryStore` persiste o saldo contábil em arquivo, mas as pré-reservas (`holds`) ficam em um `Map` em memória. O fluxo cria a reserva e persiste o pré-pedido; em uma reinicialização, os pedidos continuam no arquivo cifrado, porém as reservas em memória desaparecem.
+
+**Impacto:** um pré-pedido ainda dentro da janela de reserva pode continuar registrado enquanto as unidades voltam a aparecer disponíveis. Se houver reinício, deploy ou falha de processo no período, dois clientes podem acreditar que reservaram as mesmas últimas unidades. A própria classe também documenta que mutações são seguras apenas dentro de um processo Node e recomenda banco transacional para múltiplas instâncias.
+
+**Correção obrigatória antes de depender de reserva de estoque:** persistir reservas com expiração junto ao armazenamento transacional, recuperar e reconciliar reservas no boot, garantir atomicidade entre gravação do pedido e reserva, e usar transações/locks no banco. Até isso existir, tratar o fluxo como pré-pedido sem garantia de reserva durável e comunicar disponibilidade final no momento de confirmação.
+
