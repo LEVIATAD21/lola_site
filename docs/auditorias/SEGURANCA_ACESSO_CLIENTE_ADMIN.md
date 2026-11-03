@@ -304,3 +304,37 @@ A aprovação do CI não substitui testes dinâmicos em infraestrutura real, rev
 A revisão de fluxo identificou que o saldo numérico também era enviado por `GET /api/produtos`, `GET /api/produto/:productId` e no contexto do assistente virtual. Esses caminhos foram corrigidos: catálogo e detalhe retornam booleano; o assistente recebe apenas disponibilidade booleana e suas respostas locais não revelam contagens. Foram adicionados testes de boot real para os três fluxos.
 
 **Validação:** commit `63b0bddbf68edf1b54ddcbf2a44cf62fbee6150f` — typecheck, testes unitários/integração, build, auditoria de dependências e auditoria E2E aprovados. CodeQL permanece como análise separada.
+
+
+### A-17 — Perguntas da cliente poderiam ser enviadas ao Gemini sem aviso/consentimento
+**Severidade: ALTA para privacidade | CORRIGIDO NA BRANCH**
+
+Em produção, a integração externa do Gemini agora permanece desabilitada mesmo que `GEMINI_API_KEY` esteja configurada. O assistente usa o fallback local até existir aviso prévio, consentimento verificável e tratamento de dados documentado. Teste de boot injeta uma chave fictícia em produção e verifica que o caminho externo não é acionado.
+
+### A-18 — Proteção CSRF comparava apenas host e ignorava o esquema
+**Severidade: MÉDIA/ALTA | CORRIGIDO NA BRANCH**
+
+A guarda de escrita agora compara a origem completa efetiva (esquema, host e porta), respeitando somente proxies explicitamente confiáveis. Requisições com mesmo host, mas HTTP/HTTPS divergente, são recusadas antes de consumir o rate limit. Teste específico cobre o downgrade de esquema.
+
+### A-19 — DTO público dependia de spread do objeto de catálogo
+**Severidade: MÉDIA | CORRIGIDO NA BRANCH**
+
+As rotas públicas de listagem e detalhe agora constroem DTOs por allowlist explícita. Novos campos adicionados ao catálogo não serão expostos automaticamente. Testes negativos verificam ausência de campos internos.
+
+### A-20 — Allowlist irrestrita no modo administrativo embutido
+**Severidade: ALTA | CORRIGIDO NA BRANCH**
+
+Além do bloqueio no servidor de dados, o modo administrativo embutido também recusa `LOLA_ADMIN_ALLOWED_IPS=any` em produção. Teste de boot negativo verifica que o processo encerra antes de abrir a porta HTTP.
+
+### Validação automatizada atualizada
+
+Commit validado: `55b609eb475f5f6f3ac96aef7f8c934ba99a4fb7`.
+
+- Typecheck: aprovado.
+- Testes unitários e de integração: aprovados.
+- Build de produção: aprovado.
+- Auditoria de dependências: aprovada.
+- Auditoria E2E: aprovada.
+- CodeQL: execução separada ainda em andamento.
+
+Essas validações são de código e pipeline. Ainda não comprovam firewall, DNS, TLS externo, segredos reais, configuração de cloud, restauração de backups ou resistência sob carga em ambiente implantado.
