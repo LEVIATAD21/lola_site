@@ -164,6 +164,18 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(resposta.headers.get('strict-transport-security')).toBeTruthy();
   });
 
+  it('expõe apenas disponibilidade booleana, nunca a quantidade exata de estoque', async () => {
+    const resposta = await getJson(`${base}/api/estoque/brinco-1`);
+    const corpo = resposta.corpo as Record<string, unknown>;
+
+    expect(resposta.status).toBe(200);
+    expect(corpo).toEqual({ productId: 'brinco-1', disponivel: true });
+    expect(typeof corpo.disponivel).toBe('boolean');
+    expect(corpo).not.toHaveProperty('total');
+    expect(corpo).not.toHaveProperty('reservado');
+    expect(corpo).not.toHaveProperty('vendido');
+  });
+
   // VUL-B / bloco 9: JSON malformado passa pelo `express.json` ANTES das rotas;
   // o buraco era o `finalhandler` devolver HTML com a stack. O boot prova que o
   // tratador JSON está registrado depois do body parser e do static.
