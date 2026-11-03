@@ -613,9 +613,15 @@ ${JSON.stringify(pergunta)}
   // Em modo dividido isto não existe — as rotas vivem no `data-server.ts`, em
   // outra máquina, atrás da chave administrativa e da allowlist de origem.
   if (MOUNT_ADMIN && localPlane) {
+    const adminAllowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
+    if (PRODUCTION && adminAllowlist.allowAny) {
+      throw new Error(
+        'LOLA_ADMIN_ALLOWED_IPS=any não é permitido quando a administração embutida está ativa em produção.',
+      );
+    }
     app.use('/api', createAdminRouter({
       plane: localPlane,
-      allowlist: resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS),
+      allowlist: adminAllowlist,
     }));
   }
 
