@@ -73,7 +73,7 @@ describe('data-server.ts — boot real', () => {
     });
 
     const log = await servidor.esperar(/dados\.falha_configuracao/);
-    expect(log).toContain('sem TLS');
+    expect(log).toContain('sem_TLS');
     expect(log).toContain('LOLA_TLS_CERT_FILE');
     expect(log).not.toContain('dados.servidor_iniciado');
     const { codigo } = await servidor.esperarSaida();
