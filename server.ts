@@ -678,12 +678,11 @@ ${JSON.stringify(pergunta)}
   // LOLA_BIND_HOST sobrescreve os dois — o data-server usa a mesma variável.
   const bindHost = (process.env.LOLA_BIND_HOST ?? '').trim()
     || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
-  const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
   const trustedProxyIps = Array.isArray(TRUST_PROXY) && TRUST_PROXY.length > 0 &&
     TRUST_PROXY.every((entry) => isIP(entry.split('/')[0]) !== 0);
-  if (PRODUCTION && !loopbackBind && !trustedProxyIps) {
+  if (PRODUCTION && !trustedProxyIps) {
     throw new Error(
-      'bind público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs explícitos dos proxies confiáveis; ausência, faixas nomeadas ou contagem de saltos não identificam o proxy e não são aceitas.',
+      'servidor público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs explícitos do proxy TLS confiável; ausência, faixas nomeadas ou contagem de saltos não são aceitas.',
     );
   }
   app.listen(PORT, bindHost, () => {
