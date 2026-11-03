@@ -128,6 +128,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     base = `http://127.0.0.1:${porta}`;
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-vitrine-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
@@ -320,10 +321,27 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect((chaveErrada.corpo as { error?: string }).error).toBe(MENSAGEM_ADMIN_401);
   });
 
+  it('recusa bind público em produção sem declarar os proxies confiáveis', async () => {
+    const porta = await portaLivre();
+    const servidorSemProxy = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '0.0.0.0',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-no-trusted-proxy-'),
+    });
+    const log = await servidorSemProxy.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_TRUSTED_PROXY');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorSemProxy.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('recusa painel embutido em produção com allowlist aberta para qualquer IP', async () => {
     const porta = await portaLivre();
     const servidorAberto = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-embedded-open-admin-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
@@ -385,6 +403,7 @@ describe('server.ts — modo dividido com o servidor de dados fora do ar (boot r
     // é que a vitrine NÃO o monta, por mais que quem opera peça.
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_SERVICE_URL: `http://127.0.0.1:${portaMorta}`,
       LOLA_INTERNAL_PLAINTEXT: 'true',
