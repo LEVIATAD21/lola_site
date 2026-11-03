@@ -223,7 +223,7 @@ O script recusa gravar backup que não conseguiu decifrar: ele roda `deploy/veri
 
 ### 5. Antes de dizer "está no ar"
 
-Siga o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md). Os itens que mais derrubam lançamento são: IP real por trás do proxy (sem `LOLA_TRUSTED_PROXY` declarado, todo cliente divide o mesmo bucket de rate limit), `X-Forwarded-For` forjado sendo ignorado, e backup agendado mas nunca testado.
+Siga o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md). O servidor público em produção exige `LOLA_TRUSTED_PROXY` com IPs/CIDRs explícitos do proxy TLS; sem isso, a inicialização falha. Também valide `X-Forwarded-For` forjado, allowlist administrativa e restauração real de backup.
 
 ### 6. Manutenção recorrente
 
