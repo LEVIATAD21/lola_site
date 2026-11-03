@@ -320,6 +320,24 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect((chaveErrada.corpo as { error?: string }).error).toBe(MENSAGEM_ADMIN_401);
   });
 
+  it('recusa painel embutido em produção com allowlist aberta para qualquer IP', async () => {
+    const porta = await portaLivre();
+    const servidorAberto = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-open-admin-'),
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ADMIN_API_KEY: 'k'.repeat(64),
+      LOLA_ADMIN_ALLOWED_IPS: 'any',
+    });
+    const log = await servidorAberto.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_ADMIN_ALLOWED_IPS=any');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorAberto.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('monta o painel administrativo em produção e aceita a chave certa', async () => {
     const resposta = await getJson(`${base}/api/admin/pre-pedidos`, {
       headers: { 'x-admin-key': chaveAdmin },
