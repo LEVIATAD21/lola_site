@@ -131,6 +131,8 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-vitrine-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      // Simula chave presente por engano: em produção não pode haver chamada externa.
+      GEMINI_API_KEY: 'test-key-must-not-be-used-in-production',
       LOLA_EMBEDDED_ADMIN: 'true',
       LOLA_ADMIN_API_KEY: chaveAdmin,
     });
@@ -203,6 +205,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(resposta.status).toBe(200);
     expect(corpo.resposta).toContain('disponível');
     expect(corpo.resposta).not.toMatch(/\b\d+\s+unidades?\b/i);
+    expect(servidor.saida()).not.toContain('[assistente] Falha ao chamar o modelo');
   });
 
   // VUL-B / bloco 9: JSON malformado passa pelo `express.json` ANTES das rotas;
