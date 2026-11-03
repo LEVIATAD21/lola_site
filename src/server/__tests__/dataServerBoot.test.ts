@@ -62,6 +62,26 @@ describe('data-server.ts — boot real', () => {
     expect(resposta.headers.get('x-content-type-options')).toBe('nosniff');
   }, 30_000);
 
+  it('recusa allowlist administrativa aberta para qualquer IP em produção', async () => {
+    const porta = await portaLivre();
+    const servidor = subirDataServer({
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_INTERNAL_SECRET: 's'.repeat(64),
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_ADMIN_ALLOWED_IPS: 'any',
+      LOLA_DATA_DIR: diretorioTemporario('lola-open-admin-'),
+    });
+
+    const log = await servidor.esperar(/dados\.falha_configuracao/);
+    expect(log).toContain('allowlist_administrativa_não_pode_aceitar_qualquer_IP');
+    expect(log).toContain('LOLA_ADMIN_ALLOWED_IPS');
+    expect(log).not.toContain('dados.servidor_iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('recusa inicialização de produção quando a chave de pedidos não está configurada', async () => {
     const porta = await portaLivre();
     const servidor = subirDataServer({
