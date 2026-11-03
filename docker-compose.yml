@@ -168,6 +168,9 @@ services:
       # container, nem 0.0.0.0, que exigiria o opt-in LOLA_ALLOW_WILDCARD_BIND).
       # Fixo para ser previsível: a vitrine chega por `http://data-server:4100`.
       LOLA_BIND_HOST: "172.31.1.10"
+      # A exceção de texto puro só vale nesta rede Docker internal=true, sem
+      # porta publicada, IP privado fixo e segredo HMAC obrigatório.
+      LOLA_INTERNAL_PLAINTEXT: "true"
       # Mantido `false` de propósito: com o IP fixo acima não há motivo de abrir
       # o bind coringa, e o opt-in continuaria valendo para qualquer futuro host.
       LOLA_ALLOW_WILDCARD_BIND: "false"
