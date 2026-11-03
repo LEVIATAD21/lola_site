@@ -354,6 +354,23 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(codigo).toBe(1);
   }, 30_000);
 
+  it('recusa faixa nomeada ampla como proxy confiável em bind público de produção', async () => {
+    const porta = await portaLivre();
+    const servidorNamedRange = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '0.0.0.0',
+      LOLA_TRUSTED_PROXY: 'uniquelocal',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-proxy-range-'),
+    });
+    const log = await servidorNamedRange.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('faixas_nomeadas');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorNamedRange.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('recusa painel embutido em produção com allowlist aberta para qualquer IP', async () => {
     const porta = await portaLivre();
     const servidorAberto = subirEntryPoint('server.ts', {
