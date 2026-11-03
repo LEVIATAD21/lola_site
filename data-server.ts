@@ -13,7 +13,7 @@ import { resolveAdminAllowlist } from './src/server/ipAllow';
 import { configureIpLoggingFromEnv, createRequestLogger, log } from './src/server/logger';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { createJsonErrorHandler } from './src/server/httpError';
-import { envInt, resolveTlsConfig } from './src/server/envConfig';
+import { allowPrivatePlaintext, envInt, resolveTlsConfig } from './src/server/envConfig';
 import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
 
 /**
@@ -191,17 +191,25 @@ async function startDataService(): Promise<void> {
   const { enabled: tlsEnabled, certFile: tlsCertFile, keyFile: tlsKeyFile } = tls;
 
   const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
-  if (!tlsEnabled && !loopbackBind) {
+  const privatePlaintext = !tlsEnabled && allowPrivatePlaintext(bindHost, process.env);
+  if (!tlsEnabled && !loopbackBind && !privatePlaintext) {
     if (production) {
       fail(
-        'servidor de dados em produção não pode escutar fora do loopback sem TLS',
-        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE válidos ou restrinja LOLA_BIND_HOST a um IP 127.0.0.0/8 ou ::1',
+        'servidor de dados em produção não pode escutar fora do loopback sem TLS ou opt-in privado explícito',
+        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE; apenas rede privada não publicada pode usar LOLA_INTERNAL_PLAINTEXT=true com IP RFC1918/ULA e HMAC obrigatório',
       );
     }
     log('warn', 'dados.sem_tls_em_endereco_publico', {
       bind: bindHost,
       aviso: 'a_chave_administrativa_e_os_dados_dos_clientes_transitam_em_claro',
       acao: 'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE ou restrinja o bind a 127.0.0.1',
+    });
+  }
+  if (privatePlaintext) {
+    log('warn', 'dados.texto_puro_rede_privada_optin', {
+      bind: bindHost,
+      aviso: 'HMAC protege autenticidade_e_integridade_mas_nao_cifra_os_dados',
+      acao: 'mantenha a rede Docker internal true e a porta do data-server sem publicação; TLS é preferível',
     });
   }
 
