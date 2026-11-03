@@ -124,13 +124,25 @@ público falha na inicialização sem IPs/CIDRs explícitos em `LOLA_TRUSTED_PRO
       abortou e você sabe agora, não no dia do apagão.
 - [ ] Data do primeiro `.tar.gz` em `~/lola-backups` confere com a de hoje.
 
-## 6. Painel de pedidos (modo dividido)
+## 6. Administração temporária (modo dividido)
+
+> O `data-server` é uma API, não serve a página `/admin`. O repositório
+> `lola_site_admin` continua demonstrativo (`localStorage`), sem login humano,
+> sessões, MFA ou integração autenticada. **Não use esse painel como operação
+> real e nunca coloque `LOLA_ADMIN_API_KEY` no navegador.** A administração
+> temporária abaixo é somente por API via túnel SSH e chave guardada no ambiente
+> do operador; ainda não substitui identidade individual/RBAC.
 
 - [ ] `docker compose exec data-server sh -lc 'wget -qO- http://127.0.0.1:4100/api/health || curl -sf http://127.0.0.1:4100/api/health'`
-      → `{"ok":true}`.
-- [ ] Entrada do painel pelo túnel (sem expor porta no host):
-      `ssh -N -L 4100:172.31.1.10:4100 usuario@servidor` e abrir
-      `http://localhost:4100/admin` no navegador de quem administra.
+      → `{"status":"ok"}`.
+- [ ] Túnel SSH sem publicar a porta 4100:
+      `ssh -N -L 4100:172.31.1.10:4100 usuario@servidor`.
+- [ ] No terminal do operador, carregar a chave do cofre/secret store em
+      `LOLA_ADMIN_API_KEY` e consultar:
+      `curl -fsS -H "x-admin-key: $LOLA_ADMIN_API_KEY" http://127.0.0.1:4100/api/admin/pre-pedidos`.
+      Não gravar a chave em histórico de shell, script versionado ou navegador.
+- [ ] `curl -sI http://127.0.0.1:4100/admin | head -1` → `404` (a API não
+      serve interface administrativa).
 - [ ] `docker compose ps` — os serviços com `healthy`, não `unhealthy`.
 
 ## 7. Lançamento
