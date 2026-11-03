@@ -129,12 +129,14 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
       LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-vitrine-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
       // Simula chave presente por engano: em produção não pode haver chamada externa.
       GEMINI_API_KEY: 'test-key-must-not-be-used-in-production',
       LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
       LOLA_ADMIN_API_KEY: chaveAdmin,
     });
     await servidor.esperar(/servidor\.iniciado/);
@@ -376,10 +378,12 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     const servidorAberto = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
       LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-embedded-open-admin-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
       LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
       LOLA_ADMIN_API_KEY: 'k'.repeat(64),
       LOLA_ADMIN_ALLOWED_IPS: 'any',
     });
@@ -438,6 +442,7 @@ describe('server.ts — modo dividido com o servidor de dados fora do ar (boot r
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
       LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_SERVICE_URL: `http://127.0.0.1:${portaMorta}`,
       LOLA_INTERNAL_PLAINTEXT: 'true',
