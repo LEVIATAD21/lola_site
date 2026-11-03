@@ -9,7 +9,6 @@ interface BadgeEstoqueProps {
 
 export const BadgeEstoque: React.FC<BadgeEstoqueProps> = ({
   availableUnits,
-  showDetailed = true,
   className = '',
 }) => {
   if (availableUnits === undefined || availableUnits === null) {
