@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { isIP } from 'node:net';
 
 /**
  * Guardas de configuração de ambiente — funções puras, testáveis sem subir
@@ -75,4 +76,29 @@ export function resolveTlsConfig(
     return { error: `LOLA_TLS_KEY_FILE aponta para arquivo inexistente: ${keyFile}` };
   }
   return { enabled: true, certFile, keyFile };
+}
+
+
+/**
+ * Endereço unicast privado permitido para o canal interno sem TLS quando
+ * existe opt-in explícito. Não aceita endereço público, wildcard ou link-local
+ * (metadata de cloud). O HMAC continua obrigatório e protege autenticidade/
+ * integridade; esta exceção não oferece confidencialidade contra quem já está
+ * dentro da rede privada.
+ */
+export function isPrivateUnicastAddress(host: string): boolean {
+  if (isIP(host) === 4) {
+    const octets = host.split('.').map(Number);
+    const [a, b] = octets;
+    return a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168);
+  }
+  if (isIP(host) === 6) return /^f[cd]/i.test(host);
+  return false;
+}
+
+/** Opt-in de texto puro restrito a IP privado unicast, nunca a host público. */
+export function allowPrivatePlaintext(bindHost: string, env: Env = process.env): boolean {
+  return env.LOLA_INTERNAL_PLAINTEXT === 'true' && isPrivateUnicastAddress(bindHost);
 }
