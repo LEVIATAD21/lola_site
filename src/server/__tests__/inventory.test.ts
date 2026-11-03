@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InventoryStore, type StockItem } from '../inventory';
@@ -81,7 +81,6 @@ describe('InventoryStore', () => {
     const file = join(dir, 'inventory.json');
     writeFileSync(file, JSON.stringify(initial), { mode: 0o644 });
     // Simula volume antigo criado com permissões permissivas.
-    const { chmodSync } = require('node:fs');
     chmodSync(dir, 0o755);
     chmodSync(file, 0o644);
     new InventoryStore(initial, file);
