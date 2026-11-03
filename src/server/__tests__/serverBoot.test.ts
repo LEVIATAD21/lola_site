@@ -202,7 +202,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
 
     expect(resposta.status).toBe(200);
     expect(corpo.resposta).toContain('disponível');
-    expect(corpo.resposta).not.toMatch(/\\b\\d+\\s+unidades?\\b/i);
+    expect(corpo.resposta).not.toMatch(/\b\d+\s+unidades?\b/i);
   });
 
   // VUL-B / bloco 9: JSON malformado passa pelo `express.json` ANTES das rotas;
