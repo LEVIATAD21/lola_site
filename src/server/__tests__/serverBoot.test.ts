@@ -176,6 +176,35 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(corpo).not.toHaveProperty('vendido');
   });
 
+  it('não expõe saldo exato nas rotas públicas de listagem e detalhe', async () => {
+    const listagem = await getJson(`${base}/api/produtos`);
+    const produtos = listagem.corpo as Array<Record<string, unknown>>;
+    const brincoNaLista = produtos.find((item) => item.id === 'brinco-1');
+
+    expect(listagem.status).toBe(200);
+    expect(brincoNaLista?.disponivel).toBe(true);
+    expect(typeof brincoNaLista?.disponivel).toBe('boolean');
+
+    const detalhe = await getJson(`${base}/api/produto/brinco-1`);
+    const produto = detalhe.corpo as Record<string, unknown>;
+    expect(detalhe.status).toBe(200);
+    expect(produto.disponivel).toBe(true);
+    expect(typeof produto.disponivel).toBe('boolean');
+  });
+
+  it('assistente informa disponibilidade sem revelar contagem interna de estoque', async () => {
+    const resposta = await getJson(`${base}/api/ai/consulta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pergunta: 'Tem estoque?', contexto: { produtoId: 'brinco-1' } }),
+    });
+    const corpo = resposta.corpo as { resposta?: string };
+
+    expect(resposta.status).toBe(200);
+    expect(corpo.resposta).toContain('disponível');
+    expect(corpo.resposta).not.toMatch(/\\b\\d+\\s+unidades?\\b/i);
+  });
+
   // VUL-B / bloco 9: JSON malformado passa pelo `express.json` ANTES das rotas;
   // o buraco era o `finalhandler` devolver HTML com a stack. O boot prova que o
   // tratador JSON está registrado depois do body parser e do static.
