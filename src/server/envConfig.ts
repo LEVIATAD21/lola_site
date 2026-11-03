@@ -100,5 +100,7 @@ export function isPrivateUnicastAddress(host: string): boolean {
 
 /** Opt-in de texto puro restrito a IP privado unicast, nunca a host público. */
 export function allowPrivatePlaintext(bindHost: string, env: Env = process.env): boolean {
-  return env.LOLA_INTERNAL_PLAINTEXT === 'true' && isPrivateUnicastAddress(bindHost);
+  return env.LOLA_INTERNAL_PLAINTEXT === 'true' &&
+    env.LOLA_PRIVATE_NETWORK_ISOLATED === 'true' &&
+    isPrivateUnicastAddress(bindHost);
 }
