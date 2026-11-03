@@ -196,7 +196,7 @@ async function startDataService(): Promise<void> {
     if (production) {
       fail(
         'servidor de dados em produção não pode escutar fora do loopback sem TLS ou opt-in privado explícito',
-        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE; apenas rede privada não publicada pode usar LOLA_INTERNAL_PLAINTEXT=true com IP RFC1918/ULA e HMAC obrigatório',
+        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE; a exceção exige LOLA_INTERNAL_PLAINTEXT=true, LOLA_PRIVATE_NETWORK_ISOLATED=true, IP RFC1918/ULA e HMAC obrigatório',
       );
     }
     log('warn', 'dados.sem_tls_em_endereco_publico', {
