@@ -92,6 +92,25 @@ const aiBudget = new PersistentDailyBudget(DATA_DIR, Number.isSafeInteger(dailyA
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
+function toPublicCatalogProduct(
+  item: (typeof CATALOG_INFO)[number],
+  available: boolean,
+) {
+  // DTO explícito: adicionar campos internos ao catálogo nunca deve torná-los
+  // públicos por acidente via spread de objeto.
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    price: item.price,
+    material: item.material,
+    color: item.color,
+    disponivel: available,
+    desc: item.desc,
+    image: item.image,
+  };
+}
+
 const STORE_FAQS = `
 SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 - Catálogo: use os nomes, descrições, materiais e preços fornecidos pelo catálogo vigente.
@@ -348,11 +367,9 @@ async function startServer() {
     const snapshot = await plane.snapshot().catch(() => null);
     if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
-    let list = CATALOG_INFO.map((item) => ({
-      ...item,
-      // API pública entrega disponibilidade comercial, nunca saldo numérico.
-      disponivel: (snapshot[item.id] ?? item.disponivel) > 0,
-    }));
+    let list = CATALOG_INFO.map((item) =>
+      toPublicCatalogProduct(item, (snapshot[item.id] ?? item.disponivel) > 0),
+    );
 
     if (categoria && typeof categoria === 'string') {
       list = list.filter((p) => p.category.toLowerCase() === categoria.toLowerCase());
@@ -381,8 +398,8 @@ async function startServer() {
     const snapshot = await plane.snapshot().catch(() => null);
     if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const stock = snapshot[productId] ?? item.disponivel;
-    // Não divulgar saldo exato nem por endpoint de detalhe.
-    res.json({ ...item, disponivel: stock > 0 });
+    // DTO explícito evita que futuros campos internos sejam expostos.
+    res.json(toPublicCatalogProduct(item, stock > 0));
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
