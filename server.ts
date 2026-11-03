@@ -451,7 +451,10 @@ async function startServer() {
     const apiKey = process.env.GEMINI_API_KEY;
 
     try {
-      if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
+      // Em produção, não transferir perguntas/contexto da cliente a terceiros
+      // enquanto a UI não apresentar aviso prévio e recolher consentimento
+      // verificável. A chave configurada por engano não habilita a transferência.
+      if (process.env.NODE_ENV !== 'production' && apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
         const budget = aiBudget.consume();
         if (!budget.allowed) {
           return res.status(aiBudget.ready ? 429 : 503).json({
