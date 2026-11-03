@@ -679,9 +679,9 @@ ${JSON.stringify(pergunta)}
   const bindHost = (process.env.LOLA_BIND_HOST ?? '').trim()
     || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
   const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
-  if (PRODUCTION && !loopbackBind && TRUST_PROXY === undefined) {
+  if (PRODUCTION && !loopbackBind && !Array.isArray(TRUST_PROXY)) {
     throw new Error(
-      'bind público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs dos proxies confiáveis; sem isso, protocolo e IP de origem não podem ser verificados corretamente.',
+      'bind público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs específicos dos proxies confiáveis; ausência ou contagem de saltos não identifica o proxy e não é aceita.',
     );
   }
   app.listen(PORT, bindHost, () => {
