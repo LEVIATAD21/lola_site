@@ -108,13 +108,10 @@ services:
     profiles: ["dividido"]
 
     env_file:
+      # A vitrine recebe SOMENTE a configuração comum. Nunca carregar .env.dados
+      # neste serviço: ele contém a chave AES e a chave administrativa.
       - path: .env
         required: true
-      # Arquivo de segredos do servidor de dados. Deixamos `required: false`
-      # para que o modo embutido (que não o usa) não trave na validação do
-      # compose. No modo dividido ele DEVE existir e ser preenchido.
-      - path: .env.dados
-        required: false
 
     environment:
       NODE_ENV: production
@@ -158,8 +155,9 @@ services:
     env_file:
       - path: .env
         required: true
+      # Único serviço autorizado a receber chaves AES e chave administrativa.
       - path: .env.dados
-        required: false
+        required: true
 
     environment:
       NODE_ENV: production
