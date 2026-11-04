@@ -382,7 +382,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
       LOLA_TRUSTED_PROXY: '127.0.0.1',
       LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-key-'),
     });
-    const log = await servidor.esperar(/servidor\\.falha_ao_iniciar/);
+    const log = await servidor.esperar(/servidor\.falha_ao_iniciar/);
     expect(log).toContain('chave_AES_em_.env.embutido');
     expect(log).not.toContain('servidor.iniciado');
     const { codigo } = await servidor.esperarSaida();
@@ -401,7 +401,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
       LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-admin-key-'),
     });
-    const log = await servidor.esperar(/servidor\\.falha_ao_iniciar/);
+    const log = await servidor.esperar(/servidor\.falha_ao_iniciar/);
     expect(log).toContain('LOLA_ADMIN_API_KEY_com_pelo_menos_32_caracteres');
     expect(log).not.toContain('servidor.iniciado');
     const { codigo } = await servidor.esperarSaida();
