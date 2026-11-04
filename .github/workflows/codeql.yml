@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '30 1 * * 0'
 
+concurrency:
+  group: codeql-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -18,7 +22,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      security-events: write
     steps:
       # Actions pinadas por SHA (RT-S-01): tag móvel muda de conteúdo sem aviso.
       - name: Checkout repository
@@ -32,3 +35,22 @@ jobs:
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          # Repositórios privados sem GitHub Code Security não aceitam SARIF upload.
+          # Mantemos a análise real e arquivamos o SARIF como artefato auditável.
+          upload: false
+
+      - name: Stage CodeQL SARIF results inside workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p codeql-results
+          cp ../results/*.sarif codeql-results/
+
+      - name: Archive CodeQL SARIF results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: codeql-sarif-${{ github.sha }}
+          path: codeql-results/*.sarif
+          if-no-files-found: error
+          retention-days: 14
