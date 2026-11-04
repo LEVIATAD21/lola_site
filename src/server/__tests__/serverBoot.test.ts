@@ -350,7 +350,7 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
       LOLA_DATA_DIR: diretorioTemporario('lola-proxy-hop-'),
     });
     const log = await servidorHop.esperar(/servidor\.falha_ao_iniciar/);
-    expect(log).toContain('IPs/CIDRs_específicos');
+    expect(log).toContain('IPs/CIDRs_explícitos');
     expect(log).not.toContain('servidor.iniciado');
     const { codigo } = await servidorHop.esperarSaida();
     expect(codigo).toBe(1);
