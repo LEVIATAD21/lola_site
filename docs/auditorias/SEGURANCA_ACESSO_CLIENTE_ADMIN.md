@@ -363,11 +363,20 @@ Corrigi o formato das declarações de redes Compose e adicionei validação aut
 **Limite:** validar a configuração Compose não prova que o firewall real do host, as rotas do proxy, os volumes e os segredos do servidor implantado correspondam ao arquivo.
 
 ### A-27 — Recuperação de pré-reservas expiradas e validação de integridade do estoque
-**Severidade: MÉDIA | CORRIGIDO NA BRANCH | CI pendente**
+**Severidade: MÉDIA | CORRIGIDO NA BRANCH | CI aprovado**
 
 A recuperação de `inventory-holds.json` rejeitava reservas cujo prazo expirou enquanto o processo estava parado. Isso podia impedir a inicialização do servidor mesmo quando o arquivo representava apenas reservas naturalmente vencidas. Além disso, a recuperação precisava validar o total reservado contra o estoque-base persistido.
 
 **Correção:** reservas expiradas agora são descartadas durante a recuperação e a limpeza é persistida. Reservas ativas são agregadas por produto e o boot falha fechado se o total comprometido exceder o saldo-base. IDs de reserva e identificadores de origem também recebem limites de tamanho.
 
-**Testes adicionados:** recuperação após expiração e rejeição de arquivo com pré-reservas acima do estoque. A validação de CI para o commit desta correção ainda está em andamento.
+**Testes adicionados:** recuperação após expiração e rejeição de arquivo com pré-reservas acima do estoque. O CI do commit `004e2ffa0d4f76294f6b6bd368452e786a4c2a2f` foi aprovado: typecheck, testes unitários/integração, build de produção, validação dos dois perfis Compose e auditorias de dependências/E2E. A análise CodeQL ainda tinha uma falha de publicação no GitHub, tratada separadamente em A-28.
+
+### A-28 — Publicação dos resultados CodeQL indisponível em repositórios privados
+**Severidade: MÉDIA (cobertura de segurança) | CONTORNO IMPLEMENTADO, VERIFICAÇÃO PENDENTE**
+
+Os dois repositórios são privados e o GitHub respondeu que Code Scanning não está habilitado. A análise CodeQL chegou a examinar todos os arquivos suportados, mas a etapa de upload SARIF falhou por indisponibilidade do recurso no repositório.
+
+**Ajuste de pipeline:** CodeQL agora executa a análise sem tentar publicar no Code Scanning e arquiva o SARIF como artefato de workflow por 14 dias. O workflow roda também na branch de integração. O artefato permite inspeção/download, mas não cria alertas na aba Security nem substitui habilitar GitHub Code Security quando o plano/configuração permitir.
+
+**Estado:** alteração de workflow enviada para ambos os repositórios; execução de validação em andamento. Não declarar CodeQL aprovado até confirmar que o SARIF foi produzido e arquivado.
 
