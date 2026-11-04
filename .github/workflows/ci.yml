@@ -32,6 +32,12 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Validate production Compose configuration
+        run: |
+          cp deploy/env.producao.example .env
+          cp deploy/env.producao.dados.example .env.dados
+          docker compose --profile dividido config --quiet
+          docker compose --profile embutido config --quiet
       - name: Install E2E dependencies
         run: cd e2e && npm ci
       - name: E2E dependency audit
