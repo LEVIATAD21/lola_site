@@ -47,10 +47,10 @@ seus domínios reais.
         preencha `LOLA_ORDERS_ENCRYPTION_KEY` e `LOLA_ADMIN_API_KEY` nesse arquivo.
       - **Embutido:** `install -m 600 deploy/env.producao.embutido.example /srv/lola/.env.embutido`;
         preencha as mesmas chaves nesse arquivo. Não carregue `.env.embutido` no modo dividido.
-- [ ] Confira os valores obrigatórios no arquivo do perfil escolhido:
-      `grep -E '^(LOLA_INTERNAL_SECRET|APP_URL)=' /srv/lola/.env` e
-      `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.dados`
-      (dividido) **ou** `/srv/lola/.env.embutido` (embutido).
+- [ ] Confira os valores obrigatórios no arquivo comum:
+      `grep -E '^(LOLA_INTERNAL_SECRET|APP_URL)=' /srv/lola/.env`.
+- [ ] Dividido: `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.dados`.
+- [ ] Embutido: `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.embutido`.
 - [ ] `git check-ignore -v .env .env.dados .env.embutido` — tem que responder o caminho do ignore
       (senão o `.env` pode ir para o GitHub no próximo `git add .`).
 - [ ] `git status --porcelain` — nenhum `.env*` aparecendo.
