@@ -237,6 +237,36 @@ describe('InventoryStore — pré-reservas', () => {
     expect(restarted.get('brinco-1')?.disponivel).toBe(7);
   });
 
+  it('descarta pré-reservas expiradas durante a recuperação após reinicialização', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-expired-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'inventory.json');
+    const holds = join(dir, 'inventory-holds.json');
+    new InventoryStore(initial, file, {}, holds);
+    writeFileSync(holds, JSON.stringify({
+      'pedido-expirado': [{ productId: 'brinco-1', quantity: 6, expiresAt: Date.now() - 1_000 }],
+    }));
+
+    const restarted = new InventoryStore(initial, file, {}, holds);
+
+    expect(restarted.get('brinco-1')?.disponivel).toBe(7);
+    expect(JSON.parse(readFileSync(holds, 'utf8'))).toEqual({});
+  });
+
+  it('falha fechado quando reservas persistidas excedem o estoque-base', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lola-inventory-overheld-'));
+    tempDirs.push(dir);
+    const file = join(dir, 'inventory.json');
+    const holds = join(dir, 'inventory-holds.json');
+    new InventoryStore(initial, file, {}, holds);
+    writeFileSync(holds, JSON.stringify({
+      'pedido-inconsistente': [{ productId: 'brinco-1', quantity: 8, expiresAt: Date.now() + 60_000 }],
+    }));
+
+    expect(() => new InventoryStore(initial, file, {}, holds))
+      .toThrow(/Pré-reservas excedem o estoque persistido/);
+  });
+
   it('não reserva estoque de produto sem registro', () => {
     const store = makeStore();
     const result = store.placeHold('pedido-1', [{ productId: 'nao-existe', quantity: 1 }], soon);
