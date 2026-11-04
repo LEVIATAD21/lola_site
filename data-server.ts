@@ -180,12 +180,13 @@ async function startDataService(): Promise<void> {
   // inclusive do body-parser — vira JSON genérico, nunca HTML com stack (VUL-B).
   app.use(createJsonErrorHandler());
 
-  // TLS opcional. Sem ele, `x-admin-key` (adminAuth.ts) e o PII completo dos
-  // pedidos — nome, telefone, endereço — atravessam a rede privada em claro.
-  // Loopback não precisa; qualquer outro destino, inclusive outro host da mesma
-  // máquina, precisa. Configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
-  // A validação é função pura exportada (envConfig.ts) para ser testável sem
-  // subir servidor; aqui só o resultado é aplicado, como antes.
+  // TLS é obrigatório fora do loopback em produção. A única exceção é uma
+  // rede privada isolada declarada por opt-in duplo, IP RFC1918/ULA, HMAC
+  // obrigatório e porta não publicada. HMAC não cifra o tráfego: o aviso no log
+  // deixa esse risco explícito. Para qualquer rede fora desse limite, configure
+  // LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
+  // A validação TLS é função pura em envConfig.ts; a política de texto puro
+  // privado também é testada isoladamente.
   const tls = resolveTlsConfig(process.env);
   if ('error' in tls) throw new Error(tls.error);
   const { enabled: tlsEnabled, certFile: tlsCertFile, keyFile: tlsKeyFile } = tls;
