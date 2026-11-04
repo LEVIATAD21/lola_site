@@ -138,11 +138,10 @@ services:
         condition: service_healthy
 
     networks:
-      # `lola-publica` primeiro: dá saída para a internet (Gemini, ViaCEP) e é
-      # por ela que o proxy do host chega na porta publicada.
-      - lola-publica
-      # `lola-interna` é por onde ela fala com o servidor de dados.
-      - lola-interna: {}
+      # `lola-publica` dá saída controlada para serviços externos e recebe o proxy.
+      lola-publica: {}
+      # `lola-interna` é por onde a vitrine fala com o servidor de dados.
+      lola-interna: {}
 
     # Defesa em profundidade: mesmo que uma configuração errada montasse o
     # volume aqui, ele ficaria somente-leitura — a vitrine NÃO escreve dados.
@@ -214,8 +213,8 @@ services:
       # internet. Comprometer o processo não entrega rota de saída para
       # exfiltrar os pedidos — a defesa que sobra quando a chave já está no
       # ambiente do processo.
-      - lola-interna:
-          ipv4_address: 172.31.1.10
+      lola-interna:
+        ipv4_address: 172.31.1.10
 
     healthcheck:
       # O healthcheck do Dockerfile já é herdado (usa PORT=4100). Repetimos aqui
