@@ -36,6 +36,7 @@ jobs:
         run: |
           cp deploy/env.producao.example .env
           cp deploy/env.producao.dados.example .env.dados
+          cp deploy/env.producao.embutido.example .env.embutido
           docker compose --profile dividido config --quiet
           docker compose --profile embutido config --quiet
       - name: Install E2E dependencies
