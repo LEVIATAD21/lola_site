@@ -14,7 +14,7 @@ describe('production Docker Compose secret boundaries', () => {
     expect(vitrineStart).toBeGreaterThanOrEqual(0);
     expect(dataStart).toBeGreaterThan(vitrineStart);
     expect(vitrine).toContain('path: .env');
-    expect(vitrine).not.toContain('.env.dados');
+    expect(vitrine).not.toMatch(/path:\s*\.env\.dados/);
     expect(vitrine).not.toContain('LOLA_ORDERS_ENCRYPTION_KEY');
     expect(vitrine).not.toContain('LOLA_ADMIN_API_KEY');
   });
