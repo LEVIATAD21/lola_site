@@ -59,9 +59,11 @@ export class InventoryStore {
     // change permissions when the directory already exists.
     this.securePath(this.filePath);
     this.securePath(this.holdsFilePath);
-    if (this.holdsFilePath && existsSync(this.holdsFilePath)) this.loadHoldsFromDisk();
+    // O estoque-base precisa ser carregado antes das reservas para validar que
+    // o arquivo de holds não compromete mais unidades do que o inventário contém.
     if (this.filePath && existsSync(this.filePath)) this.loadFromDisk();
     else if (this.filePath) this.persist();
+    if (this.holdsFilePath && existsSync(this.holdsFilePath)) this.loadHoldsFromDisk();
   }
 
   private securePath(filePath?: string): void {
@@ -133,8 +135,10 @@ export class InventoryStore {
       const raw: unknown = JSON.parse(readFileSync(this.holdsFilePath!, 'utf8'));
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Formato inválido.');
       const now = Date.now();
+      const restored = new Map<string, HoldEntry[]>();
+      const totals = new Map<string, number>();
       for (const [holdId, value] of Object.entries(raw as Record<string, unknown>)) {
-        if (!holdId || !Array.isArray(value)) throw new Error('Reserva inválida.');
+        if (!holdId || holdId.length > 128 || !Array.isArray(value)) throw new Error('Reserva inválida.');
         const entries: HoldEntry[] = [];
         for (const candidate of value) {
           if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) throw new Error('Linha de reserva inválida.');
@@ -142,14 +146,29 @@ export class InventoryStore {
           if (typeof item.productId !== 'string' || !Object.hasOwn(this.items, item.productId) ||
               !Number.isSafeInteger(item.quantity) || (item.quantity as number) <= 0 ||
               !Number.isSafeInteger(item.expiresAt) || (item.expiresAt as number) <= now ||
-              (item.owner !== undefined && typeof item.owner !== 'string')) {
+              (item.owner !== undefined && (typeof item.owner !== 'string' || item.owner.length > 128))) {
             throw new Error('Conteúdo de reserva inválido.');
           }
-          entries.push({ productId: item.productId, quantity: item.quantity as number,
+          const quantity = item.quantity as number;
+          const total = (totals.get(item.productId) ?? 0) + quantity;
+          if (!Number.isSafeInteger(total)) throw new Error('Quantidade total de reservas inválida.');
+          totals.set(item.productId, total);
+          entries.push({ productId: item.productId, quantity,
             expiresAt: item.expiresAt as number, ...(typeof item.owner === 'string' ? { owner: item.owner } : {}) });
         }
-        if (entries.length) this.holds.set(holdId, entries);
+        if (entries.length) restored.set(holdId, entries);
       }
+
+      // Um arquivo de reservas truncado, adulterado ou inconsistente não pode
+      // fazer o sistema aceitar estoque negativo nem bloquear unidades além do
+      // saldo-base. Falhar fechado preserva a integridade até intervenção.
+      for (const [productId, quantity] of totals) {
+        const stock = this.lookup(productId);
+        if (!stock || quantity > stock.disponivel) {
+          throw new Error('Pré-reservas excedem o estoque persistido para o produto ' + productId + '.');
+        }
+      }
+      for (const [holdId, entries] of restored) this.holds.set(holdId, entries);
       this.persistHolds();
     } catch (error) {
       throw new Error('Não foi possível carregar as pré-reservas persistidas: ' +
