@@ -25,6 +25,21 @@ Fazer o painel `lola_site_admin` administrar os dados reais consumidos pela loja
 
 A CDN pode entregar arquivos por pontos de presença brasileiros, mas isso não significa que os dados dinâmicos estejam no Brasil. O servidor de API e os volumes persistentes devem estar na região brasileira escolhida.
 
+## Topologia obrigatória de acesso do painel
+
+O modo dividido atual mantém o `data-server` em uma rede Docker privada, sem porta publicada. Isso é correto e deve ser preservado: **o navegador não pode acessar diretamente o `data-server`, a porta 4100, o canal `/internal` ou a chave HMAC**.
+
+A integração precisa de uma camada pública HTTPS para o painel:
+
+1. O painel estático chama uma origem de API HTTPS pública e fixa, preferencialmente sob o mesmo domínio registrável do painel.
+2. Essa camada termina a sessão humana, aplica CSRF, CORS com allowlist exata, rate limit, RBAC e DTOs públicos.
+3. Para operações administrativas, a camada encaminha comandos explícitos ao servidor de dados por HMAC, usando rotas internas dedicadas e assinadas. Não aceitar método, caminho ou payload arbitrários para virar proxy genérico.
+4. O servidor de dados permanece sem `ports:`, sem rota pública e sem CORS. O firewall/rede permite apenas o gateway autorizado.
+5. Cookies de sessão devem ser `HttpOnly`, `Secure` em produção e `SameSite=Strict` quando painel e API forem same-site. Se a topologia exigir sites distintos, a política `SameSite=None; Secure` exige CORS credenciado com origem exata e defesa CSRF explícita.
+6. O proxy reverso/edge deve encaminhar somente as rotas necessárias; jamais publicar `/internal`, arquivos de dados, healthchecks administrativos ou endpoints de manutenção.
+
+**Estado atual:** o Compose mantém corretamente o servidor de dados em rede interna, mas ainda não existe gateway de sessão humana nem contrato de proxy administrativo público. Portanto, o painel não deve apontar diretamente para o data-server nem ser considerado integrado.
+
 ## Requisitos obrigatórios do painel
 
 - Login administrativo real, sessão revogável e cookies HttpOnly/Secure/SameSite.
