@@ -373,6 +373,41 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(codigo).toBe(1);
   }, 30_000);
 
+  it('recusa modo embutido em produção sem chave de cifragem de pedidos', async () => {
+    const porta = await portaLivre();
+    const servidor = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-key-'),
+    });
+    const log = await servidor.esperar(/servidor\\.falha_ao_iniciar/);
+    expect(log).toContain('chave_AES_em_.env.embutido');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa painel embutido em produção sem chave administrativa', async () => {
+    const porta = await portaLivre();
+    const servidor = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
+      LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-admin-key-'),
+    });
+    const log = await servidor.esperar(/servidor\\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_ADMIN_API_KEY_com_pelo_menos_32_caracteres');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('recusa painel embutido em produção com allowlist aberta para qualquer IP', async () => {
     const porta = await portaLivre();
     const servidorAberto = subirEntryPoint('server.ts', {
