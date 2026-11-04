@@ -11,6 +11,13 @@ seus domínios reais.
 > ferramenta operacional nem coloque a chave no browser até essa arquitetura ser
 > substituída e validada.
 
+> **NO-GO geral para lançamento comercial:** ainda não há banco transacional
+> compartilhado para pedidos/estoque, gateway de pagamento com webhooks reais,
+> cotação/rastreio de transportadora validado em produção, nem evidência de
+> restauração de backup e pentest dinâmico no ambiente implantado. As rotas de
+> pagamento/logística não podem ser apresentadas como integrações reais. Só
+> retirar este bloqueio depois de implementar e testar cada integração real.
+
 ---
 
 ## 1. Antes de qualquer coisa
