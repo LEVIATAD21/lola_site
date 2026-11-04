@@ -305,7 +305,7 @@ e é verificada com comparação em tempo constante. Cada camada fecha uma porta
 | **Teto por minuto** (`LOLA_INTERNAL_PER_MINUTE`) | Limita o custo de um flood sobre o verificador. |
 | **Resposta idêntica em toda recusa** | `401 {"error":"Não autorizado."}` com `Cache-Control: no-store` para assinatura errada, janela estourada, nonce repetido e segredo curto — sem oráculo. O log real é protegido por orçamento (20 linhas/s), senão um flood de recusas encheria o disco. |
 
-Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (anti-SSRF), recusa credenciais, query string, fragmento, redirecionamentos (`redirect: 'error'`) e esquemas que não sejam `http`/`https`; limita o corpo lido a 64 KB; usa caminho com regex restrita; tem timeout (`AbortSignal.timeout`) e — importante — **recusa `http://` fora de loopback**, porque o canal carria nome, telefone e endereço em texto puro. Essa exceção exige `LOLA_INTERNAL_PLAINTEXT=true` nos dois processos, bind RFC1918/ULA, segredo HMAC obrigatório e rede privada não publicada; o servidor de dados valida o endereço e registra aviso. TLS continua preferível fora da rede Docker isolada.
+Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (anti-SSRF), recusa credenciais, query string, fragmento, redirecionamentos (`redirect: 'error'`) e esquemas que não sejam `http`/`https`; limita o corpo lido a 64 KB; usa caminho com regex restrita; tem timeout (`AbortSignal.timeout`) e — importante — **recusa `http://` fora de loopback**, porque o canal carria nome, telefone e endereço em texto puro. Essa exceção exige `LOLA_INTERNAL_PLAINTEXT=true` nos dois processos, `LOLA_PRIVATE_NETWORK_ISOLATED=true` no data-server, bind RFC1918/ULA, segredo HMAC obrigatório e rede privada não publicada; o servidor de dados valida o endereço e registra aviso. TLS continua preferível fora da rede Docker isolada.
 
 ### O que a vitrine perde no modo dividido
 
@@ -321,7 +321,7 @@ Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (
 - **Sem CORS**: o painel precisa falar com o próprio backend, que carrega a chave. Colocar `LOLA_ADMIN_API_KEY` em JavaScript de navegador seria entregá-la a qualquer visitante.
 - **Sem `trust proxy`**: a allowlist e o rate limit leem `req.socket.remoteAddress`. `X-Forwarded-For` forjado não abre porta nem balde novo.
 - **Allowlist de origem por CIDR** (`LOLA_ADMIN_ALLOWED_IPS`), com padrão loopback + faixa privada. A verificação da chave vem **antes** da da origem, para que um atacante com chave errada não aprenda nada sobre como a rede está fatiada.
-- **TLS obrigatório fora de loopback em produção**, salvo opt-in explícito para rede privada isolada (`LOLA_INTERNAL_PLAINTEXT=true`, IP RFC1918/ULA, HMAC e porta não publicada). Em qualquer outra rede, configure `LOLA_TLS_CERT_FILE` + `LOLA_TLS_KEY_FILE`. O opt-in privado não cifra o tráfego e gera aviso no log.
+- **TLS obrigatório fora de loopback em produção**, salvo opt-in explícito para rede privada isolada (`LOLA_INTERNAL_PLAINTEXT=true` + `LOLA_PRIVATE_NETWORK_ISOLATED=true`, IP RFC1918/ULA, HMAC e porta não publicada). Em qualquer outra rede, configure `LOLA_TLS_CERT_FILE` + `LOLA_TLS_KEY_FILE`. O opt-in privado não cifra o tráfego e gera aviso no log.
 
 ### Recusas na largada
 
