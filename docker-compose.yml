@@ -121,6 +121,14 @@ services:
       # ver justificativa em `deploy/env.producao.example`.
       LOLA_DATA_SERVICE_URL: "http://data-server:4100"
       LOLA_INTERNAL_PLAINTEXT: "true"
+      # Defesa extra: mesmo se alguém colocar segredos no .env comum por engano,
+      # a vitrine recebe valores vazios e não pode abrir o armazenamento local.
+      LOLA_ORDERS_ENCRYPTION_KEY: ""
+      LOLA_ORDERS_KEY_FILE: ""
+      LOLA_TRACKING_ENCRYPTION_KEY: ""
+      LOLA_ADMIN_API_KEY: ""
+      LOLA_EMBEDDED_ADMIN: "false"
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: "false"
 
     ports:
       - "127.0.0.1:3000:3000"
