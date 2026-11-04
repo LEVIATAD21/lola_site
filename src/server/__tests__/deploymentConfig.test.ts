@@ -5,11 +5,20 @@ import { describe, expect, it } from 'vitest';
 describe('production Docker Compose secret boundaries', () => {
   const compose = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf8');
   const dockerignore = readFileSync(join(process.cwd(), '.dockerignore'), 'utf8');
+  const embeddedStart = compose.indexOf('\n  embutido:');
   const vitrineStart = compose.indexOf('\n  vitrine:');
   const dataStart = compose.indexOf('\n  data-server:');
   const volumesStart = compose.indexOf('\nvolumes:', dataStart);
+  const embedded = compose.slice(embeddedStart, vitrineStart);
   const vitrine = compose.slice(vitrineStart, dataStart);
   const dataServer = compose.slice(dataStart, volumesStart);
+
+  it('injects embedded-only secrets into the embedded service, never the public split-mode services', () => {
+    expect(embeddedStart).toBeGreaterThanOrEqual(0);
+    expect(embedded).toContain('path: .env.embutido');
+    expect(vitrine).not.toMatch(/path:\s*\.env\.embutido/);
+    expect(dataServer).not.toMatch(/path:\s*\.env\.embutido/);
+  });
 
   it('never injects the data-only secret file into the public storefront', () => {
     expect(vitrineStart).toBeGreaterThanOrEqual(0);
