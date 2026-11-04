@@ -13,14 +13,11 @@
 #
 # Arquivos de ambiente (via env_file — NUNCA inline neste YAML):
 #
-#   .env        comum aos dois serviços. É o que a VITRINE enxerga.
-#               No modo dividido ele NÃO pode conter LOLA_ORDERS_ENCRYPTION_KEY
-#               nem LOLA_ADMIN_API_KEY: entregar essas duas chaves à vitrine
-#               anularia toda a separação que o modo dividido existe para criar.
+#   .env            comum aos serviços: configuração pública + HMAC compartilhado.
+#                   Nunca coloque aqui a chave AES nem a chave administrativa.
+#   .env.dados      só o data-server lê: chave AES e chave administrativa do modo dividido.
+#   .env.embutido   só o serviço embutido lê: chave AES e chave administrativa do modo embutido.
 #
-#   .env            comum aos serviços; contém somente configuração pública e HMAC compartilhado.
-#   .env.dados       só o data-server lê: chave AES e chave administrativa do modo dividido.
-#   .env.embutido    só o serviço embutido lê: chave AES e chave administrativa do modo embutido.
 # Exemplos: deploy/env.producao.example (.env), deploy/env.producao.dados.example
 # (.env.dados) e deploy/env.producao.embutido.example (.env.embutido), todos chmod 600.
 #
