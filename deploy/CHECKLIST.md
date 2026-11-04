@@ -88,10 +88,14 @@ seus domínios reais.
 > pré-visualização) entrega o site sem essas proteções. O caminho suportado é
 > o deste checklist — aplicação atrás do proxy.
 
-- [ ] `www`, `apes` (ou o domínio da loja) e `pedidos` apontando para o IP do
-      servidor (A/AAAA; se usar Cloudflare, proxy pode ficar ligado, mas aí
+- [ ] Somente o domínio público da vitrine apontando para o IP do servidor
+      (A/AAAA; se usar Cloudflare, proxy pode ficar ligado, mas aí
       `LOLA_TRUSTED_PROXY` precisa incluir faixas oficiais do Cloudflare como
       IPs/CIDRs explícitos; contagem de saltos e faixas nomeadas são recusadas).
+      Não criar/apontar um subdomínio `pedidos` para o data-server: o Compose
+      não publica a porta 4100 e o Caddyfile deliberadamente não encaminha
+      tráfego público para ele. Um gateway administrativo HTTPS ainda precisa
+      ser implementado antes de publicar uma origem de API para o painel.
 - [ ] Subiu com `docker compose --profile dividido up -d` (recomendado) ou
       `--profile embutido`.
 - [ ] `curl -sI https://www.example.com/api/health | head -3` → `HTTP/2 200`.
@@ -101,11 +105,6 @@ seus domínios reais.
 - [ ] `curl -sI https://www.example.com/.env | head -1` → `404` (nunca `200`).
 - [ ] `curl -sI https://www.example.com/admin | head -1` → `404` ou `403`,
       **nunca** `200`.
-- [ ] `curl -sI https://pedidos.example.com/ | head -1` → `404` (o servidor de
-      dados é API pura e não serve página nenhuma; o painel em si é protegido
-      por allowlist, ver próxima seção).
-- [ ] `curl -s https://pedidos.example.com/api/health` → `{"status":"ok"}`.
-
 ## 4. IP real por trás do proxy (obrigatório)
 
 Sem isso, os logs registram o IP do Caddy, o rate limit agrupa clientes e a
@@ -118,9 +117,9 @@ público falha na inicialização sem IPs/CIDRs explícitos em `LOLA_TRUSTED_PRO
 - [ ] Teste do header: `curl -s -H 'X-Forwarded-For: 8.8.8.8' https://www.example.com/api/health >/dev/null`
       e confira no log: tem que continuar aparecendo o **seu IP real** (o
       Express só aceita XFF de quem está na lista `LOLA_TRUSTED_PROXY`).
-- [ ] `curl -s -o /dev/null -w '%{http_code}\n' https://pedidos.example.com/api/admin/pedidos`
-      → `401`/`403` de fora da rede interna (é o esperado: sem chave e sem
-      estar na allowlist). Nunca coloque `LOLA_ADMIN_API_KEY` no navegador.
+- [ ] Não testar nem expor rotas administrativas por domínio público neste
+      estágio. O acesso temporário permitido é exclusivamente pelo túnel SSH
+      descrito na seção 6. Nunca coloque `LOLA_ADMIN_API_KEY` no navegador.
 
 ## 5. Backup (sem plano de restore, não é backup)
 
