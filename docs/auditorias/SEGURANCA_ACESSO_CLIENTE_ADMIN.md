@@ -338,3 +338,33 @@ Commit validado: `55b609eb475f5f6f3ac96aef7f8c934ba99a4fb7`.
 - CodeQL: execução separada ainda em andamento.
 
 Essas validações são de código e pipeline. Ainda não comprovam firewall, DNS, TLS externo, segredos reais, configuração de cloud, restauração de backups ou resistência sob carga em ambiente implantado.
+
+
+### A-21 — Proxy de produção sem identidade de origem confiável
+**Severidade: ALTA | CORRIGIDO NA BRANCH**
+
+O servidor público agora exige, em produção, `LOLA_TRUSTED_PROXY` com IPs/CIDRs explícitos do proxy TLS. Contagem de saltos e faixas nomeadas não são aceitas. Isso mantém `req.ip`, `req.protocol`, rate limit e a validação CSRF vinculados ao proxy esperado. Testes de boot cobrem ausência, hop count e faixa nomeada.
+
+### A-22 — Exceção de HTTP interno podia ser interpretada como rede privada suficiente
+**Severidade: ALTA | MITIGADO COM OPT-IN EXPLÍCITO**
+
+A exceção sem TLS agora exige simultaneamente `LOLA_INTERNAL_PLAINTEXT=true`, `LOLA_PRIVATE_NETWORK_ISOLATED=true`, bind RFC1918/ULA unicast e HMAC obrigatório. O Compose mantém o data-server apenas na rede Docker `internal: true`, sem porta publicada, com IP fixo. O log deixa claro que HMAC autentica/integridade, mas não cifra. TLS continua sendo a opção preferida fora dessa topologia isolada.
+
+### A-24 — Segredos do data-server eram injetados também no container público
+**Severidade: CRÍTICA | CORRIGIDO NA BRANCH**
+
+O serviço `vitrine` carregava `.env.dados`, que contém chave AES e chave administrativa. Removi esse arquivo do `env_file` da vitrine. Agora apenas o `data-server` o recebe. A vitrine também sobrescreve explicitamente as variáveis de chave AES, arquivo de chave, chave de rastreamento e chave administrativa com valores vazios. Testes estáticos verificam a fronteira.
+
+### A-25 — Segredos do modo embutido compartilhavam o template de ambiente comum
+**Severidade: ALTA | CORRIGIDO NA BRANCH**
+
+As chaves AES e administrativa foram retiradas do `.env` comum e movidas para `.env.embutido`, carregado somente pelo serviço embutido. No modo dividido, `.env.dados` é carregado somente pelo data-server. O `.env` comum contém apenas configuração compartilhada e o segredo HMAC necessário entre serviços. O build context exclui `.env*` e `.data`; testes verificam templates, Compose e Docker ignore.
+
+O modo embutido também falha na inicialização em produção se o armazenamento cifrado não estiver pronto ou se a administração estiver ativada sem chave de pelo menos 32 caracteres.
+
+### A-26 — Configuração de rede Docker inválida não era validada no CI
+**Severidade: MÉDIA | CORRIGIDO NA BRANCH**
+
+Corrigi o formato das declarações de redes Compose e adicionei validação automatizada dos perfis `dividido` e `embutido` com arquivos de ambiente de exemplo. A execução validada no commit `86f9e7e8f3a5f4c23d41e362111944ca473a80d3` aprovou: typecheck, 473 testes, build de produção, `docker compose config` para os dois perfis, auditoria de dependências e auditoria E2E.
+
+**Limite:** validar a configuração Compose não prova que o firewall real do host, as rotas do proxy, os volumes e os segredos do servidor implantado correspondam ao arquivo.
