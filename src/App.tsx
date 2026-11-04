@@ -311,32 +311,15 @@ export default function App() {
       );
       return;
     }
-    if (stock.disponivel <= 0) {
+    if (!stock.disponivel) {
       addToast('error', 'Produto esgotado', `${product.name} não possui unidades disponíveis no momento.`);
       return;
     }
 
+    // O endpoint público informa apenas disponibilidade. A quantidade exata
+    // será validada no servidor durante a criação do pré-pedido.
     const existing = cartItems.find((item) => item.id === itemKey);
-    const currentQty = existing ? existing.quantity : 0;
-    let finalQty = quantity;
-
-    if (currentQty + quantity > stock.disponivel) {
-      const allowed = stock.disponivel - currentQty;
-      if (allowed <= 0) {
-        addToast(
-          'error',
-          'Limite de estoque atingido',
-          `Só restam ${stock.disponivel} un. de ${product.name} e elas já estão na sua sacola.`
-        );
-        return;
-      }
-      finalQty = allowed;
-      addToast(
-        'info',
-        'Quantidade ajustada ao estoque',
-        `Adicionamos apenas ${allowed} un. de ${product.name} (disponível: ${stock.disponivel} un.).`
-      );
-    }
+    const finalQty = quantity;
 
     setCartItems((prev) => {
       const existingItem = prev.find((item) => item.id === itemKey);
@@ -400,22 +383,12 @@ export default function App() {
         );
         return;
       }
-      if (item.quantity + delta > stock.disponivel) {
-        if (item.quantity >= stock.disponivel) {
-          addToast(
-            'error',
-            'Limite de estoque atingido',
-            `Só restam ${stock.disponivel} un. de ${item.name} e elas já estão na sua sacola.`
-          );
-          return;
-        }
-        effectiveDelta = stock.disponivel - item.quantity;
-        addToast(
-          'info',
-          'Quantidade ajustada ao estoque',
-          `A quantidade de ${item.name} foi limitada a ${stock.disponivel} un.`
-        );
+      if (!stock.disponivel) {
+        addToast('error', 'Produto esgotado', `${item.name} não possui unidades disponíveis no momento.`);
+        return;
       }
+      // O cliente pode montar a sacola sem conhecer o saldo exato. O servidor
+      // aplica a validação autoritativa e recusa quantidades indisponíveis.
     }
 
     setCartItems((prev) =>

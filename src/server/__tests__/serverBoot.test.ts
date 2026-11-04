@@ -128,10 +128,15 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     base = `http://127.0.0.1:${porta}`;
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_DIR: diretorioTemporario('lola-vitrine-'),
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      // Simula chave presente por engano: em produção não pode haver chamada externa.
+      GEMINI_API_KEY: 'test-key-must-not-be-used-in-production',
       LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
       LOLA_ADMIN_API_KEY: chaveAdmin,
     });
     await servidor.esperar(/servidor\.iniciado/);
@@ -162,6 +167,54 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect(resposta.headers.get('x-frame-options')).toBe('DENY');
     expect(resposta.headers.get('content-security-policy')).toBeTruthy();
     expect(resposta.headers.get('strict-transport-security')).toBeTruthy();
+  });
+
+  it('expõe apenas disponibilidade booleana, nunca a quantidade exata de estoque', async () => {
+    const resposta = await getJson(`${base}/api/estoque/brinco-1`);
+    const corpo = resposta.corpo as Record<string, unknown>;
+
+    expect(resposta.status).toBe(200);
+    expect(corpo).toEqual({ productId: 'brinco-1', disponivel: true });
+    expect(typeof corpo.disponivel).toBe('boolean');
+    expect(corpo).not.toHaveProperty('total');
+    expect(corpo).not.toHaveProperty('reservado');
+    expect(corpo).not.toHaveProperty('vendido');
+  });
+
+  it('não expõe saldo exato nas rotas públicas de listagem e detalhe', async () => {
+    const listagem = await getJson(`${base}/api/produtos`);
+    const produtos = listagem.corpo as Array<Record<string, unknown>>;
+    const brincoNaLista = produtos.find((item) => item.id === 'brinco-1');
+
+    expect(listagem.status).toBe(200);
+    expect(brincoNaLista?.disponivel).toBe(true);
+    expect(typeof brincoNaLista?.disponivel).toBe('boolean');
+    expect(brincoNaLista).not.toHaveProperty('total');
+    expect(brincoNaLista).not.toHaveProperty('custoInterno');
+    expect(brincoNaLista).not.toHaveProperty('observacoesInternas');
+
+    const detalhe = await getJson(`${base}/api/produto/brinco-1`);
+    const produto = detalhe.corpo as Record<string, unknown>;
+    expect(detalhe.status).toBe(200);
+    expect(produto.disponivel).toBe(true);
+    expect(typeof produto.disponivel).toBe('boolean');
+    expect(produto).not.toHaveProperty('total');
+    expect(produto).not.toHaveProperty('custoInterno');
+    expect(produto).not.toHaveProperty('observacoesInternas');
+  });
+
+  it('assistente informa disponibilidade sem revelar contagem interna de estoque', async () => {
+    const resposta = await getJson(`${base}/api/ai/consulta`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pergunta: 'Tem estoque?', contexto: { produtoId: 'brinco-1' } }),
+    });
+    const corpo = resposta.corpo as { resposta?: string };
+
+    expect(resposta.status).toBe(200);
+    expect(corpo.resposta).toContain('disponível');
+    expect(corpo.resposta).not.toMatch(/\b\d+\s+unidades?\b/i);
+    expect(servidor.saida()).not.toContain('[assistente] Falha ao chamar o modelo');
   });
 
   // VUL-B / bloco 9: JSON malformado passa pelo `express.json` ANTES das rotas;
@@ -270,6 +323,112 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     expect((chaveErrada.corpo as { error?: string }).error).toBe(MENSAGEM_ADMIN_401);
   });
 
+  it('recusa bind público em produção sem declarar os proxies confiáveis', async () => {
+    const porta = await portaLivre();
+    const servidorSemProxy = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '0.0.0.0',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-no-trusted-proxy-'),
+    });
+    const log = await servidorSemProxy.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_TRUSTED_PROXY');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorSemProxy.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa contagem de saltos como proxy confiável em bind público de produção', async () => {
+    const porta = await portaLivre();
+    const servidorHop = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '0.0.0.0',
+      LOLA_TRUSTED_PROXY: '1',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-proxy-hop-'),
+    });
+    const log = await servidorHop.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('IPs/CIDRs_explícitos');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorHop.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa faixa nomeada ampla como proxy confiável em bind público de produção', async () => {
+    const porta = await portaLivre();
+    const servidorNamedRange = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '0.0.0.0',
+      LOLA_TRUSTED_PROXY: 'uniquelocal',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-proxy-range-'),
+    });
+    const log = await servidorNamedRange.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('faixas_nomeadas');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorNamedRange.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa modo embutido em produção sem chave de cifragem de pedidos', async () => {
+    const porta = await portaLivre();
+    const servidor = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-key-'),
+    });
+    const log = await servidor.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('chave_AES_em_.env.embutido');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa painel embutido em produção sem chave administrativa', async () => {
+    const porta = await portaLivre();
+    const servidor = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
+      LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-no-admin-key-'),
+    });
+    const log = await servidor.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_ADMIN_API_KEY_com_pelo_menos_32_caracteres');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa painel embutido em produção com allowlist aberta para qualquer IP', async () => {
+    const porta = await portaLivre();
+    const servidorAberto = subirEntryPoint('server.ts', {
+      NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
+      PORT: String(porta),
+      LOLA_DATA_DIR: diretorioTemporario('lola-embedded-open-admin-'),
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_EMBEDDED_ADMIN: 'true',
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: 'true',
+      LOLA_ADMIN_API_KEY: 'k'.repeat(64),
+      LOLA_ADMIN_ALLOWED_IPS: 'any',
+    });
+    const log = await servidorAberto.esperar(/servidor\.falha_ao_iniciar/);
+    expect(log).toContain('LOLA_ADMIN_ALLOWED_IPS=any');
+    expect(log).not.toContain('servidor.iniciado');
+    const { codigo } = await servidorAberto.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('monta o painel administrativo em produção e aceita a chave certa', async () => {
     const resposta = await getJson(`${base}/api/admin/pre-pedidos`, {
       headers: { 'x-admin-key': chaveAdmin },
@@ -317,6 +476,8 @@ describe('server.ts — modo dividido com o servidor de dados fora do ar (boot r
     // é que a vitrine NÃO o monta, por mais que quem opera peça.
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_TRUSTED_PROXY: '127.0.0.1',
       PORT: String(porta),
       LOLA_DATA_SERVICE_URL: `http://127.0.0.1:${portaMorta}`,
       LOLA_INTERNAL_PLAINTEXT: 'true',

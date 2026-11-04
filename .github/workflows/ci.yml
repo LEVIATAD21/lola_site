@@ -5,41 +5,55 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
-# RT-S-09: o job só precisa ler o repositório; sem este bloco o token fica
-# com o padrão do repositório.
 permissions:
   contents: read
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      # Actions pinadas por SHA (RT-S-01): tag móvel muda de conteúdo sem aviso
-      # e roda com o token do workflow.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+concurrency:
+  group: lola-store-ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Dependency audit
-        run: npm audit
-
-      # RT-S-02: a árvore npm do e2e/ tem lockfile próprio e ficaria fora do
-      # portão; audit limpo hoje, gate contínuo a partir de agora.
-      - name: Dependency audit (e2e)
-        run: cd e2e && npm ci && npm audit
-
       - name: Typecheck
         run: npm run lint
-
-      - name: Test
+      - name: Unit and integration tests
         run: npm test
-
-      - name: Build
+      - name: Production build
         run: npm run build
+      - name: Validate production Compose configuration
+        run: |
+          cp deploy/env.producao.example .env
+          cp deploy/env.producao.dados.example .env.dados
+          cp deploy/env.producao.embutido.example .env.embutido
+          docker compose --profile dividido config --quiet
+          docker compose --profile embutido config --quiet
+      - name: Install E2E dependencies
+        run: cd e2e && npm ci
+      - name: E2E dependency audit
+        run: cd e2e && npm audit
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Dependency audit (blocking)
+        run: npm audit

@@ -168,6 +168,7 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
     createInitialStock(),
     path.join(options.dataDir, 'inventory.json'),
     options.holdLimits,
+    path.join(options.dataDir, 'inventory-holds.json'),
   );
   const orders = new EncryptedOrderStore(
     options.dataDir,

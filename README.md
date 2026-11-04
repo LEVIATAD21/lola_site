@@ -151,7 +151,7 @@ No modo dividido a vitrine **não** abre `LOLA_DATA_DIR`, não guarda a chave AE
 
 ### Variáveis de ambiente
 
-A integração da assistente pode depender de uma chave configurada no ambiente do servidor, como `GEMINI_API_KEY`. Configure segredos somente no ambiente local ou no gerenciador de segredos do serviço de hospedagem. **Nunca inclua chaves privadas no frontend, no repositório ou em variáveis com prefixo público `VITE_`.**
+A integração externa da assistente pode depender de `GEMINI_API_KEY` em desenvolvimento. Em produção, o backend bloqueia chamadas ao Gemini até existir aviso prévio e consentimento verificável da cliente. Configure segredos somente no ambiente local ou no gerenciador de segredos do serviço de hospedagem. **Nunca inclua chaves privadas no frontend, no repositório ou em variáveis com prefixo público `VITE_`.**
 
 ## 🧪 Qualidade e testes
 
@@ -178,8 +178,8 @@ Tudo o que a operação precisa está em [`deploy/`](deploy/): `Dockerfile` + `d
 | | `--profile embutido` | `--profile dividido` (recomendado) |
 |---|---|---|
 | Serviços | 1 container (vitrine + API) | `vitrine` (pública) + `data-server` (privada) |
-| Chave AES dos pedidos | no ambiente do próprio container | só no `.env.dados`, que a vitrine não lê |
-| Painel administrativo | opt-in (`LOLA_EMBEDDED_ADMIN=true`) | no `data-server`, sem porta publicada |
+| Chave AES dos pedidos | só no `.env.embutido` | só no `.env.dados`, que a vitrine não lê |
+| Administração | API legada com chave compartilhada; não é painel humano pronto | API no `data-server`, sem porta publicada; ainda sem identidade individual |
 | Rede | 1 rede | rede pública + rede `internal: true` |
 | VPS mínima | 1 GB | 1 GB (o ganho é de superfície, não de hardware) |
 
@@ -191,8 +191,9 @@ No modo dividido, o servidor de dados **não publica porta nenhuma**: ele fica s
 # pré-requisitos: Docker 24+ / Compose v2.24+ (Node 22 no host, para os scripts)
 git clone <repo> /srv/lola && cd /srv/lola
 
-install -m 600 deploy/env.producao.example       /srv/lola/.env        # e edite
-install -m 600 deploy/env.producao.dados.example  /srv/lola/.env.dados  # e edite
+install -m 600 deploy/env.producao.example          /srv/lola/.env        # comum, sem chaves AES/admin
+install -m 600 deploy/env.producao.dados.example     /srv/lola/.env.dados  # somente dividido
+install -m 600 deploy/env.producao.embutido.example  /srv/lola/.env.embutido # somente embutido
 
 docker compose --profile dividido up -d --build   # ou --profile embutido
 ```
@@ -223,7 +224,7 @@ O script recusa gravar backup que não conseguiu decifrar: ele roda `deploy/veri
 
 ### 5. Antes de dizer "está no ar"
 
-Siga o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md). Os itens que mais derrubam lançamento são: IP real por trás do proxy (sem `LOLA_TRUSTED_PROXY` declarado, todo cliente divide o mesmo bucket de rate limit), `X-Forwarded-For` forjado sendo ignorado, e backup agendado mas nunca testado.
+Siga o [`deploy/CHECKLIST.md`](deploy/CHECKLIST.md). O servidor público em produção exige `LOLA_TRUSTED_PROXY` com IPs/CIDRs explícitos do proxy TLS; sem isso, a inicialização falha. Também valide `X-Forwarded-For` forjado, allowlist administrativa e restauração real de backup.
 
 ### 6. Manutenção recorrente
 
@@ -305,7 +306,7 @@ e é verificada com comparação em tempo constante. Cada camada fecha uma porta
 | **Teto por minuto** (`LOLA_INTERNAL_PER_MINUTE`) | Limita o custo de um flood sobre o verificador. |
 | **Resposta idêntica em toda recusa** | `401 {"error":"Não autorizado."}` com `Cache-Control: no-store` para assinatura errada, janela estourada, nonce repetido e segredo curto — sem oráculo. O log real é protegido por orçamento (20 linhas/s), senão um flood de recusas encheria o disco. |
 
-Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (anti-SSRF), recusa credenciais, query string, fragmento, redirecionamentos (`redirect: 'error'`) e esquemas que não sejam `http`/`https`; limita o corpo lido a 64 KB; usa caminho com regex restrita; tem timeout (`AbortSignal.timeout`) e — importante — **recusa `http://` fora de loopback**, porque o canal carria nome, telefone e endereço em texto puro. Só quem declara `LOLA_INTERNAL_PLAINTEXT=true` abre essa exceção, e o servidor avisa no log.
+Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (anti-SSRF), recusa credenciais, query string, fragmento, redirecionamentos (`redirect: 'error'`) e esquemas que não sejam `http`/`https`; limita o corpo lido a 64 KB; usa caminho com regex restrita; tem timeout (`AbortSignal.timeout`) e — importante — **recusa `http://` fora de loopback**, porque o canal carria nome, telefone e endereço em texto puro. Essa exceção exige `LOLA_INTERNAL_PLAINTEXT=true` nos dois processos, `LOLA_PRIVATE_NETWORK_ISOLATED=true` no data-server, bind RFC1918/ULA, segredo HMAC obrigatório e rede privada não publicada; o servidor de dados valida o endereço e registra aviso. TLS continua preferível fora da rede Docker isolada.
 
 ### O que a vitrine perde no modo dividido
 
@@ -321,7 +322,7 @@ Do lado da vitrine, o cliente endurecido recusa base URL vinda de requisição (
 - **Sem CORS**: o painel precisa falar com o próprio backend, que carrega a chave. Colocar `LOLA_ADMIN_API_KEY` em JavaScript de navegador seria entregá-la a qualquer visitante.
 - **Sem `trust proxy`**: a allowlist e o rate limit leem `req.socket.remoteAddress`. `X-Forwarded-For` forjado não abre porta nem balde novo.
 - **Allowlist de origem por CIDR** (`LOLA_ADMIN_ALLOWED_IPS`), com padrão loopback + faixa privada. A verificação da chave vem **antes** da da origem, para que um atacante com chave errada não aprenda nada sobre como a rede está fatiada.
-- **TLS opcional mas lembrado** (`LOLA_TLS_CERT_FILE` + `LOLA_TLS_KEY_FILE`, os dois ou nenhum). Sem ele, `x-admin-key` e o PII dos pedidos atravessam a rede privada em claro. Bind fora de loopback sem TLS gera aviso explícito no log de subida.
+- **TLS obrigatório fora de loopback em produção**, salvo opt-in explícito para rede privada isolada (`LOLA_INTERNAL_PLAINTEXT=true` + `LOLA_PRIVATE_NETWORK_ISOLATED=true`, IP RFC1918/ULA, HMAC e porta não publicada). Em qualquer outra rede, configure `LOLA_TLS_CERT_FILE` + `LOLA_TLS_KEY_FILE`. O opt-in privado não cifra o tráfego e gera aviso no log.
 
 ### Recusas na largada
 
@@ -331,7 +332,7 @@ Nenhuma dessas situações vira um servidor rodando "mais fraco do que o esperad
 |---|---|
 | `LOLA_INTERNAL_SECRET` ausente ou < 32 caracteres | `data-server.ts` não inicia; `server.ts` em modo dividido recusa o canal. |
 | `LOLA_DATA_SERVICE_URL` malformada, com credenciais, query, fragmento ou esquema inválido | `server.ts` não inicia. |
-| `http://` fora de loopback sem `LOLA_INTERNAL_PLAINTEXT=true` | `server.ts` não inicia. |
+| `http://` fora de loopback sem `LOLA_INTERNAL_PLAINTEXT=true` | `server.ts` recusa a conexão; o `data-server.ts` também exige TLS ou opt-in privado RFC1918/ULA com HMAC. |
 | `LOLA_ORDERS_ENCRYPTION_KEY` com permissão aberta em produção | Pré-pedidos desligados (não grava dado pessoal sem chave segura). |
 | Bind coringa em produção sem `LOLA_ALLOW_WILDCARD_BIND=true` | `data-server.ts` não inicia. |
 | `LOLA_TLS_CERT_FILE` e `LOLA_TLS_KEY_FILE` declarados só um dos dois, ou apontando para o mesmo arquivo | `data-server.ts` não inicia. |
@@ -360,7 +361,7 @@ O estoque do modo embutido reserva em memória por 30 minutos; no modo dividido 
 - **Cupom é regra de servidor, não de vitrine.** Os códigos ficam visíveis no bundle (o desconto de campanha é informação de prateleira, não segredo), mas `checkCoupon` só concede se o cupom existir, estiver dentro da validade (`COUPON_RULES[code].validUntil`), atingir o subtotal mínimo e não ter estourado o teto de usos — contado sobre os pré-pedidos gravados. Antes, os três códigos eram reutilizáveis para sempre, sem mínimo e sem fim.
 - **CEP precisa ser plausível**, não apenas ter 8 dígitos: fora da faixa real (`01000-000` a `99999-999`) ou sequência degenerada (`00000000`, `11111111`) é recusado. O endereço ainda não é reconciliado com o ViaCEP — isso recusaria pedido de CEP não consultável e é decisão comercial.
 - A solicitação fica com status `awaiting_payment_setup` e pagamento `not_configured`: não há cobrança real, Pix/boletos emitidos ou confirmação final de venda nesta versão.
-- Ao registrar o pré-pedido, o backend **reserva as unidades por `LOLA_RESERVATION_TTL_MS` (padrão 30 minutos)**, sem gravar nada no arquivo de estoque: `disponivel` devolvido à vitrine já vem líquido das reservas ativas. Assim, pedidos simultâneos não vendem o mesmo exemplar duas vezes. Ao expirar, o estoque volta sozinho. As reservas vivem em memória, então reiniciar o processo libera as reservas ativas.
+- Ao registrar o pré-pedido, o backend **persiste a pré-reserva por `LOLA_RESERVATION_TTL_MS` (padrão 30 minutos)** em `inventory-holds.json`, separado do saldo-base. Ao reiniciar, recupera reservas ainda válidas e descarta as expiradas. Limite importante: são arquivos locais, sem transação ACID conjunta entre estoque e pedidos e sem coordenação multi-instância; banco transacional é obrigatório antes de escalar concorrência.
 - A baixa administrativa em `POST /api/estoque/atualizar` consome primeiro as unidades pré-reservadas (ordem de chegada) e só depois as livres; uma baixa acima do saldo restaura as reservas intactas.
 - Número do cartão, CVV e validade não são enviados à API nem persistidos. Nome, telefone, endereço e itens são gravados cifrados com AES-256-GCM em `.data/orders.enc.json`.
 - **Retenção dos pré-pedidos (LGPD, art. 15, II):** `LOLA_ORDER_RETENTION_DAYS` (padrão **90** dias, `0` desliga e é opt-in explícito) define por quanto tempo um pré-pedido é tratado. A varredura roda na subida e de hora em hora (`pedidos.expirados_removidos` no log), descarta o registro acima do prazo e **reescreve o arquivo com a chave vigente** — apagar não rotaciona chave, então nenhum registro vizinho fica ilegível. `MAX_RECORDS` continua sendo apenas teto de espaço, não retenção. Detalhes e matriz de direitos do titular: [`docs/auditorias/lgpd.md`](docs/auditorias/lgpd.md).
@@ -378,7 +379,7 @@ O estoque do modo embutido reserva em memória por 30 minutos; no modo dividido 
 - A autenticação administrativa tem limite de tentativas por IP. Os limites são locais por processo; produção com múltiplas instâncias deve adicionar um WAF ou armazenamento compartilhado de rate limiting.
 - Todas essas rotas exigem o cabeçalho `x-admin-key`. Configure `LOLA_ADMIN_API_KEY` como segredo no servidor com pelo menos 32 caracteres; gere com `openssl rand -hex 32`. Sem essa variável (ou com valor curto), as operações privilegiadas ficam recusadas.
 - **Em modo dividido essas rotas existem apenas no `data-server.ts`.** A vitrine responde `404` para elas com ou sem chave, e é essa a garantia: o processo exposto à internet não tem o painel nem a chave. Rode o painel atrás de rede privada ou VPN, nunca na internet.
-- **Allowlist de origem** (`LOLA_ADMIN_ALLOWED_IPS`): aceita IPs e CIDRs separados por vírgula, por padrão loopback + faixa privada (RFC1918, link-local, ULA IPv6). A origem é lida do socket, nunca de um header — `X-Forwarded-For` forjado não passa. Entrada inválida cai para o padrão privado em vez de abrir tudo. A `any` desliga a restrição, mas exige o valor literal e avisa no log.
+- **Allowlist de origem** (`LOLA_ADMIN_ALLOWED_IPS`): aceita IPs e CIDRs separados por vírgula, por padrão loopback + faixa privada (RFC1918, link-local, ULA IPv6). A origem é lida do socket, nunca de um header — `X-Forwarded-For` forjado não passa. Entrada inválida cai para o padrão privado. `any` é recusado em produção, tanto no modo dividido quanto no embutido.
 - A ordem das verificações é intencional: a **chave é checada antes da origem**, com resposta `401` idêntica à de "sem chave". Se fosse ao contrário, um atacante com chave errada descobriria que existe restrição de rede e passaria a mapear a topologia interna.
 - Não coloque a chave no frontend, em variáveis `VITE_*`, em URLs ou no repositório. Use HTTPS em produção.
 - A resposta para "chave errada" e para "chave não configurada" é **idêntica (401)**, de propósito: uma diferença de status ou texto seria um oráculo que diz a um visitante se existe chave administrativa no servidor. O diagnóstico real aparece no log (`admin.desativado` na subida e `admin.access` a cada tentativa) e nunca contém a chave.
@@ -391,7 +392,7 @@ O estoque do modo embutido reserva em memória por 30 minutos; no modo dividido 
 - O parser JSON aceita corpos de no máximo 16 KiB. As consultas à assistente, os pré-pedidos, as rotas administrativas e as consultas GET de catálogo têm limites de frequência.
 - **Node.js `>=22.12.0`** é exigido (`engines` + `.nvmrc`): é o piso do Vite 8, a restrição mais estrita das dependências. `npm ci` recusa instalar em versão menor. O `npm start` roda o servidor via `tsx`, então o backend funciona igual em qualquer versão dentro dessa faixa — não depende de suporte nativo a TypeScript, que só ficou ligado por padrão a partir do 22.18.
 - `GET /api/produtos`, `GET /api/produto/:id` e `GET /api/estoque/:id` têm teto de 300 req/min por IP (`LOLA_READ_PER_MINUTE`). Antes não havia limite nenhum, o que permitia raspagem completa do catálogo e inundação do log. `GET /api/health` fica fora de propósito: monitor de uptime e balanceador consultam com frequência e a rota é O(1).
-- `POST /api/ai/consulta` tem três camadas por IP (20/min, 120/h e 400/dia) e aborta a chamada ao modelo após `LOLA_AI_TIMEOUT_MS` (padrão 20 s), caindo no motor local de regras. Sem essas camadas, um atacante dispara centenas de milhares de chamadas pagas por dia em nome da loja. Em produção com tráfego real, ajuste os tetos conforme o orçamento da conta Gemini.
+- `POST /api/ai/consulta` tem três camadas por IP (20/min, 120/h e 400/dia) e aborta a chamada ao modelo após `LOLA_AI_TIMEOUT_MS` (padrão 20 s), caindo no motor local de regras. Em produção, chamadas externas estão bloqueadas até existir consentimento verificável; a chave configurada por engano não habilita a transferência de dados. Os limites continuam protegendo o motor local e o eventual uso externo em desenvolvimento.
 - `POST /api/pedidos/rascunho` tem teto de **10 pré-pedidos por minuto por IP** (`LOLA_ORDER_PER_MINUTE`). É uma rota que consome estoque e grava dado pessoal cifrado, então o teto é deliberadamente baixo; suba apenas em teste.
 - No modo dividido, o canal interno tem teto próprio (`LOLA_INTERNAL_PER_MINUTE`, padrão 10 000/min) do lado do servidor de dados, contado **por origem e não por caminho** — o middleware alcança qualquer rota sob `/internal`, e agrupar por caminho daria balde novo a cada rota inventada. A vitrine guarda o catálogo em cache por `LOLA_SNAPSHOT_TTL_MS` (padrão 5 s) com reserva de voo única — sem isso, uma rajada de visitantes viraria uma tempestade de chamadas contra o vizinho.
 - **HSTS vem ligado por padrão em produção** e os navegadores ignoram o cabeçalho recebido por HTTP simples, então o padrão só protege. Desligue com `LOLA_HSTS_ENABLED=false` apenas se o hostname ainda precisar atender por HTTP. `LOLA_HSTS_INCLUDE_SUBDOMAINS=true` arrasta subdomínios junto — só ligue se todos já estiverem em HTTPS, porque quebra subdomínio em HTTP pelo período inteiro do max-age (180 dias).
@@ -414,7 +415,7 @@ Eventos: `servidor.iniciado`, `servidor.falha_ao_iniciar`, `http.request`, `http
 
 No modo dividido, os eventos com prefixo `dados.` são do `data-server.ts` e os com prefixo `interno.` marcam recusas do canal assinado. As recusas de assinatura vêm protegidas por orçamento (20 linhas por segundo): sem isso, um flood de chamadas inválidas encheria o disco da máquina de logs de rejeição — que é exatamente o que a limitação de requisições existe para evitar.
 
-Os eventos com prefixo `config.` são diagnósticos de configuração resolvidos na subida: um valor inválido nunca derruba o servidor — ele cai no padrão seguro e registra o motivo. `interno.chave_rejeitada` é falha fechada (nenhuma requisição interna é aceita sem chave válida) e `interno.canal_texto_puro` marca o opt-in explícito por `LOLA_INTERNAL_PLAINTEXT`.
+Os eventos com prefixo `config.` registram diagnósticos de configuração. Algumas configurações inseguras em produção agora falham fechadas: bind público sem IPs/CIDRs explícitos em `LOLA_TRUSTED_PROXY`, allowlist administrativa `any` e servidor de dados fora de loopback sem TLS ou opt-in de rede privada isolada. `interno.chave_rejeitada` é falha fechada e `interno.canal_texto_puro` marca o opt-in explícito por `LOLA_INTERNAL_PLAINTEXT`.
 
 Regras fixas do registro:
 

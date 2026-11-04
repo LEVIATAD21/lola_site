@@ -62,6 +62,63 @@ describe('data-server.ts — boot real', () => {
     expect(resposta.headers.get('x-content-type-options')).toBe('nosniff');
   }, 30_000);
 
+  it('recusa allowlist administrativa aberta para qualquer IP em produção', async () => {
+    const porta = await portaLivre();
+    const servidor = subirDataServer({
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_INTERNAL_SECRET: 's'.repeat(64),
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_ADMIN_ALLOWED_IPS: 'any',
+      LOLA_DATA_DIR: diretorioTemporario('lola-open-admin-'),
+    });
+
+    const log = await servidor.esperar(/dados\.falha_configuracao/);
+    expect(log).toContain('allowlist_administrativa_não_pode_aceitar_qualquer_IP');
+    expect(log).toContain('LOLA_ADMIN_ALLOWED_IPS');
+    expect(log).not.toContain('dados.servidor_iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa inicialização de produção quando a chave de pedidos não está configurada', async () => {
+    const porta = await portaLivre();
+    const servidor = subirDataServer({
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '127.0.0.1',
+      LOLA_INTERNAL_SECRET: 's'.repeat(64),
+      LOLA_DATA_DIR: diretorioTemporario('lola-no-order-key-'),
+    });
+
+    const log = await servidor.esperar(/dados\.falha_configuracao/);
+    expect(log).toContain('armazenamento_seguro_de_pedidos');
+    expect(log).toContain('LOLA_ORDERS_ENCRYPTION_KEY');
+    expect(log).not.toContain('dados.servidor_iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
+  it('recusa bind fora do loopback em produção quando TLS não está configurado', async () => {
+    const porta = await portaLivre();
+    const servidor = subirDataServer({
+      NODE_ENV: 'production',
+      PORT: String(porta),
+      LOLA_BIND_HOST: '10.0.0.5',
+      LOLA_INTERNAL_SECRET: 's'.repeat(64),
+      LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
+      LOLA_DATA_DIR: diretorioTemporario('lola-no-tls-'),
+    });
+
+    const log = await servidor.esperar(/dados\.falha_configuracao/);
+    expect(log).toContain('sem_TLS');
+    expect(log).toContain('LOLA_TLS_CERT_FILE');
+    expect(log).not.toContain('dados.servidor_iniciado');
+    const { codigo } = await servidor.esperarSaida();
+    expect(codigo).toBe(1);
+  }, 30_000);
+
   it('canal interno existe e recusa requisição sem assinatura com 401', async () => {
     const porta = await portaLivre();
     const servidor = subirDataServer({ PORT: String(porta), LOLA_DATA_DIR: diretorioTemporario('lola-boot-') });

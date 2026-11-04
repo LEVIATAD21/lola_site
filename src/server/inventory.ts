@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export interface StockItem {
@@ -30,7 +30,7 @@ export interface HoldLimits {
 
 export type HoldResult =
   | { ok: true }
-  | { ok: false; status: 404 | 409 | 429; productId: string; requested: number; available: number; error: string };
+  | { ok: false; status: 404 | 409 | 429 | 500; productId: string; requested: number; available: number; error: string };
 
 /**
  * Persistent inventory for a single Node process. Mutations are synchronous to
@@ -40,24 +40,38 @@ export type HoldResult =
 export class InventoryStore {
   private readonly items: Record<string, StockItem>;
   private readonly filePath?: string;
-  /**
-   * Pré-reservas de pré-pedidos, só em memória. O arquivo de estoque permanece
-   * intacto: `disponivel` devolvido ao cliente já desconta as reservas ativas,
-   * então nada se perde e nada é contado em duplicidade ao reiniciar o processo.
-   */
+  private readonly holdsFilePath?: string;
+  /** Pré-reservas persistidas separadamente; expiram por timestamp mesmo após restart. */
   private readonly holds = new Map<string, HoldEntry[]>();
 
   constructor(
     initial: Record<string, StockItem>,
     filePath?: string,
     private readonly limits: HoldLimits = {},
+    holdsFilePath?: string,
   ) {
     this.items = Object.fromEntries(
       Object.entries(initial).map(([id, item]) => [id, { ...item }]),
     );
     this.filePath = filePath;
+    this.holdsFilePath = holdsFilePath;
+    // Tighten existing data directories/files too: mkdir({mode}) does not
+    // change permissions when the directory already exists.
+    this.securePath(this.filePath);
+    this.securePath(this.holdsFilePath);
+    // O estoque-base precisa ser carregado antes das reservas para validar que
+    // o arquivo de holds não compromete mais unidades do que o inventário contém.
     if (this.filePath && existsSync(this.filePath)) this.loadFromDisk();
     else if (this.filePath) this.persist();
+    if (this.holdsFilePath && existsSync(this.holdsFilePath)) this.loadHoldsFromDisk();
+  }
+
+  private securePath(filePath?: string): void {
+    if (!filePath) return;
+    const directory = dirname(filePath);
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    chmodSync(directory, 0o700);
+    if (existsSync(filePath)) chmodSync(filePath, 0o600);
   }
 
   private isValidItem(id: string, value: unknown): value is StockItem {
@@ -101,10 +115,68 @@ export class InventoryStore {
     // EncryptedOrderStore, então `LOLA_DATA_DIR` nasceu 0755 e o 0700 posterior
     // não corrigia um diretório já criado. O pai dos arquivos de dados não pode
     // ficar legível por outros usuários do host.
-    mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
+    this.securePath(this.filePath);
     const temporaryPath = this.filePath + '.' + process.pid + '.tmp';
     writeFileSync(temporaryPath, JSON.stringify(this.items, null, 2) + '\n', { mode: 0o600 });
     renameSync(temporaryPath, this.filePath);
+  }
+
+  private persistHolds(): void {
+    if (!this.holdsFilePath) return;
+    this.securePath(this.holdsFilePath);
+    const temporaryPath = this.holdsFilePath + '.' + process.pid + '.tmp';
+    const serialized = Object.fromEntries([...this.holds].map(([id, entries]) => [id, entries]));
+    writeFileSync(temporaryPath, JSON.stringify(serialized) + '\n', { mode: 0o600 });
+    renameSync(temporaryPath, this.holdsFilePath);
+  }
+
+  private loadHoldsFromDisk(): void {
+    try {
+      const raw: unknown = JSON.parse(readFileSync(this.holdsFilePath!, 'utf8'));
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Formato inválido.');
+      const now = Date.now();
+      const restored = new Map<string, HoldEntry[]>();
+      const totals = new Map<string, number>();
+      for (const [holdId, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (!holdId || holdId.length > 128 || !Array.isArray(value)) throw new Error('Reserva inválida.');
+        const entries: HoldEntry[] = [];
+        for (const candidate of value) {
+          if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) throw new Error('Linha de reserva inválida.');
+          const item = candidate as Record<string, unknown>;
+          if (typeof item.productId !== 'string' || !Object.hasOwn(this.items, item.productId) ||
+              !Number.isSafeInteger(item.quantity) || (item.quantity as number) <= 0 ||
+              !Number.isSafeInteger(item.expiresAt) ||
+              (item.owner !== undefined && (typeof item.owner !== 'string' || item.owner.length > 128))) {
+            throw new Error('Conteúdo de reserva inválido.');
+          }
+          // Reserva vencida durante a parada do processo é estado normal, não
+          // corrupção. Descarta e persiste a limpeza para não impedir o boot.
+          if ((item.expiresAt as number) <= now) continue;
+          const quantity = item.quantity as number;
+          const total = (totals.get(item.productId) ?? 0) + quantity;
+          if (!Number.isSafeInteger(total)) throw new Error('Quantidade total de reservas inválida.');
+          totals.set(item.productId, total);
+          entries.push({ productId: item.productId, quantity,
+            expiresAt: item.expiresAt as number, ...(typeof item.owner === 'string' ? { owner: item.owner } : {}) });
+        }
+        if (entries.length) restored.set(holdId, entries);
+      }
+
+      // Um arquivo de reservas truncado, adulterado ou inconsistente não pode
+      // fazer o sistema aceitar estoque negativo nem bloquear unidades além do
+      // saldo-base. Falhar fechado preserva a integridade até intervenção.
+      for (const [productId, quantity] of totals) {
+        const stock = this.lookup(productId);
+        if (!stock || quantity > stock.disponivel) {
+          throw new Error('Pré-reservas excedem o estoque persistido para o produto ' + productId + '.');
+        }
+      }
+      for (const [holdId, entries] of restored) this.holds.set(holdId, entries);
+      this.persistHolds();
+    } catch (error) {
+      throw new Error('Não foi possível carregar as pré-reservas persistidas: ' +
+        (error instanceof Error ? error.message : 'erro desconhecido'));
+    }
   }
 
   /** Unidades já comprometidas por pré-reservas ativas. */
@@ -221,16 +293,28 @@ export class InventoryStore {
       }
       pending.set(line.productId, (pending.get(line.productId) ?? 0) + line.quantity);
     }
+    const previous = this.holds.get(holdId);
     this.holds.set(holdId, lines.map((line) => ({ ...line, expiresAt, ...(owner ? { owner } : {}) })));
+    try { this.persistHolds(); }
+    catch {
+      if (previous) this.holds.set(holdId, previous); else this.holds.delete(holdId);
+      return { ok: false, status: 500, productId: lines[0]?.productId ?? '', requested, available: 0,
+        error: 'Não foi possível registrar a reserva com segurança. Tente novamente.' };
+    }
     return { ok: true };
   }
 
   removeHold(holdId: string): boolean {
-    return this.holds.delete(holdId);
+    const previous = this.holds.get(holdId);
+    if (!previous) return false;
+    this.holds.delete(holdId);
+    try { this.persistHolds(); return true; }
+    catch { this.holds.set(holdId, previous); return false; }
   }
 
   /** Devolve ao estoque as pré-reservas vencidas. */
   sweep(now = Date.now()): number {
+    const before = this.snapshotHolds();
     let expired = 0;
     for (const [holdId, entries] of [...this.holds]) {
       const live = entries.filter((entry) => entry.expiresAt > now);
@@ -238,6 +322,10 @@ export class InventoryStore {
       expired += entries.length - live.length;
       if (live.length) this.holds.set(holdId, live);
       else this.holds.delete(holdId);
+    }
+    if (expired > 0) {
+      try { this.persistHolds(); }
+      catch { this.restoreHolds(before); return 0; }
     }
     return expired;
   }
@@ -298,10 +386,12 @@ export class InventoryStore {
     current.disponivel -= quantity;
     current.vendido += quantity;
     try {
+      this.persistHolds();
       this.persist();
     } catch {
       this.items[productId] = previous;
       this.restoreHolds(holdsBefore);
+      try { this.persistHolds(); } catch { /* keep process fail-closed; operator must inspect storage */ }
       return { ok: false, status: 500, error: 'Não foi possível salvar a atualização de estoque.' };
     }
     return { ok: true, stock: { ...current, disponivel: this.availableQuantity(productId) } };

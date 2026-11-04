@@ -38,7 +38,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isGlobalLightboxOpen, setIsGlobalLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [stockUnits, setStockUnits] = useState<number | null>(null);
+  const [stockUnits, setStockUnits] = useState<boolean | null>(null);
 
   useEffect(() => {
     let isMounted = true;

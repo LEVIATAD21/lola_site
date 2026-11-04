@@ -11,7 +11,7 @@ interface EarringProductCardProps {
   onAddToCart: (product: Product) => void;
   onSelectProduct: (product: Product) => void;
   viewMode?: 'grid' | 'list';
-  availableUnits?: number | null;
+  availableUnits?: boolean | null;
 }
 
 export const EarringProductCard: React.FC<EarringProductCardProps> = ({
@@ -23,7 +23,7 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
   viewMode = 'grid',
   availableUnits: propAvailableUnits,
 }) => {
-  const [stockUnits, setStockUnits] = useState<number | null | undefined>(propAvailableUnits);
+  const [stockUnits, setStockUnits] = useState<boolean | null | undefined>(propAvailableUnits);
 
   useEffect(() => {
     if (propAvailableUnits !== undefined) {
@@ -41,10 +41,10 @@ export const EarringProductCard: React.FC<EarringProductCardProps> = ({
     };
   }, [product.id, propAvailableUnits]);
 
-  const hasConfirmedStock = typeof stockUnits === 'number';
-  const isOutOfStock = hasConfirmedStock && stockUnits <= 0;
+  const hasConfirmedStock = typeof stockUnits === 'boolean';
+  const isOutOfStock = stockUnits === false;
   const isStockUnknown = !hasConfirmedStock;
-  const canPurchase = hasConfirmedStock && stockUnits > 0;
+  const canPurchase = stockUnits === true;
 
   const handleAdd = () => {
     if (!canPurchase) return;

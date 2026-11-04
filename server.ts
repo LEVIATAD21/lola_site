@@ -1,4 +1,5 @@
 import express from 'express';
+import { isIP } from 'node:net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -92,6 +93,25 @@ const aiBudget = new PersistentDailyBudget(DATA_DIR, Number.isSafeInteger(dailyA
 
 // Catálogo resumido para contexto do assistente
 // Catálogo compartilhado com o frontend; quantidades vêm do InventoryStore.
+function toPublicCatalogProduct(
+  item: (typeof CATALOG_INFO)[number],
+  available: boolean,
+) {
+  // DTO explícito: adicionar campos internos ao catálogo nunca deve torná-los
+  // públicos por acidente via spread de objeto.
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    price: item.price,
+    material: item.material,
+    color: item.color,
+    disponivel: available,
+    desc: item.desc,
+    image: item.image,
+  };
+}
+
 const STORE_FAQS = `
 SOBRE A LOLA AÇO INOX & ACESSÓRIOS:
 - Catálogo: use os nomes, descrições, materiais e preços fornecidos pelo catálogo vigente.
@@ -153,6 +173,11 @@ async function startServer() {
         maxHoldsPerOwner: envInt('LOLA_MAX_HOLDS_PER_ORIGIN', 10, 0, 10_000),
       },
     });
+    if (PRODUCTION && (!localPlane.orders.ready || !localPlane.tracking.ready)) {
+      throw new Error(
+        'armazenamento cifrado de pedidos/rastreamento indisponível no modo embutido de produção; configure a chave AES em .env.embutido',
+      );
+    }
     plane = localPlane;
     log('info', 'plano.local_configurado', { dados: dataDir });
   }
@@ -165,6 +190,9 @@ async function startServer() {
     // Sem chave (ou curta), as rotas administrativas recusam tudo. O diagnóstico
     // é só de log porque a resposta HTTP não pode revelar se a chave existe (VUL-11).
     const ADMIN_KEY_MIN_LENGTH = 32;
+    if (PRODUCTION && (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH)) {
+      throw new Error('admin embutido em produção exige LOLA_ADMIN_API_KEY com pelo menos 32 caracteres em .env.embutido');
+    }
     if (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH) {
       log('warn', 'admin.desativado', {
         motivo: process.env.LOLA_ADMIN_API_KEY ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
@@ -286,9 +314,11 @@ async function startServer() {
     if (disponivel === undefined) {
       return res.status(404).json({ error: 'Produto não encontrado no catálogo.' });
     }
-    // Storefront clients only need availability, not sales/reservation/inventory accounting.
+    // A vitrine precisa saber apenas se pode aceitar itens. O saldo exato é
+    // informação operacional interna e não deve ser exposto publicamente.
+    // A quantidade solicitada será validada novamente no servidor ao criar o pedido.
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ productId: req.params.productId, disponivel });
+    return res.json({ productId: req.params.productId, disponivel: disponivel > 0 });
   });
 
   // 2. POST /api/estoque/atualizar — escrita de estoque, que pertence ao
@@ -346,10 +376,9 @@ async function startServer() {
     const snapshot = await plane.snapshot().catch(() => null);
     if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
-    let list = CATALOG_INFO.map((item) => ({
-      ...item,
-      disponivel: snapshot[item.id] ?? item.disponivel,
-    }));
+    let list = CATALOG_INFO.map((item) =>
+      toPublicCatalogProduct(item, (snapshot[item.id] ?? item.disponivel) > 0),
+    );
 
     if (categoria && typeof categoria === 'string') {
       list = list.filter((p) => p.category.toLowerCase() === categoria.toLowerCase());
@@ -378,7 +407,8 @@ async function startServer() {
     const snapshot = await plane.snapshot().catch(() => null);
     if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const stock = snapshot[productId] ?? item.disponivel;
-    res.json({ ...item, disponivel: stock });
+    // DTO explícito evita que futuros campos internos sejam expostos.
+    res.json(toPublicCatalogProduct(item, stock > 0));
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
@@ -419,7 +449,7 @@ async function startServer() {
       preco: `R$ ${prod.price.toFixed(2).replace('.', ',')}`,
       material: prod.material,
       cor: prod.color,
-      estoqueDisponivel: stockSnapshot[prod.id] ?? prod.disponivel,
+      estoqueDisponivel: (stockSnapshot[prod.id] ?? prod.disponivel) > 0,
       descricao: prod.desc,
     }));
 
@@ -447,7 +477,10 @@ async function startServer() {
     const apiKey = process.env.GEMINI_API_KEY;
 
     try {
-      if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
+      // Em produção, não transferir perguntas/contexto da cliente a terceiros
+      // enquanto a UI não apresentar aviso prévio e recolher consentimento
+      // verificável. A chave configurada por engano não habilita a transferência.
+      if (process.env.NODE_ENV !== 'production' && apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
         const budget = aiBudget.consume();
         if (!budget.allowed) {
           return res.status(aiBudget.ready ? 429 : 503).json({
@@ -464,8 +497,8 @@ Seu tom de voz é amigável, atencioso, acolhedor e consultivo, condizente com a
 
 REGRAS CRÍTICAS (ANTI-ALUCINAÇÃO):
 1. Use SOMENTE as informações do catálogo e políticas fornecidas abaixo.
-2. NUNCA invente produtos, coleções, preços, cupons ou estoques que não estejam listados aqui.
-3. Se o cliente perguntar por estoque, informe exatamente o valor de "estoqueDisponivel" oficial. Se estiver baixo (<= 3), avise delicadamente que restam poucas unidades.
+2. NUNCA invente produtos, coleções, preços, cupons ou disponibilidade que não estejam listados aqui.
+3. Se o cliente perguntar por estoque, informe somente se o produto está disponível ou indisponível. Nunca revele quantidades, saldos, reservas ou unidades vendidas.
 4. Se o cliente perguntar por algo que não vendemos ou que não está no catálogo, responda com sinceridade e gentileza: "No momento não temos essa peça específica em nosso catálogo, mas recomendo dar uma olhada em..."
 5. Não prometa resistência à água, propriedades antialérgicas, garantia ou durabilidade sem confirmação nos dados oficiais específicos do produto.
 6. Quando citar produtos específicos do catálogo, mencione o nome exato da peça para que o sistema possa criar links para a cliente.
@@ -550,12 +583,12 @@ ${JSON.stringify(pergunta)}
 
     if (pLow.includes('estoque') || pLow.includes('tem') || pLow.includes('disponivel')) {
       if (activeProduct) {
-        fallbackAnswer = `O catálogo registra ${activeProduct.estoqueDisponivel} unidades disponíveis de ${activeProduct.nome}. O prazo de envio ainda precisa ser confirmado no atendimento.`;
+        fallbackAnswer = `${activeProduct.nome} está ${activeProduct.estoqueDisponivel ? 'disponível' : 'indisponível'} no momento. O prazo de envio ainda precisa ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: activeProduct.id, titulo: activeProduct.nome, link: `/produto/${activeProduct.id}` });
       } else {
         const featured = liveCatalog.find((product) => product.id === 'brinco-1');
         const necklace = liveCatalog.find((product) => product.id === 'prod-colar-1');
-        fallbackAnswer = `O catálogo registra ${featured?.estoqueDisponivel ?? 0} unidades de ${featured?.nome ?? 'Brinco Argola Lisa'} e ${necklace?.estoqueDisponivel ?? 0} unidades de ${necklace?.nome ?? 'Colar Coração Madreperola'}. O prazo de envio deve ser confirmado no atendimento.`;
+        fallbackAnswer = `${featured?.nome ?? 'Brinco Argola Lisa'} está ${featured?.estoqueDisponivel ? 'disponível' : 'indisponível'} e ${necklace?.nome ?? 'Colar Coração Madreperola'} está ${necklace?.estoqueDisponivel ? 'disponível' : 'indisponível'} no momento. O prazo de envio deve ser confirmado no atendimento.`;
         fallbackRefs.push({ tipo: 'produto', id: 'brinco-1', titulo: featured?.nome ?? 'Brinco Argola Lisa', link: '/produto/brinco-1' });
         if (necklace) fallbackRefs.push({ tipo: 'produto', id: necklace.id, titulo: necklace.nome, link: '/produto/' + necklace.id });
       }
@@ -589,9 +622,15 @@ ${JSON.stringify(pergunta)}
   // Em modo dividido isto não existe — as rotas vivem no `data-server.ts`, em
   // outra máquina, atrás da chave administrativa e da allowlist de origem.
   if (MOUNT_ADMIN && localPlane) {
+    const adminAllowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
+    if (PRODUCTION && adminAllowlist.allowAny) {
+      throw new Error(
+        'LOLA_ADMIN_ALLOWED_IPS=any não é permitido quando a administração embutida está ativa em produção.',
+      );
+    }
     app.use('/api', createAdminRouter({
       plane: localPlane,
-      allowlist: resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS),
+      allowlist: adminAllowlist,
     }));
   }
 
@@ -647,6 +686,13 @@ ${JSON.stringify(pergunta)}
   // LOLA_BIND_HOST sobrescreve os dois — o data-server usa a mesma variável.
   const bindHost = (process.env.LOLA_BIND_HOST ?? '').trim()
     || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
+  const trustedProxyIps = Array.isArray(TRUST_PROXY) && TRUST_PROXY.length > 0 &&
+    TRUST_PROXY.every((entry) => isIP(entry.split('/')[0]) !== 0);
+  if (PRODUCTION && !trustedProxyIps) {
+    throw new Error(
+      'servidor público em produção exige LOLA_TRUSTED_PROXY com IPs/CIDRs explícitos do proxy TLS confiável; ausência, faixas nomeadas ou contagem de saltos não são aceitas.',
+    );
+  }
   app.listen(PORT, bindHost, () => {
     log('info', 'servidor.iniciado', {
       porta: PORT,

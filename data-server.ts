@@ -13,7 +13,7 @@ import { resolveAdminAllowlist } from './src/server/ipAllow';
 import { configureIpLoggingFromEnv, createRequestLogger, log } from './src/server/logger';
 import { createSecurityHeadersMiddleware } from './src/server/securityHeaders';
 import { createJsonErrorHandler } from './src/server/httpError';
-import { envInt, resolveTlsConfig } from './src/server/envConfig';
+import { allowPrivatePlaintext, envInt, resolveTlsConfig } from './src/server/envConfig';
 import { INTERNAL_SECRET_MIN_LENGTH } from './src/server/internalAuth';
 
 /**
@@ -98,7 +98,23 @@ async function startDataService(): Promise<void> {
     },
   });
 
+  // Produção não pode anunciar serviço saudável com pedidos ou rastreamento
+  // desativados por ausência de chave. Falha na inicialização em vez de aceitar
+  // tráfego enquanto operações essenciais respondem 503.
+  if (production && (!plane.orders.ready || !plane.tracking.ready)) {
+    fail(
+      'armazenamento seguro de pedidos/rastreamento indisponível em produção',
+      'configure LOLA_ORDERS_ENCRYPTION_KEY (32 bytes em hexadecimal) e, se separado, LOLA_TRACKING_ENCRYPTION_KEY',
+    );
+  }
+
   const allowlist = resolveAdminAllowlist(process.env.LOLA_ADMIN_ALLOWED_IPS);
+  if (production && allowlist.allowAny) {
+    fail(
+      'allowlist administrativa não pode aceitar qualquer IP em produção',
+      'configure LOLA_ADMIN_ALLOWED_IPS com IPs ou CIDRs privados específicos; o valor any é proibido',
+    );
+  }
 
   const app = express();
   app.disable('x-powered-by');
@@ -164,21 +180,37 @@ async function startDataService(): Promise<void> {
   // inclusive do body-parser — vira JSON genérico, nunca HTML com stack (VUL-B).
   app.use(createJsonErrorHandler());
 
-  // TLS opcional. Sem ele, `x-admin-key` (adminAuth.ts) e o PII completo dos
-  // pedidos — nome, telefone, endereço — atravessam a rede privada em claro.
-  // Loopback não precisa; qualquer outro destino, inclusive outro host da mesma
-  // máquina, precisa. Configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
-  // A validação é função pura exportada (envConfig.ts) para ser testável sem
-  // subir servidor; aqui só o resultado é aplicado, como antes.
+  // TLS é obrigatório fora do loopback em produção. A única exceção é uma
+  // rede privada isolada declarada por opt-in duplo, IP RFC1918/ULA, HMAC
+  // obrigatório e porta não publicada. HMAC não cifra o tráfego: o aviso no log
+  // deixa esse risco explícito. Para qualquer rede fora desse limite, configure
+  // LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE juntos.
+  // A validação TLS é função pura em envConfig.ts; a política de texto puro
+  // privado também é testada isoladamente.
   const tls = resolveTlsConfig(process.env);
   if ('error' in tls) throw new Error(tls.error);
   const { enabled: tlsEnabled, certFile: tlsCertFile, keyFile: tlsKeyFile } = tls;
 
-  if (!tlsEnabled && !bindHost.startsWith('127.') && bindHost !== '::1') {
+  const loopbackBind = bindHost === '::1' || (isIP(bindHost) === 4 && bindHost.startsWith('127.'));
+  const privatePlaintext = !tlsEnabled && allowPrivatePlaintext(bindHost, process.env);
+  if (!tlsEnabled && !loopbackBind && !privatePlaintext) {
+    if (production) {
+      fail(
+        'servidor de dados em produção não pode escutar fora do loopback sem TLS ou opt-in privado explícito',
+        'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE; a exceção exige LOLA_INTERNAL_PLAINTEXT=true, LOLA_PRIVATE_NETWORK_ISOLATED=true, IP RFC1918/ULA e HMAC obrigatório',
+      );
+    }
     log('warn', 'dados.sem_tls_em_endereco_publico', {
       bind: bindHost,
       aviso: 'a_chave_administrativa_e_os_dados_dos_clientes_transitam_em_claro',
       acao: 'configure LOLA_TLS_CERT_FILE e LOLA_TLS_KEY_FILE ou restrinja o bind a 127.0.0.1',
+    });
+  }
+  if (privatePlaintext) {
+    log('warn', 'dados.texto_puro_rede_privada_optin', {
+      bind: bindHost,
+      aviso: 'HMAC protege autenticidade_e_integridade_mas_nao_cifra_os_dados',
+      acao: 'mantenha a rede Docker internal true e a porta do data-server sem publicação; TLS é preferível',
     });
   }
 

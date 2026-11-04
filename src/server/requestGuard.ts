@@ -16,7 +16,7 @@ import type { RequestHandler } from 'express';
  * - `GET`/`HEAD`/`OPTIONS` passam: não mutam estado.
  * - Sem cabeçalho `Origin` passa: cliente sem navegador (curl, monitor de
  *   uptime, webhook) não envia, e exigir Origin quebraria integração legítima.
- * - `Origin` presente com host diferente do `Host` da requisição → 403.
+ * - `Origin` presente com esquema, host ou porta diferente da origem efetiva → 403.
  * - `Origin` malformado também → 403: quem manda Origin inválido não é
  *   navegador legítimo, e não faz sentido arriscar.
  */
@@ -27,14 +27,22 @@ export function createCrossSiteWriteGuard(): RequestHandler {
     const origin = req.get('origin');
     if (!origin) return next();
 
-    let originHost: string | undefined;
+    let originUrl: URL | undefined;
+    let requestOrigin: string | undefined;
     try {
-      originHost = new URL(origin).host;
+      originUrl = new URL(origin);
+      const requestHost = req.get('host');
+      if (requestHost) requestOrigin = new URL(`${req.protocol}://${requestHost}`).origin;
     } catch {
-      originHost = undefined;
+      originUrl = undefined;
+      requestOrigin = undefined;
     }
 
-    if (!originHost || originHost !== req.get('host')) {
+    // Origin é schemeful: aceitar o mesmo host em HTTP quando a requisição é
+    // HTTPS abre uma janela de CSRF por downgrade. req.protocol respeita apenas
+    // os proxies explicitamente confiáveis configurados pelo entrypoint.
+    if (!originUrl || originUrl.username || originUrl.password ||
+        !requestOrigin || originUrl.origin !== requestOrigin) {
       res.setHeader('Cache-Control', 'no-store');
       return res.status(403).json({ error: 'Origem não autorizada.' });
     }

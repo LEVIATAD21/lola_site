@@ -13,16 +13,13 @@
 #
 # Arquivos de ambiente (via env_file — NUNCA inline neste YAML):
 #
-#   .env        comum aos dois serviços. É o que a VITRINE enxerga.
-#               No modo dividido ele NÃO pode conter LOLA_ORDERS_ENCRYPTION_KEY
-#               nem LOLA_ADMIN_API_KEY: entregar essas duas chaves à vitrine
-#               anularia toda a separação que o modo dividido existe para criar.
+#   .env            comum aos serviços: configuração pública + HMAC compartilhado.
+#                   Nunca coloque aqui a chave AES nem a chave administrativa.
+#   .env.dados      só o data-server lê: chave AES e chave administrativa do modo dividido.
+#   .env.embutido   só o serviço embutido lê: chave AES e chave administrativa do modo embutido.
 #
-#   .env.dados  só o data-server lê. É onde moram a chave AES e a chave
-#               administrativa no modo dividido. Exemplos prontos para copiar:
-#               `deploy/env.producao.example` (o .env) e
-#               `deploy/env.producao.dados.example` (o .env.dados) — os dois
-#               com `chmod 600`.
+# Exemplos: deploy/env.producao.example (.env), deploy/env.producao.dados.example
+# (.env.dados) e deploy/env.producao.embutido.example (.env.embutido), todos chmod 600.
 #
 # Requisitos: Docker Engine 24+ / Docker Compose v2.24+ (sintaxe `env_file`
 # com `required:`), Node 22 no HOST apenas para os scripts de backup/rotação.
@@ -75,6 +72,9 @@ services:
     env_file:
       - path: .env
         required: true
+      # Somente este serviço recebe as chaves do modo embutido.
+      - path: .env.embutido
+        required: false
 
     environment:
       NODE_ENV: production
@@ -108,13 +108,10 @@ services:
     profiles: ["dividido"]
 
     env_file:
+      # A vitrine recebe SOMENTE a configuração comum. Nunca carregar .env.dados
+      # neste serviço: ele contém a chave AES e a chave administrativa.
       - path: .env
         required: true
-      # Arquivo de segredos do servidor de dados. Deixamos `required: false`
-      # para que o modo embutido (que não o usa) não trave na validação do
-      # compose. No modo dividido ele DEVE existir e ser preenchido.
-      - path: .env.dados
-        required: false
 
     environment:
       NODE_ENV: production
@@ -124,6 +121,14 @@ services:
       # ver justificativa em `deploy/env.producao.example`.
       LOLA_DATA_SERVICE_URL: "http://data-server:4100"
       LOLA_INTERNAL_PLAINTEXT: "true"
+      # Defesa extra: mesmo se alguém colocar segredos no .env comum por engano,
+      # a vitrine recebe valores vazios e não pode abrir o armazenamento local.
+      LOLA_ORDERS_ENCRYPTION_KEY: ""
+      LOLA_ORDERS_KEY_FILE: ""
+      LOLA_TRACKING_ENCRYPTION_KEY: ""
+      LOLA_ADMIN_API_KEY: ""
+      LOLA_EMBEDDED_ADMIN: "false"
+      LOLA_ADMIN_ALLOW_PRIVATE_PROXY: "false"
 
     ports:
       - "127.0.0.1:3000:3000"
@@ -133,11 +138,10 @@ services:
         condition: service_healthy
 
     networks:
-      # `lola-publica` primeiro: dá saída para a internet (Gemini, ViaCEP) e é
-      # por ela que o proxy do host chega na porta publicada.
-      - lola-publica
-      # `lola-interna` é por onde ela fala com o servidor de dados.
-      - lola-interna: {}
+      # `lola-publica` dá saída controlada para serviços externos e recebe o proxy.
+      lola-publica: {}
+      # `lola-interna` é por onde a vitrine fala com o servidor de dados.
+      lola-interna: {}
 
     # Defesa em profundidade: mesmo que uma configuração errada montasse o
     # volume aqui, ele ficaria somente-leitura — a vitrine NÃO escreve dados.
@@ -158,6 +162,10 @@ services:
     env_file:
       - path: .env
         required: true
+      # Único serviço autorizado a receber chaves AES e chave administrativa.
+      # required:false mantém o perfil embutido utilizável sem este arquivo;
+      # no perfil dividido, o data-server falha na inicialização se a chave AES
+      # não estiver configurada, portanto a vitrine nunca sobe sozinha.
       - path: .env.dados
         required: false
 
@@ -168,6 +176,10 @@ services:
       # container, nem 0.0.0.0, que exigiria o opt-in LOLA_ALLOW_WILDCARD_BIND).
       # Fixo para ser previsível: a vitrine chega por `http://data-server:4100`.
       LOLA_BIND_HOST: "172.31.1.10"
+      # A exceção de texto puro só vale nesta rede Docker internal=true, sem
+      # porta publicada, IP privado fixo e segredo HMAC obrigatório.
+      LOLA_INTERNAL_PLAINTEXT: "true"
+      LOLA_PRIVATE_NETWORK_ISOLATED: "true"
       # Mantido `false` de propósito: com o IP fixo acima não há motivo de abrir
       # o bind coringa, e o opt-in continuaria valendo para qualquer futuro host.
       LOLA_ALLOW_WILDCARD_BIND: "false"
@@ -201,8 +213,8 @@ services:
       # internet. Comprometer o processo não entrega rota de saída para
       # exfiltrar os pedidos — a defesa que sobra quando a chave já está no
       # ambiente do processo.
-      - lola-interna:
-          ipv4_address: 172.31.1.10
+      lola-interna:
+        ipv4_address: 172.31.1.10
 
     healthcheck:
       # O healthcheck do Dockerfile já é herdado (usa PORT=4100). Repetimos aqui

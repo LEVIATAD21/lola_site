@@ -404,3 +404,12 @@ router.patch('/admin/pre-pedidos/:orderNumber', requireAdminKey, requireTrustedO
 4. Correção de dados — art. 18, III (esboço §8.3).
 5. Canal + prazo de resposta ao titular (§8.5), encarregado, ROPA e LIA.
 6. Tudo o que é UI: nada foi criado sem pergunta.
+
+
+---
+
+## Atualização técnica — 2026-11-03
+
+A integração externa do Gemini foi **desabilitada em produção no backend**, mesmo que `GEMINI_API_KEY` esteja configurada. A rota `POST /api/ai/consulta` usa o motor local de regras em produção até que exista aviso prévio na interface, consentimento verificável, registro da escolha e mecanismo de revogação. O bloqueio é fail-closed: a presença acidental da chave não autoriza envio de pergunta, produto ou carrinho ao Google.
+
+A mudança reduz o risco imediato de transferência internacional sem consentimento, mas **não conclui a adequação LGPD**. Ainda faltam: aviso de privacidade publicado e aprovado pelo controlador, definição formal das bases legais e operadores, canal de atendimento aos direitos do titular, política de retenção de logs, inventário atualizado de todos os terceiros e avaliação contratual dos operadores. Este documento permanece uma análise técnica, não um parecer jurídico.

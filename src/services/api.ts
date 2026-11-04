@@ -1,6 +1,7 @@
 export interface StockResponse {
   productId: string;
-  disponivel: number;
+  /** Boolean commercial availability; exact inventory counts stay server-side. */
+  disponivel: boolean;
 }
 
 export interface AIRef {
@@ -81,12 +82,12 @@ export function parseStockPayload(json: unknown, expectedId?: string): StockResp
   if (typeof o.productId !== 'string' || !o.productId) return null;
   if (expectedId && o.productId !== expectedId) return null;
 
-  // Only public availability belongs in the storefront response. Administrative counters are intentionally omitted.
-  if (!Number.isSafeInteger(o.disponivel) || (o.disponivel as number) < 0) return null;
+  // Public clients receive a boolean only; never accept or expose inventory counts.
+  if (typeof o.disponivel !== 'boolean') return null;
 
   return {
     productId: o.productId,
-    disponivel: o.disponivel as number,
+    disponivel: o.disponivel,
   };
 }
 
