@@ -67,15 +67,15 @@ Todas usam a mesma chave administrativa e a mesma allowlist. Não há autorizaç
 Ações destrutivas devem exigir confirmação explícita, motivo, registro de auditoria com identidade do operador e, quando adequado, dupla confirmação. Não retornar dados pessoais em listagens desnecessárias.
 
 ### A-04 — Quantidade exata de estoque exposta na API pública
-**Severidade: MÉDIA | Confirmado**
+**Severidade: MÉDIA | CORRIGIDO NA BRANCH | Testes de boot aprovados**
 
 Arquivo: `lola_site/server.ts`, rotas `GET /api/produtos`, `GET /api/produto/:productId` e `GET /api/estoque/:productId`.
 
-A vitrine recebe o campo `disponivel` com a quantidade exata. A rota de estoque já omite os contadores internos `reservado` e `vendido`, o que é correto, mas ainda revela o saldo comercial exato.
+O achado original foi corrigido: as três rotas retornam `disponivel` como booleano, nunca como saldo numérico. O assistente também recebe somente disponibilidade booleana. O DTO público é construído por allowlist explícita, sem serializar o objeto interno de catálogo/estoque.
 
-**Impacto:** concorrentes e robôs podem inferir giro, reposição e disponibilidade por produto. Rate limit reduz raspagem, mas não torna o dado privado.
+**Evidência:** testes de boot real em `src/server/__tests__/serverBoot.test.ts` verificam listagem, detalhe, consulta de estoque e assistente, inclusive ausência de contadores e campos internos. O relatório complementar A-12 registra a correção e a validação automatizada.
 
-**Correção recomendada:** expor apenas estado comercial necessário à compra (disponível/esgotado ou faixas como poucas unidades), mantendo o saldo exato somente no servidor. O checkout continua validando saldo real no backend.
+**Risco residual:** preservar essa política em novas rotas, exports e integrações; o saldo exato continua restrito ao plano de dados e às permissões administrativas.
 
 ### A-05 — Allowlist de IP pode deixar de representar o operador quando há proxy
 **Severidade: ALTA se houver proxy público | Dependente da configuração**
