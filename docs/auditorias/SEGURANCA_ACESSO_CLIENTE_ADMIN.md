@@ -226,16 +226,9 @@ O canal interno usa timestamp, nonce, HMAC sobre método/caminho/corpo e assinat
 
 
 ### A-11 — Pré-reservas de estoque são mantidas apenas em memória
-**Severidade: ALTA para integridade de pedidos | Confirmado**
+**Status: ACHADO HISTÓRICO — SUPERADO PELA ATUALIZAÇÃO ABAIXO**
 
-Arquivos: `lola_site/src/server/inventory.ts`, `src/server/dataPlane.ts`, `src/server/orders.ts`.
-
-O `InventoryStore` persiste o saldo contábil em arquivo, mas as pré-reservas (`holds`) ficam em um `Map` em memória. O fluxo cria a reserva e persiste o pré-pedido; em uma reinicialização, os pedidos continuam no arquivo cifrado, porém as reservas em memória desaparecem.
-
-**Impacto:** um pré-pedido ainda dentro da janela de reserva pode continuar registrado enquanto as unidades voltam a aparecer disponíveis. Se houver reinício, deploy ou falha de processo no período, dois clientes podem acreditar que reservaram as mesmas últimas unidades. A própria classe também documenta que mutações são seguras apenas dentro de um processo Node e recomenda banco transacional para múltiplas instâncias.
-
-**Correção obrigatória antes de depender de reserva de estoque:** persistir reservas com expiração junto ao armazenamento transacional, recuperar e reconciliar reservas no boot, garantir atomicidade entre gravação do pedido e reserva, e usar transações/locks no banco. Até isso existir, tratar o fluxo como pré-pedido sem garantia de reserva durável e comunicar disponibilidade final no momento de confirmação.
-
+Este achado descreve o comportamento anterior à persistência das reservas. O risco de perda imediata dos holds após reinicialização foi parcialmente corrigido: as reservas agora são gravadas em `inventory-holds.json` e recuperadas após restart. Consulte a atualização A-11 abaixo para o estado atual e os riscos residuais.
 
 ---
 
@@ -251,7 +244,7 @@ As pré-reservas agora são gravadas em arquivo separado (`inventory-holds.json`
 **Limite restante:** pedido e reserva ainda são persistidos em arquivos separados, sem transação ACID entre ambos. O mecanismo é síncrono e consistente apenas dentro de um processo Node. Não garante coordenação entre múltiplas instâncias nem recuperação atômica de falha entre gravações. Antes de operação comercial com concorrência relevante, migrar estoque, pedidos e reservas para banco transacional e testar corrida/rollback.
 
 ### A-12 — API pública expunha saldo exato de estoque
-**Status: CORRIGIDO NO CÓDIGO DA BRANCH | Aguardando CI**
+**Status: CORRIGIDO NA BRANCH | CI aprovado no commit 86f9e7e8f3a5f4c23d41e362111944ca473a80d3**
 
 `GET /api/estoque/:productId` agora retorna apenas `{ productId, disponivel: boolean }`. O storefront e os componentes de produto usam disponibilidade comercial, não saldo numérico. A quantidade pedida continua sendo validada no servidor ao criar o pré-pedido. Foi incluído teste de boot real para garantir que a resposta pública não contenha contadores internos.
 
