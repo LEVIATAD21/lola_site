@@ -99,14 +99,12 @@ Respostas:
 
 | Status | Corpo |
 |---|---|
-| `200` | `{"productId":"<id>","disponivel":<inteiro≥0>}` |
+| `200` | `{"productId":"<id>","disponivel":<boolean>}` — `true` quando há pelo menos uma unidade vendável; `false` caso contrário |
 | `404` | `{"error":"Produto não encontrado no catálogo."}` — id fora do catálogo |
 | `429` | limite de leitura |
 | `503` | `{"error":"O catálogo está temporariamente indisponível. Recarregue a página em instantes."}` — plano de dados inacessível |
 
-O `disponivel` devolvido é o saldo **líquido de pré-reservas ativas**.
-Contadores administrativos (`total`, `reservado`, `vendido`) **nunca** saem
-desta rota.
+O campo público `disponivel` é estritamente booleano (`availableQuantity > 0`). A quantidade exata, o saldo líquido e os contadores administrativos (`total`, `reservado`, `vendido`) **não são expostos**. A quantidade solicitada é validada novamente no servidor de dados ao criar o pré-pedido.
 
 ### 2.3 `GET /api/produtos`
 
@@ -117,9 +115,8 @@ desta rota.
 | Limite | `300/min` por IP |
 | Query | `categoria` (igualdade, sem distinção de caixa) · `query` (substring em `name`, `category`, `desc`) |
 
-Respostas: `200` com array de objetos
-`{id, name, category, price, material, color, disponivel, desc, image}` ·
-`429` · `503` com `PLANO_DE_DADOS_INDISPONIVEL` (mensagem da seção 2.2).
+Respostas: `200` com array de DTOs públicos
+`{id, name, category, price, material, color, disponivel, desc, image}`, onde `disponivel` é booleano · `429` · `503` com `PLANO_DE_DADOS_INDISPONIVEL` (mensagem da seção 2.2). O DTO é projetado por `toPublicCatalogProduct`; não serializa o registro interno de estoque.
 Sem paginação nem ordenação.
 
 > Observação de produto: nenhum componente da vitrine chama esta rota hoje
