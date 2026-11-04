@@ -41,10 +41,10 @@ describe('production Docker Compose secret boundaries', () => {
   });
 
   it('excludes environment secrets and customer data from Docker build context', () => {
-    expect(dockerignore).toMatch(/^\\.env$/m);
-    expect(dockerignore).toMatch(/^\\.env\\.\\*$/m);
-    expect(dockerignore).toMatch(/^\\.data$/m);
-    expect(dockerignore).toMatch(/^\\.git$/m);
+    expect(dockerignore).toMatch(/^\.env$/m);
+    expect(dockerignore).toMatch(/^\.env\.\*$/m);
+    expect(dockerignore).toMatch(/^\.data$/m);
+    expect(dockerignore).toMatch(/^\.git$/m);
   });
 
   it('keeps the data network internal and without a public route', () => {
