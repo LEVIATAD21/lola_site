@@ -58,7 +58,11 @@ seus domínios reais.
       `grep -E '^(LOLA_INTERNAL_SECRET|APP_URL)=' /srv/lola/.env`.
 - [ ] Dividido: `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.dados`.
 - [ ] Embutido: `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.embutido`.
-- [ ] `git check-ignore -v .env .env.dados .env.embutido` — tem que responder o caminho do ignore
+- [ ] `git check-ignore -v .env .env.dados .env.embutido` — tem que responder o caminho do ignore.
+- [ ] **Perfil dividido:** depois de subir, verifique sem imprimir segredos:
+      `docker compose exec -T vitrine sh -lc 'test -z "$LOLA_ORDERS_ENCRYPTION_KEY" && test -z "$LOLA_ADMIN_API_KEY" && test -z "$LOLA_TRACKING_ENCRYPTION_KEY"'`
+      e `docker compose exec -T data-server sh -lc 'test -n "$LOLA_ORDERS_ENCRYPTION_KEY" && test -n "$LOLA_ADMIN_API_KEY"'`.
+- [ ] **Perfil embutido:** `docker compose exec -T embutido sh -lc 'test -n "$LOLA_ORDERS_ENCRYPTION_KEY" && test -n "$LOLA_ADMIN_API_KEY"'`.
       (senão o `.env` pode ir para o GitHub no próximo `git add .`).
 - [ ] `git status --porcelain` — nenhum `.env*` aparecendo.
 
