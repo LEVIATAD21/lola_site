@@ -368,3 +368,13 @@ O modo embutido também falha na inicialização em produção se o armazenament
 Corrigi o formato das declarações de redes Compose e adicionei validação automatizada dos perfis `dividido` e `embutido` com arquivos de ambiente de exemplo. A execução validada no commit `86f9e7e8f3a5f4c23d41e362111944ca473a80d3` aprovou: typecheck, 473 testes, build de produção, `docker compose config` para os dois perfis, auditoria de dependências e auditoria E2E.
 
 **Limite:** validar a configuração Compose não prova que o firewall real do host, as rotas do proxy, os volumes e os segredos do servidor implantado correspondam ao arquivo.
+
+### A-27 — Recuperação de pré-reservas expiradas e validação de integridade do estoque
+**Severidade: MÉDIA | CORRIGIDO NA BRANCH | CI pendente**
+
+A recuperação de `inventory-holds.json` rejeitava reservas cujo prazo expirou enquanto o processo estava parado. Isso podia impedir a inicialização do servidor mesmo quando o arquivo representava apenas reservas naturalmente vencidas. Além disso, a recuperação precisava validar o total reservado contra o estoque-base persistido.
+
+**Correção:** reservas expiradas agora são descartadas durante a recuperação e a limpeza é persistida. Reservas ativas são agregadas por produto e o boot falha fechado se o total comprometido exceder o saldo-base. IDs de reserva e identificadores de origem também recebem limites de tamanho.
+
+**Testes adicionados:** recuperação após expiração e rejeição de arquivo com pré-reservas acima do estoque. A validação de CI para o commit desta correção ainda está em andamento.
+
