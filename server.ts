@@ -173,6 +173,11 @@ async function startServer() {
         maxHoldsPerOwner: envInt('LOLA_MAX_HOLDS_PER_ORIGIN', 10, 0, 10_000),
       },
     });
+    if (PRODUCTION && (!localPlane.orders.ready || !localPlane.tracking.ready)) {
+      throw new Error(
+        'armazenamento cifrado de pedidos/rastreamento indisponível no modo embutido de produção; configure a chave AES em .env.embutido',
+      );
+    }
     plane = localPlane;
     log('info', 'plano.local_configurado', { dados: dataDir });
   }
@@ -185,6 +190,9 @@ async function startServer() {
     // Sem chave (ou curta), as rotas administrativas recusam tudo. O diagnóstico
     // é só de log porque a resposta HTTP não pode revelar se a chave existe (VUL-11).
     const ADMIN_KEY_MIN_LENGTH = 32;
+    if (PRODUCTION && (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH)) {
+      throw new Error('admin embutido em produção exige LOLA_ADMIN_API_KEY com pelo menos 32 caracteres em .env.embutido');
+    }
     if (!process.env.LOLA_ADMIN_API_KEY || process.env.LOLA_ADMIN_API_KEY.length < ADMIN_KEY_MIN_LENGTH) {
       log('warn', 'admin.desativado', {
         motivo: process.env.LOLA_ADMIN_API_KEY ? 'LOLA_ADMIN_API_KEY curta' : 'LOLA_ADMIN_API_KEY ausente',
