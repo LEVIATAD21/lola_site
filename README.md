@@ -178,8 +178,8 @@ Tudo o que a operação precisa está em [`deploy/`](deploy/): `Dockerfile` + `d
 | | `--profile embutido` | `--profile dividido` (recomendado) |
 |---|---|---|
 | Serviços | 1 container (vitrine + API) | `vitrine` (pública) + `data-server` (privada) |
-| Chave AES dos pedidos | no ambiente do próprio container | só no `.env.dados`, que a vitrine não lê |
-| Painel administrativo | opt-in (`LOLA_EMBEDDED_ADMIN=true`) | no `data-server`, sem porta publicada |
+| Chave AES dos pedidos | só no `.env.embutido` | só no `.env.dados`, que a vitrine não lê |
+| Administração | API legada com chave compartilhada; não é painel humano pronto | API no `data-server`, sem porta publicada; ainda sem identidade individual |
 | Rede | 1 rede | rede pública + rede `internal: true` |
 | VPS mínima | 1 GB | 1 GB (o ganho é de superfície, não de hardware) |
 
@@ -191,8 +191,9 @@ No modo dividido, o servidor de dados **não publica porta nenhuma**: ele fica s
 # pré-requisitos: Docker 24+ / Compose v2.24+ (Node 22 no host, para os scripts)
 git clone <repo> /srv/lola && cd /srv/lola
 
-install -m 600 deploy/env.producao.example       /srv/lola/.env        # e edite
-install -m 600 deploy/env.producao.dados.example  /srv/lola/.env.dados  # e edite
+install -m 600 deploy/env.producao.example          /srv/lola/.env        # comum, sem chaves AES/admin
+install -m 600 deploy/env.producao.dados.example     /srv/lola/.env.dados  # somente dividido
+install -m 600 deploy/env.producao.embutido.example  /srv/lola/.env.embutido # somente embutido
 
 docker compose --profile dividido up -d --build   # ou --profile embutido
 ```
