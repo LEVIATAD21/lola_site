@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('production Docker Compose secret boundaries', () => {
   const compose = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf8');
+  const dockerignore = readFileSync(join(process.cwd(), '.dockerignore'), 'utf8');
   const vitrineStart = compose.indexOf('\n  vitrine:');
   const dataStart = compose.indexOf('\n  data-server:');
   const volumesStart = compose.indexOf('\nvolumes:', dataStart);
@@ -24,6 +25,13 @@ describe('production Docker Compose secret boundaries', () => {
     expect(dataServer).toContain('required: false');
     expect(dataServer).not.toMatch(/^\s+ports:/m);
     expect(dataServer).toContain('LOLA_PRIVATE_NETWORK_ISOLATED: "true"');
+  });
+
+  it('excludes environment secrets and customer data from Docker build context', () => {
+    expect(dockerignore).toMatch(/^\\.env$/m);
+    expect(dockerignore).toMatch(/^\\.env\\.\\*$/m);
+    expect(dockerignore).toMatch(/^\\.data$/m);
+    expect(dockerignore).toMatch(/^\\.git$/m);
   });
 
   it('keeps the data network internal and without a public route', () => {
