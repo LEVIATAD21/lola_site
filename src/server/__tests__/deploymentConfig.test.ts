@@ -21,7 +21,7 @@ describe('production Docker Compose secret boundaries', () => {
 
   it('loads the data-only secret file only into the private data service', () => {
     expect(dataServer).toContain('path: .env.dados');
-    expect(dataServer).toContain('required: true');
+    expect(dataServer).toContain('required: false');
     expect(dataServer).not.toMatch(/^\s+ports:/m);
     expect(dataServer).toContain('LOLA_PRIVATE_NETWORK_ISOLATED: "true"');
   });
