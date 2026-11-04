@@ -25,8 +25,12 @@ describe('production Docker Compose secret boundaries', () => {
     expect(dataStart).toBeGreaterThan(vitrineStart);
     expect(vitrine).toContain('path: .env');
     expect(vitrine).not.toMatch(/path:\s*\.env\.dados/);
-    expect(vitrine).not.toContain('LOLA_ORDERS_ENCRYPTION_KEY');
-    expect(vitrine).not.toContain('LOLA_ADMIN_API_KEY');
+    expect(vitrine).toContain('LOLA_ORDERS_ENCRYPTION_KEY: ""');
+    expect(vitrine).toContain('LOLA_ORDERS_KEY_FILE: ""');
+    expect(vitrine).toContain('LOLA_TRACKING_ENCRYPTION_KEY: ""');
+    expect(vitrine).toContain('LOLA_ADMIN_API_KEY: ""');
+    expect(vitrine).toContain('LOLA_EMBEDDED_ADMIN: "false"');
+    expect(vitrine).toContain('LOLA_ADMIN_ALLOW_PRIVATE_PROXY: "false"');
   });
 
   it('loads the data-only secret file only into the private data service', () => {
