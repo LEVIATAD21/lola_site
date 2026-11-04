@@ -156,8 +156,11 @@ services:
       - path: .env
         required: true
       # Único serviço autorizado a receber chaves AES e chave administrativa.
+      # required:false mantém o perfil embutido utilizável sem este arquivo;
+      # no perfil dividido, o data-server falha na inicialização se a chave AES
+      # não estiver configurada, portanto a vitrine nunca sobe sozinha.
       - path: .env.dados
-        required: true
+        required: false
 
     environment:
       NODE_ENV: production
