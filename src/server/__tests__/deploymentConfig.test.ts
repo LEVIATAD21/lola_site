@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 describe('production Docker Compose secret boundaries', () => {
   const compose = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf8');
   const dockerignore = readFileSync(join(process.cwd(), '.dockerignore'), 'utf8');
+  const commonEnvExample = readFileSync(join(process.cwd(), 'deploy/env.producao.example'), 'utf8');
+  const dataEnvExample = readFileSync(join(process.cwd(), 'deploy/env.producao.dados.example'), 'utf8');
+  const embeddedEnvExample = readFileSync(join(process.cwd(), 'deploy/env.producao.embutido.example'), 'utf8');
   const embeddedStart = compose.indexOf('\n  embutido:');
   const vitrineStart = compose.indexOf('\n  vitrine:');
   const dataStart = compose.indexOf('\n  data-server:');
@@ -13,7 +16,16 @@ describe('production Docker Compose secret boundaries', () => {
   const vitrine = compose.slice(vitrineStart, dataStart);
   const dataServer = compose.slice(dataStart, volumesStart);
 
-  it('injects embedded-only secrets into the embedded service, never the public split-mode services', () => {
+  it('keeps AES and admin credentials out of the common production environment template', () => {
+    expect(commonEnvExample).not.toMatch(/^LOLA_ORDERS_ENCRYPTION_KEY=/m);
+    expect(commonEnvExample).not.toMatch(/^LOLA_ADMIN_API_KEY=/m);
+    expect(dataEnvExample).toMatch(/^LOLA_ORDERS_ENCRYPTION_KEY=/m);
+    expect(dataEnvExample).toMatch(/^LOLA_ADMIN_API_KEY=/m);
+    expect(embeddedEnvExample).toMatch(/^LOLA_ORDERS_ENCRYPTION_KEY=/m);
+    expect(embeddedEnvExample).toMatch(/^LOLA_ADMIN_API_KEY=/m);
+  });
+
+    it('injects embedded-only secrets into the embedded service, never the public split-mode services', () => {
     expect(embeddedStart).toBeGreaterThanOrEqual(0);
     expect(embedded).toContain('path: .env.embutido');
     expect(vitrine).not.toMatch(/path:\s*\.env\.embutido/);
