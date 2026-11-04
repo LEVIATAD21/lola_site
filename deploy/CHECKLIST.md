@@ -42,21 +42,24 @@ seus domínios reais.
 - [ ] `install -m 600 deploy/env.producao.example /srv/lola/.env` e edite
       **todas** as linhas marcadas com "O que trocar" (o `APP_URL` e o
       `LOLA_INTERNAL_SECRET` são os dois mais importantes).
-- [ ] `install -m 600 deploy/env.producao.dados.example /srv/lola/.env.dados`
-- [ ] Somente no perfil embutido: `install -m 600 deploy/env.producao.embutido.example /srv/lola/.env.embutido`. Nunca carregue este arquivo no modo dividido.
-      e cole a chave AES de produção (`openssl rand -hex 32`) — no modo dividido
-      ela NÃO pode estar no `.env` comum.
-- [ ] `grep -c . /srv/lola/.env /srv/lola/.env.dados` — nenhum valor vazio nas
-      linhas obrigatórias (`LOLA_INTERNAL_SECRET`, `LOLA_ORDERS_ENCRYPTION_KEY`,
-      `LOLA_ADMIN_API_KEY`, `APP_URL`).
-- [ ] `git check-ignore -v .env` — tem que responder o caminho do ignore
+- [ ] Escolha **um** perfil e instale somente o arquivo de segredos correspondente:
+      - **Dividido:** `install -m 600 deploy/env.producao.dados.example /srv/lola/.env.dados`;
+        preencha `LOLA_ORDERS_ENCRYPTION_KEY` e `LOLA_ADMIN_API_KEY` nesse arquivo.
+      - **Embutido:** `install -m 600 deploy/env.producao.embutido.example /srv/lola/.env.embutido`;
+        preencha as mesmas chaves nesse arquivo. Não carregue `.env.embutido` no modo dividido.
+- [ ] Confira os valores obrigatórios no arquivo do perfil escolhido:
+      `grep -E '^(LOLA_INTERNAL_SECRET|APP_URL)=' /srv/lola/.env` e
+      `grep -E '^(LOLA_ORDERS_ENCRYPTION_KEY|LOLA_ADMIN_API_KEY)=' /srv/lola/.env.dados`
+      (dividido) **ou** `/srv/lola/.env.embutido` (embutido).
+- [ ] `git check-ignore -v .env .env.dados .env.embutido` — tem que responder o caminho do ignore
       (senão o `.env` pode ir para o GitHub no próximo `git add .`).
 - [ ] `git status --porcelain` — nenhum `.env*` aparecendo.
 
 ## 2. Segredos e acesso
 
-- [ ] `LOLA_INTERNAL_SECRET`, `LOLA_ORDERS_ENCRYPTION_KEY` e `LOLA_ADMIN_API_KEY`
-      com valores fortes reais; guarde as chaves fora da máquina. `GEMINI_API_KEY`
+- [ ] `LOLA_INTERNAL_SECRET` no `.env` comum e `LOLA_ORDERS_ENCRYPTION_KEY` +
+      `LOLA_ADMIN_API_KEY` somente no arquivo de segredos do perfil escolhido;
+      use valores fortes reais e guarde as chaves fora da máquina. `GEMINI_API_KEY`
       deve permanecer vazia em produção até existir aviso/consentimento LGPD
       verificável; mesmo configurada, a chave não habilita chamadas externas.
 - [ ] `~/.ssh/authorized_keys` só com as chaves de quem administra (1 por
