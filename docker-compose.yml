@@ -18,11 +18,11 @@
 #               nem LOLA_ADMIN_API_KEY: entregar essas duas chaves à vitrine
 #               anularia toda a separação que o modo dividido existe para criar.
 #
-#   .env.dados  só o data-server lê. É onde moram a chave AES e a chave
-#               administrativa no modo dividido. Exemplos prontos para copiar:
-#               `deploy/env.producao.example` (o .env) e
-#               `deploy/env.producao.dados.example` (o .env.dados) — os dois
-#               com `chmod 600`.
+#   .env            comum aos serviços; contém somente configuração pública e HMAC compartilhado.
+#   .env.dados       só o data-server lê: chave AES e chave administrativa do modo dividido.
+#   .env.embutido    só o serviço embutido lê: chave AES e chave administrativa do modo embutido.
+# Exemplos: deploy/env.producao.example (.env), deploy/env.producao.dados.example
+# (.env.dados) e deploy/env.producao.embutido.example (.env.embutido), todos chmod 600.
 #
 # Requisitos: Docker Engine 24+ / Docker Compose v2.24+ (sintaxe `env_file`
 # com `required:`), Node 22 no HOST apenas para os scripts de backup/rotação.
@@ -75,6 +75,9 @@ services:
     env_file:
       - path: .env
         required: true
+      # Somente este serviço recebe as chaves do modo embutido.
+      - path: .env.embutido
+        required: false
 
     environment:
       NODE_ENV: production
