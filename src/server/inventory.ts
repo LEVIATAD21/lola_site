@@ -145,10 +145,13 @@ export class InventoryStore {
           const item = candidate as Record<string, unknown>;
           if (typeof item.productId !== 'string' || !Object.hasOwn(this.items, item.productId) ||
               !Number.isSafeInteger(item.quantity) || (item.quantity as number) <= 0 ||
-              !Number.isSafeInteger(item.expiresAt) || (item.expiresAt as number) <= now ||
+              !Number.isSafeInteger(item.expiresAt) ||
               (item.owner !== undefined && (typeof item.owner !== 'string' || item.owner.length > 128))) {
             throw new Error('Conteúdo de reserva inválido.');
           }
+          // Reserva vencida durante a parada do processo é estado normal, não
+          // corrupção. Descarta e persiste a limpeza para não impedir o boot.
+          if ((item.expiresAt as number) <= now) continue;
           const quantity = item.quantity as number;
           const total = (totals.get(item.productId) ?? 0) + quantity;
           if (!Number.isSafeInteger(total)) throw new Error('Quantidade total de reservas inválida.');
