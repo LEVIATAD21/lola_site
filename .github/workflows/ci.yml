@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: lola-store-ci-${{ github.event.pull_request.head.ref || github.ref }}
+  group: lola-store-ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
