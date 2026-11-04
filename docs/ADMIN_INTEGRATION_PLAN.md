@@ -18,7 +18,7 @@ Fazer o painel `lola_site_admin` administrar os dados reais consumidos pela loja
 1. **Vitrine:** build estático da loja servido por hospedagem gratuita com CDN.
 2. **Painel:** build estático independente, também em hospedagem gratuita.
 3. **API/plano de dados:** processo Node no servidor gratuito em São Paulo, se a Oracle Always Free disponibilizar capacidade na região da conta.
-4. **Persistência:** manter o armazenamento cifrado existente durante a primeira integração, com volume persistente e backups verificados. Não migrar para PostgreSQL sem plano de migração, testes e compatibilidade.
+4. **Persistência:** pedidos e rastreamento já usam arquivos cifrados com AES-256-GCM; estoque e pré-reservas usam arquivos JSON separados, com permissões restritas e gravação atômica, mas **não estão cifrados em nível de aplicação**. Proteger o volume e os backups com criptografia do host/armazenamento; não descrever o estoque como cifrado. Não migrar para PostgreSQL sem plano de migração, testes e compatibilidade.
 5. **Segredos:** chaves apenas no ambiente do servidor. Nunca usar variáveis `VITE_*` para segredos.
 6. **Rede:** API administrativa atrás de HTTPS; o navegador autentica com sessão segura. A chave HMAC interna continua exclusivamente entre servidores.
 7. **Sem fallback pago:** se não houver capacidade gratuita no Brasil, manter publicação bloqueada e informar a limitação; não contratar plano pago.
@@ -66,7 +66,7 @@ Este contrato é uma especificação, não afirma que os endpoints já estejam i
 1. Criar armazenamento persistente de catálogo e migração inicial determinística a partir do catálogo atual.
 2. Adaptar o plano de dados local e HTTP para ler/escrever o catálogo na autoridade de dados.
 3. Garantir que a vitrine e a validação/preço do checkout leiam a mesma versão do catálogo.
-4. Implementar autenticação de operador no servidor de dados, sem enviar chave administrativa interna ao browser.
+4. Implementar autenticação de operador no servidor de dados, sem enviar chave administrativa interna ao browser. A chave administrativa atual é compartilhada e não substitui identidade humana; HMAC permanece somente no canal serviço-a-serviço.
 5. Implementar CRUD, uploads e auditoria com testes unitários e de integração.
 6. Integrar o painel ao cliente HTTP autenticado; remover `seed` e `localStorage` como fonte de verdade.
 7. Testar o modo dividido, reinício, backup/restore, concorrência de estoque, autorização e falhas de rede.
