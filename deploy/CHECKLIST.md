@@ -43,6 +43,7 @@ seus domínios reais.
       **todas** as linhas marcadas com "O que trocar" (o `APP_URL` e o
       `LOLA_INTERNAL_SECRET` são os dois mais importantes).
 - [ ] `install -m 600 deploy/env.producao.dados.example /srv/lola/.env.dados`
+- [ ] Somente no perfil embutido: `install -m 600 deploy/env.producao.embutido.example /srv/lola/.env.embutido`. Nunca carregue este arquivo no modo dividido.
       e cole a chave AES de produção (`openssl rand -hex 32`) — no modo dividido
       ela NÃO pode estar no `.env` comum.
 - [ ] `grep -c . /srv/lola/.env /srv/lola/.env.dados` — nenhum valor vazio nas
