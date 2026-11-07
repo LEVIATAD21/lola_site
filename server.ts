@@ -614,7 +614,7 @@ ${JSON.stringify(pergunta)}
   // Vite middleware in dev or static files in production
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
+    app.get('*', limitRead, (req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {
