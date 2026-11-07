@@ -43,6 +43,9 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 - Validação de imagem recusa `javascript:`, HTTP sem TLS, URL protocol-relative, credenciais em URL e caminhos de traversal.
 - Limite de requisições aplicado também ao fallback de arquivos da SPA.
 - Testes HTTP cobrem autenticação administrativa, allowlist, CRUD e integridade do estoque.
+- Consulta pública de rastreamento funciona também no modo de servidores separados, pelo canal interno HMAC assinado; a resposta é projetada para conter apenas logística e usa `Cache-Control: no-store`.
+- A consulta de rastreamento confirma que o pré-pedido ainda existe; exclusão revoga o token e remove o registro de rastreio.
+- O logger da vitrine mascara tokens bearer de rastreamento nos caminhos; tokens não são gravados em logs de acesso.
 - Teste TLS usa CA de teste e SAN de IP; não desativa validação de certificado.
 
 ### Lola Admin
@@ -79,7 +82,7 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 4. **Persistência:** catálogo e estoque usam arquivos e pressupõem processo único; não há transação distribuída, locking multi-instância nem escala horizontal segura.
 5. **Imagens:** o Admin aceita URL de imagem. Upload binário, inspeção real de MIME, decodificação, antivírus, storage e limpeza de órfãos ainda não existem.
 6. **Catálogo:** estado de publicação/arquivamento ainda não é um campo de domínio; os produtos existentes são tratados como publicados.
-7. **Módulos:** listagem de pré-pedidos, busca de clientes, anonimização/exclusão LGPD e resumo operacional de até 100 registros recentes estão conectados; notificações, configurações e interface de rastreamento ainda não. Os relatórios exibem valores solicitados, não receita conciliada, pois pagamentos não estão integrados.
+7. **Módulos:** listagem de pré-pedidos, busca de clientes, anonimização/exclusão LGPD e resumo operacional de até 100 registros recentes estão conectados; notificações, configurações e interface administrativa de rastreamento ainda não. A consulta pública de rastreamento já funciona no modo dividido. Os relatórios exibem valores solicitados, não receita conciliada, pois pagamentos não estão integrados.
 8. **Auditoria:** há log de acesso administrativo, mas ainda falta trilha de auditoria por ação/operador com before/after e retenção definida.
 9. **Dependências:** o Admin ainda não tem `package-lock.json` versionado; o CI gera e arquiva um lockfile temporário, mas a instalação não é totalmente reproduzível até o lock ser incorporado.
 10. **Produção:** nenhum deploy foi realizado nesta auditoria; TLS, firewall, IP allowlist, segredos e backups precisam ser configurados no ambiente real.
