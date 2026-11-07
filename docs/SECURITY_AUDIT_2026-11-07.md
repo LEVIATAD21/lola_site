@@ -66,7 +66,7 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 | Lola Site | CI da branch de integração | 470 testes aprovados; TypeScript, auditoria de dependências e build aprovados |
 | Lola Site | `npm audit` | 0 vulnerabilidades reportadas na execução |
 | Lola Site | CodeQL | análise concluída; SARIF arquivado |
-| Lola Admin | CI da branch de integração | 13 testes aprovados; TypeScript, build e scanner do bundle aprovados |
+| Lola Admin | CI da branch de integração | 15 testes aprovados; TypeScript, build e scanner do bundle aprovados |
 | Lola Admin | `npm audit` | 0 vulnerabilidades reportadas na execução |
 | Lola Admin | CodeQL | 0 resultados no SARIF analisado |
 
