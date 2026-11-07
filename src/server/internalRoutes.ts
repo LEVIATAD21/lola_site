@@ -82,6 +82,18 @@ export function createInternalRouter(options: InternalRouterOptions): Router {
     next();
   });
 
+  router.get('/catalog', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    void options.plane.catalog()
+      .then((products) => res.json({ products: products ?? [] }))
+      .catch((error: unknown) => {
+        log('error', 'interno.catalogo_falhou', {
+          motivo: error instanceof Error ? error.message : String(error),
+        });
+        res.status(503).json({ error: 'Catálogo temporariamente indisponível.' });
+      });
+  });
+
   router.get('/estoque', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     void options.plane.snapshot()
