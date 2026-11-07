@@ -111,7 +111,7 @@ const MAX_LOG_PATH = 200;
 /** Remove bearer tracking tokens from paths before they reach access logs. */
 export function redactSensitivePath(rawPath: string | undefined): string {
   const value = (rawPath || '/').split('?')[0] || '/';
-  if (/^\\/api\\/rastreio\\/[^/]+$/i.test(value)) return '/api/rastreio/[token]';
+  if (value.toLowerCase().startsWith('/api/rastreio/')) return '/api/rastreio/[token]';
   return value;
 }
 
