@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import https from 'node:https';
 import { tmpdir } from 'node:os';
@@ -26,10 +27,10 @@ function subirDataServer(env: Record<string, string>): ProcessoFilho {
   return subirEntryPoint('data-server.ts', env);
 }
 
-function getHttps(porta: number): Promise<{ status: number; corpo: string }> {
+function getHttps(porta: number, certificado: Buffer): Promise<{ status: number; corpo: string }> {
   return new Promise((resolve, reject) => {
     const request = https.request(
-      { host: '127.0.0.1', port: porta, path: '/api/health', method: 'GET', rejectUnauthorized: false },
+      { host: '127.0.0.1', port: porta, path: '/api/health', method: 'GET', ca: certificado },
       (response) => {
         let corpo = '';
         response.on('data', (pedaco) => { corpo += String(pedaco); });
@@ -236,7 +237,7 @@ describe('data-server.ts — boot real', () => {
     expect(log).toContain('tls=ativo');
 
     // Handshake TLS de verdade com o cert autoassinado (rejeitado de propósito).
-    const resposta = await getHttps(porta);
+    const resposta = await getHttps(porta, readFileSync(certificado));
     expect(resposta.status).toBe(200);
     expect(JSON.parse(resposta.corpo)).toEqual({ status: 'ok' });
     return undefined;
