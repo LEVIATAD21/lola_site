@@ -325,6 +325,7 @@ async function startServer() {
     windowMs: 60_000, maxRequests: 20, message: 'Muitas consultas de rastreamento. Tente novamente em um minuto.',
   });
   app.get('/api/rastreio/:token', limitTrackingLookup, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
       const result = await plane.lookupTracking(req.params.token);
       return res.status(result.status).json(result.body);
