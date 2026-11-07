@@ -1,6 +1,7 @@
 import { InternalClient } from './internalClient';
 import { type DataPlane, type DataPlaneResult, PEDIDOS_INDISPONIVEL } from './dataPlane';
 import { type CatalogInfo } from './catalog';
+import { type PublicTracking, type InternalShippingStatus } from './tracking';
 import { log, loggableIp } from './logger';
 
 /**
@@ -95,6 +96,48 @@ function sanitizeCatalog(body: Record<string, unknown>): CatalogInfo[] | null {
   return result;
 }
 
+const TRACKING_STATUSES = new Set<InternalShippingStatus>([
+  'preparing', 'posted', 'in_transit', 'out_for_delivery', 'delivered', 'exception',
+]);
+
+function sanitizeTracking(value: unknown): PublicTracking | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  if (typeof source.orderNumber !== 'string' || !/^LOLA-\\d{8}-[A-F0-9]{12}$/.test(source.orderNumber)) return null;
+  if (source.carrierCode !== null && (typeof source.carrierCode !== 'string' || !/^[A-Z0-9]{8,20}$/i.test(source.carrierCode))) return null;
+  if (typeof source.status !== 'string' || !TRACKING_STATUSES.has(source.status as InternalShippingStatus)) return null;
+  if (typeof source.updatedAt !== 'string' || !Number.isFinite(Date.parse(source.updatedAt))) return null;
+  if (!Array.isArray(source.events) || source.events.length > 100) return null;
+  const events = [];
+  for (const item of source.events) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const event = item as Record<string, unknown>;
+    if (typeof event.id !== 'string' || event.id.length > 64) return null;
+    if (typeof event.status !== 'string' || !TRACKING_STATUSES.has(event.status as InternalShippingStatus)) return null;
+    if (typeof event.title !== 'string' || event.title.length > 120) return null;
+    if (typeof event.description !== 'string' || event.description.length > 300) return null;
+    if (typeof event.occurredAt !== 'string' || !Number.isFinite(Date.parse(event.occurredAt))) return null;
+    if (event.source !== 'store' && event.source !== 'carrier') return null;
+    if (event.location !== undefined && (typeof event.location !== 'string' || event.location.length > 120)) return null;
+    events.push({
+      id: event.id,
+      status: event.status as InternalShippingStatus,
+      title: event.title,
+      description: event.description,
+      occurredAt: event.occurredAt,
+      source: event.source,
+      ...(typeof event.location === 'string' && event.location ? { location: event.location } : {}),
+    });
+  }
+  return {
+    orderNumber: source.orderNumber,
+    carrierCode: source.carrierCode as string | null,
+    status: source.status as InternalShippingStatus,
+    events,
+    updatedAt: source.updatedAt,
+  };
+}
+
 /** Mensagem de erro passa adiante só se for texto curto e sem controle. */
 function sanitizeErrorMessage(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -179,6 +222,30 @@ export class HttpDataPlane implements DataPlane {
       return null;
     }
     return products;
+  }
+
+  async lookupTracking(token: string): Promise<DataPlaneResult> {
+    if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    const result = await this.client.call('GET', '/internal/rastreio/' + token);
+    if (result.status === 404) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    if (!result.ok || !result.body) {
+      this.throttleLog('tracking', 'plano.rastreio_falhou', {
+        alvo: this.client.target, status: result.status, motivo: result.failure ?? 'desconhecido',
+      });
+      return { status: 503, body: { error: 'Rastreamento temporariamente indisponível.' } };
+    }
+    const tracking = sanitizeTracking(result.body.tracking);
+    if (!tracking) {
+      this.throttleLog('tracking_formato', 'plano.rastreio_invalido', {
+        alvo: this.client.target, status: result.status,
+      });
+      return { status: 503, body: { error: 'Rastreamento temporariamente indisponível.' } };
+    }
+    return { status: 200, body: { tracking: tracking as unknown as Record<string, unknown> } };
   }
 
   async snapshot(): Promise<Record<string, number> | null> {
