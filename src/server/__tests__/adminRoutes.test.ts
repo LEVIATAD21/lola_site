@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
-import { after, before, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLocalDataPlane } from '../dataPlane';
 import { createAdminRouter } from '../adminRoutes';
 import { resolveAdminAllowlist } from '../ipAllow';
@@ -15,7 +15,7 @@ let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
 let productId = '';
 
-before(async () => {
+beforeAll(async () => {
   process.env.LOLA_ADMIN_API_KEY = KEY;
   const plane = createLocalDataPlane({
     dataDir: dir,
@@ -39,7 +39,7 @@ before(async () => {
   baseUrl = `http://${HOST}:${address.port}`;
 });
 
-after(async () => {
+afterAll(async () => {
   await new Promise<void>((resolve) => server?.close(() => resolve()));
   if (previousKey === undefined) delete process.env.LOLA_ADMIN_API_KEY;
   else process.env.LOLA_ADMIN_API_KEY = previousKey;
