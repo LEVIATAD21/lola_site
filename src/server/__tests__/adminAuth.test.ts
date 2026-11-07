@@ -103,6 +103,20 @@ describe('createAdminKeyMiddleware', () => {
 });
 
 
+describe('limite de operações administrativas autenticadas', () => {
+  it('permite mais de dez operações legítimas sem acionar o bloqueio de tentativas inválidas', async () => {
+    const endpoint = await startProtectedEndpoint(() => expectedKey);
+    for (let index = 0; index < 25; index += 1) {
+      const response = await fetch(endpoint.url, {
+        method: 'POST',
+        headers: { 'x-admin-key': expectedKey },
+      });
+      expect(response.status).toBe(200);
+    }
+    expect(endpoint.mutations()).toBe(25);
+  });
+});
+
 describe('limite de tentativas administrativas', () => {
   it('locks out repeated incorrect key guesses from the same IP', async () => {
     const endpoint = await startProtectedEndpoint(() => expectedKey);
