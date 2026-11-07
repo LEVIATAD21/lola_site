@@ -3,7 +3,7 @@ import { InventoryStore, type HoldLimits } from './inventory';
 import { type CatalogInfo } from './catalog';
 import { CatalogStore } from './catalogStore';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
-import { TrackingStore } from './tracking';
+import { TrackingStore, type PublicTracking } from './tracking';
 import { createInitialStock } from './stock';
 import { log, loggableIp } from './logger';
 
@@ -37,6 +37,8 @@ export interface DataPlane {
   snapshot(): Promise<Record<string, number> | null>;
   /** Catálogo autoritativo, vindo do armazenamento privado. */
   catalog(): Promise<CatalogInfo[] | null>;
+  /** Consulta rastreamento por token bearer; retorna somente dados logísticos públicos. */
+  lookupTracking(token: string): Promise<DataPlaneResult>;
   /** Cria um pré-pedido. Autoridade única de validação, reserva e persistência. */
   createDraft(body: unknown, meta: { ip: string }): Promise<DataPlaneResult>;
 }
@@ -88,6 +90,15 @@ export class LocalDataPlane implements DataPlane {
     const stock: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const item of this.inventory.list()) stock[item.productId] = item.disponivel;
     return stock;
+  }
+
+  async lookupTracking(token: string): Promise<DataPlaneResult> {
+    if (!this.tracking.ready) return { status: 503, body: { error: 'Rastreamento indisponível: configure a chave de criptografia.' } };
+    const result: PublicTracking | null = this.tracking.lookup(token);
+    if (!result || !this.orders.findByOrderNumber(result.orderNumber)) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    return { status: 200, body: { tracking: result as unknown as Record<string, unknown> } };
   }
 
   createProduct(body: unknown): CatalogInfo | null {
