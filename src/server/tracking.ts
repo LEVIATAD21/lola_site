@@ -125,7 +125,7 @@ export class TrackingStore {
     catch { Object.assign(record, previous); return null; }
   }
   remove(orderNumber: string): boolean {
-    if (!this.ready || !/^LOLA-\\d{8}-[A-F0-9]{12}$/.test(orderNumber)) return false;
+    if (!this.ready || !/^LOLA-[0-9]{8}-[A-F0-9]{12}$/.test(orderNumber)) return false;
     const index = this.records.findIndex((item) => item.orderNumber === orderNumber);
     if (index < 0) return true;
     const [removed] = this.records.splice(index, 1);
