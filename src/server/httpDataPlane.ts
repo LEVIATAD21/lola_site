@@ -51,7 +51,6 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
  */
 function sanitizeStock(
   body: Record<string, unknown>,
-  allowedIds: ReadonlySet<string>,
 ): Record<string, number> | null {
   const source = body.stock;
   if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
@@ -135,15 +134,12 @@ function projectPublicOrder(value: unknown): Record<string, unknown> {
 export interface HttpDataPlaneOptions {
   ttlMs?: number;
   staleMs?: number;
-  /** Ids do catálogo: a única chave aceita no snapshot. */
-  allowedIds: ReadonlySet<string>;
 }
 
 export class HttpDataPlane implements DataPlane {
   private readonly client: InternalClient;
   private readonly ttlMs: number;
   private readonly staleMs: number;
-  private readonly allowedIds: ReadonlySet<string>;
   private cache: CacheEntry | null = null;
   private inflight: Promise<Record<string, number> | null> | null = null;
   private readonly lastFailureLogAt = new Map<string, number>();
@@ -152,7 +148,6 @@ export class HttpDataPlane implements DataPlane {
     this.client = client;
     this.ttlMs = clampInt(options.ttlMs, 0, 600_000, DEFAULT_TTL_MS);
     this.staleMs = clampInt(options.staleMs, 0, 3_600_000, DEFAULT_STALE_MS);
-    this.allowedIds = options.allowedIds;
   }
 
   private throttleLog(key: string, event: string, fields: Record<string, unknown>): void {
@@ -213,7 +208,7 @@ export class HttpDataPlane implements DataPlane {
       });
       return this.staleSnapshot(null);
     }
-    const stock = sanitizeStock(result.body, this.allowedIds);
+    const stock = sanitizeStock(result.body);
     if (!stock) {
       this.throttleLog('snapshot_formato', 'plano.snapshot_invalido', {
         alvo: this.client.target, status: result.status,
