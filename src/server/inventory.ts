@@ -305,7 +305,9 @@ export class InventoryStore {
 
   removeProduct(productId: string): boolean {
     const current = this.lookup(productId);
-    if (!current || current.vendido > 0 || current.reservado > 0 || this.heldQuantity(productId) > 0) return false;
+    // Não descartar saldo físico ao excluir um produto: primeiro o operador deve
+    // reconciliar o estoque para zero. Isso também torna o rollback do catálogo seguro.
+    if (!current || current.total > 0 || current.vendido > 0 || current.reservado > 0 || this.heldQuantity(productId) > 0) return false;
     delete this.items[productId];
     try { this.persist(); } catch {
       this.items[productId] = current;
