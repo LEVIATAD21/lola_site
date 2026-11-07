@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { CATALOG_INFO } from './src/server/catalog';
 import {
   createLocalDataPlane, type DataPlane, type LocalDataPlane, PLANO_DE_DADOS_INDISPONIVEL,
 } from './src/server/dataPlane';
@@ -128,7 +127,6 @@ async function startServer() {
     plane = new HttpDataPlane(client, {
       ttlMs: envInt('LOLA_SNAPSHOT_TTL_MS', 5_000, 0, 600_000),
       staleMs: envInt('LOLA_SNAPSHOT_STALE_MS', 60_000, 0, 3_600_000),
-      allowedIds: new Set(CATALOG_INFO.map((product) => product.id)),
     });
     log('info', 'plano.remoto_configurado', { alvo: client.target });
   } else {
@@ -343,12 +341,15 @@ async function startServer() {
 
   // 4. GET /api/produtos (busca ou lista por categoria)
   app.get('/api/produtos', limitRead, async (req, res) => {
-    const snapshot = await plane.snapshot().catch(() => null);
-    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const [snapshot, catalog] = await Promise.all([
+      plane.snapshot().catch(() => null),
+      plane.catalog().catch(() => null),
+    ]);
+    if (!snapshot || !catalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
-    let list = CATALOG_INFO.map((item) => ({
+    let list = catalog.map((item) => ({
       ...item,
-      disponivel: snapshot[item.id] ?? item.disponivel,
+      disponivel: snapshot[item.id] ?? 0,
     }));
 
     if (categoria && typeof categoria === 'string') {
@@ -371,14 +372,14 @@ async function startServer() {
   // 5. GET /api/produto/:productId
   app.get('/api/produto/:productId', limitRead, async (req, res) => {
     const { productId } = req.params;
-    const item = CATALOG_INFO.find((p) => p.id === productId);
-    if (!item) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
-    }
-    const snapshot = await plane.snapshot().catch(() => null);
-    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const stock = snapshot[productId] ?? item.disponivel;
-    res.json({ ...item, disponivel: stock });
+    const [catalog, snapshot] = await Promise.all([
+      plane.catalog().catch(() => null),
+      plane.snapshot().catch(() => null),
+    ]);
+    if (!catalog || !snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const item = catalog.find((p) => p.id === productId);
+    if (!item) return res.status(404).json({ error: 'Produto não encontrado' });
+    res.json({ ...item, disponivel: snapshot[productId] ?? 0 });
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
@@ -410,9 +411,12 @@ async function startServer() {
     }
 
     // Prepare real-time inventory snapshot, consultado no plano de dados.
-    const stockSnapshot = await plane.snapshot().catch(() => null);
-    if (!stockSnapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const liveCatalog = CATALOG_INFO.map((prod) => ({
+    const [stockSnapshot, currentCatalog] = await Promise.all([
+      plane.snapshot().catch(() => null),
+      plane.catalog().catch(() => null),
+    ]);
+    if (!stockSnapshot || !currentCatalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const liveCatalog = currentCatalog.map((prod) => ({
       id: prod.id,
       nome: prod.name,
       categoria: prod.category,
