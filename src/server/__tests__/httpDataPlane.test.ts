@@ -129,6 +129,31 @@ describe('HttpDataPlane: o snapshot aceita só o que o catálogo conhece', () =>
   });
 });
 
+describe('HttpDataPlane: allowlist dinâmica do catálogo', () => {
+  it('carrega IDs do catálogo autenticado antes de aceitar o snapshot de estoque', async () => {
+    const chamadas: string[] = [];
+    const produto = {
+      id: 'prod-real-01', name: 'Brinco', category: 'Brincos', price: 29.9,
+      material: 'Aço inox', color: 'Prata', desc: 'Descrição', image: '/images/brinco.webp',
+      disponivel: 0,
+    };
+    const client = {
+      target: ALVO,
+      call: async (_method: string, path: string) => {
+        chamadas.push(path);
+        if (path === '/internal/catalog') return ok({ products: [produto] });
+        if (path === '/internal/estoque') {
+          return ok({ stock: { 'prod-real-01': 7, 'prod-fantasma': 999 } });
+        }
+        return { ok: false, status: 404, body: null, failure: 'rota inesperada' };
+      },
+    } as unknown as InternalClient;
+    const plane = new HttpDataPlane(client, { ttlMs: 0 });
+    expect(await plane.snapshot()).toEqual({ 'prod-real-01': 7 });
+    expect(chamadas).toEqual(['/internal/catalog', '/internal/estoque']);
+  });
+});
+
 describe('HttpDataPlane: cache, reserva de voo e degradação', () => {
   it('dentro do TTL não faz segunda ida ao vizinho', async () => {
     vi.useFakeTimers();
