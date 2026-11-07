@@ -14,17 +14,23 @@ const secret = 'a'.repeat(32);
 const servers: Server[] = [];
 
 /** Plano falso: este arquivo testa o encanamento do router, não o estoque. */
-function fakePlane(resposta: { status: number; body: Record<string, unknown> }) {
+function fakePlane(
+  resposta: { status: number; body: Record<string, unknown> },
+  tracking?: Record<string, unknown>,
+  orderExists = true,
+) {
   return {
     snapshot: async () => ({ 'brinco-1': 5 }),
     createDraft: async () => resposta,
+    tracking: { ready: true, lookup: () => tracking ?? null },
+    orders: { findByOrderNumber: () => orderExists ? ({ orderNumber: 'LOLA-20261011-ABCDEF123456' }) : undefined },
   } as unknown as LocalDataPlane;
 }
 
-async function startServer(perMinute: number) {
+async function startServer(perMinute: number, plane = fakePlane({ status: 409, body: { error: 'Estoque insuficiente.' } })) {
   const app = express();
   app.use('/internal', createInternalRouter({
-    plane: fakePlane({ status: 409, body: { error: 'Estoque insuficiente.' } }),
+    plane,
     secret,
     perMinute,
   }));
@@ -74,6 +80,42 @@ describe('internalRoutes: teto por origem, não por caminho inventado', () => {
       status: resposta.status,
       body: Buffer.from(resposta.body, 'utf8'),
     }, resposta.respSig)).toBe(true);
+  });
+
+  it('consulta rastreamento pelo canal assinado e devolve apenas dados logísticos', async () => {
+    const token = 'a'.repeat(43);
+    const tracking = {
+      orderNumber: 'LOLA-20261011-ABCDEF123456',
+      carrierCode: null,
+      status: 'preparing',
+      events: [{
+        id: 'evt-1', status: 'preparing', title: 'Pedido sendo preparado',
+        description: 'Atualização registrada pela loja.',
+        occurredAt: '2026-11-07T12:00:00.000Z', source: 'store',
+      }],
+      updatedAt: '2026-11-07T12:00:00.000Z',
+    };
+    const port = await startServer(10, fakePlane({ status: 200, body: {} }, tracking));
+    const resposta = await call(port, 'GET', '/internal/rastreio/' + token);
+    expect(resposta.status).toBe(200);
+    expect(resposta.body).toContain('LOLA-20261011-ABCDEF123456');
+    expect(resposta.respSig).toBeTruthy();
+    expect(verifyInternalResponse(secret, {
+      nonce: resposta.nonce,
+      status: resposta.status,
+      body: Buffer.from(resposta.body, 'utf8'),
+    }, resposta.respSig)).toBe(true);
+  });
+
+  it('não expõe rastreamento quando o pedido não existe mais', async () => {
+    const token = 'b'.repeat(43);
+    const tracking = {
+      orderNumber: 'LOLA-20261011-ABCDEF123456', carrierCode: null, status: 'preparing',
+      events: [], updatedAt: '2026-11-07T12:00:00.000Z',
+    };
+    const port = await startServer(10, fakePlane({ status: 200, body: {} }, tracking, false));
+    const resposta = await call(port, 'GET', '/internal/rastreio/' + token);
+    expect(resposta.status).toBe(404);
   });
 
   it('resposta de erro do plano de dados também vem assinada', async () => {
