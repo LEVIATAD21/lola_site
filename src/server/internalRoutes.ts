@@ -94,6 +94,18 @@ export function createInternalRouter(options: InternalRouterOptions): Router {
       });
   });
 
+  router.get('/rastreio/:token', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (!options.plane.tracking.ready) {
+      return res.status(503).json({ error: 'Rastreamento temporariamente indisponível.' });
+    }
+    const tracking = options.plane.tracking.lookup(req.params.token);
+    if (!tracking || !options.plane.orders.findByOrderNumber(tracking.orderNumber)) {
+      return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
+    }
+    return res.json({ tracking });
+  });
+
   router.get('/estoque', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     void options.plane.snapshot()
