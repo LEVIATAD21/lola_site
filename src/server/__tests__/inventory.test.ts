@@ -221,6 +221,20 @@ describe('InventoryStore — pré-reservas', () => {
   });
 });
 
+describe('InventoryStore — exclusão segura de produto', () => {
+  it('não apaga produto com saldo físico; permite excluir somente após reconciliação para zero', () => {
+    const store = makeStore();
+    const before = store.get('brinco-1');
+    expect(before?.total).toBeGreaterThan(0);
+    expect(store.removeProduct('brinco-1')).toBe(false);
+    expect(store.get('brinco-1')).toEqual(before);
+
+    expect(store.setAvailable('brinco-1', 0).ok).toBe(true);
+    expect(store.removeProduct('brinco-1')).toBe(true);
+    expect(store.get('brinco-1')).toBeUndefined();
+  });
+});
+
 describe('InventoryStore — tetos de pré-reserva (VUL-C)', () => {
   const now = Date.now();
   const soon = now + 60_000;
