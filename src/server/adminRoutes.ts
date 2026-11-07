@@ -44,6 +44,49 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     return next();
   };
 
+  // Catálogo: somente o servidor de dados persiste alterações.
+  router.get('/admin/catalog', requireAdminKey, requireTrustedOrigin, (_req, res) => {
+    return res.json({ products: plane.catalogStore.list() });
+  });
+
+  router.post('/admin/catalog', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const product = plane.createProduct(req.body);
+    if (!product) return res.status(400).json({ error: 'Dados do produto inválidos ou limite do catálogo atingido.' });
+    auditAdminAccess(req, 'allow', 'produto criado');
+    return res.status(201).json({ product });
+  });
+
+  router.put('/admin/catalog/:productId', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const { productId } = req.params;
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(productId)) {
+      return res.status(400).json({ error: 'Identificador do produto inválido.' });
+    }
+    const product = plane.updateProduct(productId, req.body);
+    if (!product) return res.status(400).json({ error: 'Produto não encontrado ou dados inválidos.' });
+    auditAdminAccess(req, 'allow', 'produto atualizado');
+    return res.json({ product });
+  });
+
+  router.delete('/admin/catalog/:productId', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const { productId } = req.params;
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(productId)) {
+      return res.status(400).json({ error: 'Identificador do produto inválido.' });
+    }
+    if (!plane.removeProduct(productId)) {
+      return res.status(409).json({ error: 'Produto não pode ser removido: confira vendas, reservas ou estoque.' });
+    }
+    auditAdminAccess(req, 'allow', 'produto removido');
+    return res.json({ success: true, productId });
+  });
+
+  router.post('/estoque/definir', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const result = plane.setProductStock(body.productId, body.quantidade);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    auditAdminAccess(req, 'allow', 'estoque ajustado');
+    return res.json({ success: true, stock: result.stock });
+  });
+
   // POST /api/estoque/atualizar — baixa estrita e persistente.
   router.post('/estoque/atualizar', requireAdminKey, requireTrustedOrigin, (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
