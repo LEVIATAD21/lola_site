@@ -51,6 +51,7 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
  */
 function sanitizeStock(
   body: Record<string, unknown>,
+  allowedIds: ReadonlySet<string>,
 ): Record<string, number> | null {
   const source = body.stock;
   if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
@@ -58,7 +59,7 @@ function sanitizeStock(
   const stock: Record<string, number> = Object.create(null) as Record<string, number>;
   let matched = 0;
   for (const id of Object.keys(entries)) {
-    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(id)) continue;
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(id) || !allowedIds.has(id)) continue;
     const raw = entries[id];
     if (typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 && raw <= 1_000_000_000) {
       stock[id] = raw;
@@ -134,12 +135,15 @@ function projectPublicOrder(value: unknown): Record<string, unknown> {
 export interface HttpDataPlaneOptions {
   ttlMs?: number;
   staleMs?: number;
+  /** Allowlist estática para testes/ambientes controlados; produção deriva do catálogo autenticado. */
+  allowedIds?: ReadonlySet<string>;
 }
 
 export class HttpDataPlane implements DataPlane {
   private readonly client: InternalClient;
   private readonly ttlMs: number;
   private readonly staleMs: number;
+  private readonly configuredAllowedIds?: ReadonlySet<string>;
   private cache: CacheEntry | null = null;
   private inflight: Promise<Record<string, number> | null> | null = null;
   private readonly lastFailureLogAt = new Map<string, number>();
@@ -148,6 +152,7 @@ export class HttpDataPlane implements DataPlane {
     this.client = client;
     this.ttlMs = clampInt(options.ttlMs, 0, 600_000, DEFAULT_TTL_MS);
     this.staleMs = clampInt(options.staleMs, 0, 3_600_000, DEFAULT_STALE_MS);
+    this.configuredAllowedIds = options.allowedIds;
   }
 
   private throttleLog(key: string, event: string, fields: Record<string, unknown>): void {
@@ -201,6 +206,15 @@ export class HttpDataPlane implements DataPlane {
   }
 
   private async fetchSnapshot(): Promise<Record<string, number> | null> {
+    // O catálogo é a autoridade dos IDs: estoque de produto fantasma não pode
+    // entrar no cache público. Em produção, a allowlist vem do canal interno
+    // assinado; testes podem injetar uma lista fixa para isolar o contrato.
+    let allowedIds = this.configuredAllowedIds;
+    if (!allowedIds) {
+      const products = await this.catalog();
+      if (!products) return this.staleSnapshot(null);
+      allowedIds = new Set(products.map((product) => product.id));
+    }
     const result = await this.client.call('GET', '/internal/estoque');
     if (!result.ok || !result.body) {
       this.throttleLog('snapshot', 'plano.snapshot_falhou', {
@@ -208,7 +222,7 @@ export class HttpDataPlane implements DataPlane {
       });
       return this.staleSnapshot(null);
     }
-    const stock = sanitizeStock(result.body);
+    const stock = sanitizeStock(result.body, allowedIds);
     if (!stock) {
       this.throttleLog('snapshot_formato', 'plano.snapshot_invalido', {
         alvo: this.client.target, status: result.status,
