@@ -103,7 +103,7 @@ const TRACKING_STATUSES = new Set<InternalShippingStatus>([
 function sanitizeTracking(value: unknown): PublicTracking | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
-  if (typeof source.orderNumber !== 'string' || !/^LOLA-\\d{8}-[A-F0-9]{12}$/.test(source.orderNumber)) return null;
+  if (typeof source.orderNumber !== 'string' || !/^LOLA-[0-9]{8}-[A-F0-9]{12}$/.test(source.orderNumber)) return null;
   if (source.carrierCode !== null && (typeof source.carrierCode !== 'string' || !/^[A-Z0-9]{8,20}$/i.test(source.carrierCode))) return null;
   if (typeof source.status !== 'string' || !TRACKING_STATUSES.has(source.status as InternalShippingStatus)) return null;
   if (typeof source.updatedAt !== 'string' || !Number.isFinite(Date.parse(source.updatedAt))) return null;
