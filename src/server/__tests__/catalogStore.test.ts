@@ -44,6 +44,11 @@ describe('CatalogStore persistente', () => {
     expect(store.create({ ...valid, price: Number.NaN })).toBeNull();
     expect(store.create({ ...valid, category: 'Acessórios' })).toBeNull();
     expect(store.create({ ...valid, image: 'javascript:alert(1)' })).toBeNull();
+    expect(store.create({ ...valid, image: '//evil.example/tracker.png' })).toBeNull();
+    expect(store.create({ ...valid, image: '/../private/file.png' })).toBeNull();
+    expect(store.create({ ...valid, image: '/%2e%2e/private/file.png' })).toBeNull();
+    expect(store.create({ ...valid, image: 'https://user:password@evil.example/image.png' })).toBeNull();
+    expect(store.create({ ...valid, image: 'http://evil.example/image.png' })).toBeNull();
     expect(store.create({ ...valid, name: ' '.repeat(121) })).toBeNull();
   });
 
