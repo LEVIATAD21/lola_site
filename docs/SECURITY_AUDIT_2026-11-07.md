@@ -72,6 +72,8 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 
 **Nota CodeQL do Site:** existe um resultado informativo `js/missing-rate-limiting` no fallback da SPA. O handler usa o middleware próprio `limitRead`, configurado para 300 requisições por minuto por IP; o analisador não reconheceu esse middleware customizado. Foi conferido manualmente. Não é uma confirmação de ausência de risco em outras rotas.
 
+**Logs do reverse proxy público:** o logger Node redige o token bearer, mas o Nginx/edge do ambiente real também deve registrar `$uri` (sem query string) com `/api/rastreio/:token` mascarado; não usar `$request` ou `$request_uri` em access logs de rastreamento.
+
 **Topologia do Data Server:** por padrão, `LOLA_BIND_HOST` é `127.0.0.1`; para receber o BFF em outro host, deve ser definido para o IP privado da interface. Em produção, bind coringa é recusado por padrão. Configure `LOLA_ADMIN_ALLOWED_IPS` para o IP que o Data Server enxerga do BFF, `LOLA_INTERNAL_SECRET` compartilhado somente entre Site público e Data Server, TLS do Data Server e firewall restritivo. A chave HMAC interna e a chave administrativa são segredos distintos.
 
 ## Limitações que ainda bloqueiam a declaração de produção
