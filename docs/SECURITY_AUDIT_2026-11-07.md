@@ -111,3 +111,6 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 - [LOLA Admin — checklist mestre](https://github.com/LEVIATAD21/lola_site_admin/issues/12)
 
 **Política de branch:** alterações mantidas nas branches de trabalho. Nenhum merge em `main` e nenhum deploy realizado nesta etapa.
+
+
+**Validação de infraestrutura:** o exemplo Nginx ainda precisa passar por `nginx -t` no host de destino antes do deploy.
