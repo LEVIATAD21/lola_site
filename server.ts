@@ -324,13 +324,13 @@ async function startServer() {
   const limitTrackingLookup = createRateLimitMiddleware({
     windowMs: 60_000, maxRequests: 20, message: 'Muitas consultas de rastreamento. Tente novamente em um minuto.',
   });
-  app.get('/api/rastreio/:token', limitTrackingLookup, (req, res) => {
-    const tracking = localPlane?.tracking;
-    if (!tracking) return res.status(404).json({ error: 'Endpoint de API não encontrado.' });
-    if (!tracking.ready) return res.status(503).json({ error: 'Rastreamento indisponível: configure a chave de criptografia.' });
-    const result = tracking.lookup(req.params.token);
-    if (!result) return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
-    return res.json({ tracking: result });
+  app.get('/api/rastreio/:token', limitTrackingLookup, async (req, res) => {
+    try {
+      const result = await plane.lookupTracking(req.params.token);
+      return res.status(result.status).json(result.body);
+    } catch {
+      return res.status(503).json({ error: 'Rastreamento temporariamente indisponível.' });
+    }
   });
 
   // CEP (RT-R-04): a consulta sai do navegador. Em produção o CSP da vitrine só
