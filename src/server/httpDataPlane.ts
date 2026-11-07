@@ -1,5 +1,6 @@
 import { InternalClient } from './internalClient';
 import { type DataPlane, type DataPlaneResult, PEDIDOS_INDISPONIVEL } from './dataPlane';
+import { type CatalogInfo } from './catalog';
 import { log, loggableIp } from './logger';
 
 /**
@@ -57,14 +58,41 @@ function sanitizeStock(
   const entries = source as Record<string, unknown>;
   const stock: Record<string, number> = Object.create(null) as Record<string, number>;
   let matched = 0;
-  for (const id of allowedIds) {
+  for (const id of Object.keys(entries)) {
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(id)) continue;
     const raw = entries[id];
     if (typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 && raw <= 1_000_000_000) {
       stock[id] = raw;
       matched += 1;
     }
   }
-  return matched > 0 ? stock : null;
+  return matched > 0 || Object.keys(entries).length === 0 ? stock : null;
+}
+
+function sanitizeCatalog(body: Record<string, unknown>): CatalogInfo[] | null {
+  if (!Array.isArray(body.products) || body.products.length > 5000) return null;
+  const ids = new Set<string>();
+  const result: CatalogInfo[] = [];
+  for (const raw of body.products) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const p = raw as Record<string, unknown>;
+    if (typeof p.id !== 'string' || !/^[a-z0-9][a-z0-9_-]{1,63}$/.test(p.id) || ids.has(p.id) ||
+        typeof p.name !== 'string' || p.name.length < 1 || p.name.length > 120 ||
+        typeof p.category !== 'string' || !['Brincos', 'Colares', 'Pulseiras', 'Anéis', 'Conjuntos'].includes(p.category) ||
+        typeof p.price !== 'number' || !Number.isFinite(p.price) || p.price < 0 || p.price > 100000 ||
+        typeof p.material !== 'string' || p.material.length > 80 ||
+        typeof p.color !== 'string' || p.color.length > 80 ||
+        typeof p.desc !== 'string' || p.desc.length > 2000 ||
+        typeof p.image !== 'string' || p.image.length > 2048 ||
+        typeof p.disponivel !== 'number' || !Number.isSafeInteger(p.disponivel) || p.disponivel < 0) return null;
+    ids.add(p.id);
+    result.push({
+      id: p.id, name: p.name, category: p.category, price: p.price,
+      material: p.material, color: p.color, desc: p.desc, image: p.image,
+      disponivel: p.disponivel,
+    });
+  }
+  return result;
 }
 
 /** Mensagem de erro passa adiante só se for texto curto e sem controle. */
@@ -133,6 +161,24 @@ export class HttpDataPlane implements DataPlane {
     if (now - previous < MAX_LOG_INTERVAL_MS) return;
     this.lastFailureLogAt.set(key, now);
     log('error', event, fields);
+  }
+
+  async catalog(): Promise<CatalogInfo[] | null> {
+    const result = await this.client.call('GET', '/internal/catalog');
+    if (!result.ok || !result.body) {
+      this.throttleLog('catalogo', 'plano.catalogo_falhou', {
+        alvo: this.client.target, status: result.status, motivo: result.failure ?? 'desconhecido',
+      });
+      return null;
+    }
+    const products = sanitizeCatalog(result.body);
+    if (!products) {
+      this.throttleLog('catalogo_formato', 'plano.catalogo_invalido', {
+        alvo: this.client.target, status: result.status,
+      });
+      return null;
+    }
+    return products;
   }
 
   async snapshot(): Promise<Record<string, number> | null> {
