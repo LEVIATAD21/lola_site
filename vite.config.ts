@@ -75,11 +75,33 @@ export const DEV_DENY = [
  * as notas internas de desenvolvimento (bloqueios, decisões de preload) ficam
  * visíveis no HTML publicado. Em dev os comentários continuam no lugar.
  */
+export function stripHtmlCommentsFromHtml(html: string): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < html.length) {
+    const start = html.indexOf('<!--', cursor);
+    if (start < 0) {
+      parts.push(html.slice(cursor));
+      break;
+    }
+    parts.push(html.slice(cursor, start));
+    const end = html.indexOf('-->', start + 4);
+    if (end < 0) {
+      // Comentário incompleto: preserva o restante em vez de truncar o documento.
+      parts.push(html.slice(start));
+      break;
+    }
+    cursor = end + 3;
+    while (cursor < html.length && /\s/.test(html[cursor])) cursor += 1;
+  }
+  return parts.join('');
+}
+
 const stripHtmlComments: Plugin = {
   name: 'lola-strip-html-comments',
   apply: 'build',
   transformIndexHtml(html) {
-    return html.replace(/<!--[\s\S]*?-->\s*/g, '');
+    return stripHtmlCommentsFromHtml(html);
   },
 };
 
