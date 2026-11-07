@@ -154,6 +154,46 @@ describe('HttpDataPlane: allowlist dinâmica do catálogo', () => {
   });
 });
 
+describe('HttpDataPlane: consulta pública de rastreamento', () => {
+  const token = 'a'.repeat(43);
+  const tracking = {
+    orderNumber: 'LOLA-20261011-ABCDEF123456',
+    carrierCode: 'AB123456789BR',
+    status: 'in_transit',
+    events: [{
+      id: 'evt-1', status: 'in_transit', title: 'Pedido em trânsito',
+      description: 'Objeto encaminhado.',
+      occurredAt: '2026-11-07T12:00:00.000Z', source: 'carrier', location: 'Rio de Janeiro',
+    }],
+    updatedAt: '2026-11-07T12:00:00.000Z',
+    tokenHash: 'must-not-reach-browser',
+    customerName: 'PII não pública',
+  };
+
+  it('usa o canal interno assinado e projeta somente campos logísticos', async () => {
+    const { plane, chamadas } = montar(() => ok({ tracking }));
+    const result = await plane.lookupTracking(token);
+    expect(result.status).toBe(200);
+    expect(chamadas).toEqual([{ method: 'GET', path: '/internal/rastreio/' + token, body: undefined }]);
+    expect(JSON.stringify(result.body)).not.toContain('tokenHash');
+    expect(JSON.stringify(result.body)).not.toContain('customerName');
+    expect(result.body.tracking).toMatchObject({
+      orderNumber: tracking.orderNumber, status: tracking.status, carrierCode: tracking.carrierCode,
+    });
+  });
+
+  it('recusa token malformado sem fazer chamada interna', async () => {
+    const { plane, chamadas } = montar(() => ok({ tracking }));
+    expect((await plane.lookupTracking('invalid-token')).status).toBe(404);
+    expect(chamadas).toHaveLength(0);
+  });
+
+  it('converte resposta de rastreamento malformada em indisponibilidade fechada', async () => {
+    const { plane } = montar(() => ok({ tracking: { ...tracking, status: 'javascript:alert(1)' } }));
+    expect((await plane.lookupTracking(token)).status).toBe(503);
+  });
+});
+
 describe('HttpDataPlane: cache, reserva de voo e degradação', () => {
   it('dentro do TTL não faz segunda ida ao vizinho', async () => {
     vi.useFakeTimers();
