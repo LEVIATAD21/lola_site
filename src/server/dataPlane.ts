@@ -90,6 +90,34 @@ export class LocalDataPlane implements DataPlane {
     return stock;
   }
 
+  createProduct(body: unknown): CatalogInfo | null {
+    const product = this.catalogStore.create(body);
+    if (!product) return null;
+    if (!this.inventory.registerProduct(product.id)) {
+      this.catalogStore.remove(product.id);
+      return null;
+    }
+    return product;
+  }
+
+  updateProduct(id: string, body: unknown): CatalogInfo | null {
+    return this.catalogStore.update(id, body);
+  }
+
+  removeProduct(id: string): boolean {
+    if (!this.catalogStore.find(id)) return false;
+    if (!this.inventory.removeProduct(id)) return false;
+    if (!this.catalogStore.remove(id)) {
+      this.inventory.registerProduct(id);
+      return false;
+    }
+    return true;
+  }
+
+  setProductStock(id: unknown, quantity: unknown) {
+    return this.inventory.setAvailable(id, quantity);
+  }
+
   async createDraft(body: unknown, meta: { ip: string }): Promise<DataPlaneResult> {
     if (!this.orders.ready) {
       return { status: 503, body: { error: PEDIDOS_INDISPONIVEL } };
