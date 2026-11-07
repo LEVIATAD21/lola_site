@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { InventoryStore, type HoldLimits } from './inventory';
-import { CATALOG_INFO } from './catalog';
+import { CATALOG_INFO, type CatalogInfo } from './catalog';
+import { CatalogStore } from './catalogStore';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
 import { TrackingStore } from './tracking';
 import { createInitialStock } from './stock';
@@ -34,6 +35,8 @@ export interface DataPlane {
    * quando o plano de dados não pôde ser consultado.
    */
   snapshot(): Promise<Record<string, number> | null>;
+  /** Catálogo autoritativo, vindo do armazenamento privado. */
+  catalog(): Promise<CatalogInfo[] | null>;
   /** Cria um pré-pedido. Autoridade única de validação, reserva e persistência. */
   createDraft(body: unknown, meta: { ip: string }): Promise<DataPlaneResult>;
 }
@@ -65,15 +68,16 @@ export class LocalDataPlane implements DataPlane {
    */
   readonly tracking: TrackingStore;
   private readonly reservationTtlMs: number;
+  readonly catalogStore: CatalogStore;
 
-  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, tracking: TrackingStore, reservationTtlMs: number) {
+  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, tracking: TrackingStore, catalogStore: CatalogStore, reservationTtlMs: number) {
     this.inventory = inventory;
     this.orders = orders;
     this.tracking = tracking;
     this.reservationTtlMs = reservationTtlMs;
   }
 
-  async snapshot(): Promise<Record<string, number> | null> {
+  async catalog(): Promise<CatalogInfo[] | null> {\n    return this.catalogStore.list();\n  }\n\n  async snapshot(): Promise<Record<string, number> | null> {
     // Objeto sem protótipo: um id vindo de fora nunca pode alcançar
     // `Object.prototype`, mesmo que a fonte esteja corrompida.
     const stock: Record<string, number> = Object.create(null) as Record<string, number>;
@@ -91,7 +95,7 @@ export class LocalDataPlane implements DataPlane {
     }
 
     const result = buildOrderDraft(
-      body, CATALOG_INFO, this.inventory, undefined,
+      body, this.catalogStore.list(), this.inventory, undefined,
       // VUL-CUPOM: o teto de usos precisa de quem guarda os pré-pedidos. O
       // plano de dados tem o armazenamento, então a contagem vem dele.
       (code) => this.orders.couponUseCount(code),
@@ -164,7 +168,7 @@ export interface LocalDataPlaneOptions {
  * essa a propriedade que separa "o site lê o estoque" de "o site tem o estoque".
  */
 export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataPlane {
-  const inventory = new InventoryStore(
+  const catalogStore = new CatalogStore(options.dataDir);\n  const inventory = new InventoryStore(
     createInitialStock(),
     path.join(options.dataDir, 'inventory.json'),
     options.holdLimits,
@@ -221,5 +225,5 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
     options.production,
   );
 
-  return new LocalDataPlane(inventory, orders, tracking, options.reservationTtlMs);
+  return new LocalDataPlane(inventory, orders, tracking, catalogStore, options.reservationTtlMs);
 }
