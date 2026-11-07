@@ -33,34 +33,60 @@ function padToLength(buffer: Buffer, length: number): Buffer {
 export function createAdminKeyMiddleware(
   getExpectedKey: AdminKeyProvider = () => process.env.LOLA_ADMIN_API_KEY,
 ): RequestHandler {
-  // Brute-force friction shared across all administrative routes for each remote IP.
-  const limitAttempts = createRateLimitMiddleware({
+  // O tráfego autenticado do BFF é uma única origem IP. Um limite de 10/min
+  // para TODAS as operações fazia o painel bloquear suas próprias consultas e
+  // atualizações em lote. Separamos volume operacional de tentativas inválidas.
+  const limitOperations = createRateLimitMiddleware({
     windowMs: 60_000,
-    maxRequests: 10,
+    maxRequests: 300,
     maxBuckets: 10_000,
     keyGenerator: (req) => req.socket.remoteAddress || 'unknown',
-    message: 'Muitas tentativas administrativas. Aguarde um minuto e tente novamente.',
+    message: 'Limite de operações administrativas atingido. Aguarde um minuto.',
   });
+  const failedAttempts = new Map<string, { count: number; resetAt: number }>();
+  const MAX_FAILED_ATTEMPTS = 10;
+  const FAILURE_WINDOW_MS = 60_000;
+  const MAX_FAILURE_BUCKETS = 10_000;
 
-  return (req, res, next) => limitAttempts(req, res, () => {
+  return (req, res, next) => limitOperations(req, res, () => {
     res.setHeader('Cache-Control', 'no-store');
-    const expected = getExpectedKey();
+    const ip = req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
 
-    if (!expected || expected.length < 32) {
-      // VUL-11: responder 503 aqui revelava a um atacante externo se a chave
-      // administrativa existe no servidor. A resposta passa a ser idêntica à de
-      // chave errada; o diagnóstico fica no log e no aviso de subida.
-      auditAdminAccess(req, 'not_configured', 'LOLA_ADMIN_API_KEY ausente ou curta');
+    for (const [address, bucket] of failedAttempts) {
+      if (bucket.resetAt <= now) failedAttempts.delete(address);
+    }
+    let failures = failedAttempts.get(ip);
+    if (failures && failures.resetAt <= now) {
+      failedAttempts.delete(ip);
+      failures = undefined;
+    }
+    if (failures && failures.count >= MAX_FAILED_ATTEMPTS) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((failures.resetAt - now) / 1000))));
+      return res.status(429).json({ error: 'Muitas tentativas administrativas. Aguarde um minuto e tente novamente.' });
+    }
+
+    const reject = (reason: string) => {
+      const bucket = failures ?? { count: 0, resetAt: now + FAILURE_WINDOW_MS };
+      bucket.count += 1;
+      if (!failures && failedAttempts.size >= MAX_FAILURE_BUCKETS) {
+        const oldest = failedAttempts.keys().next().value;
+        if (oldest) failedAttempts.delete(oldest);
+      }
+      failedAttempts.set(ip, bucket);
+      auditAdminAccess(req, 'denied', reason);
       return res.status(401).json({ error: ADMIN_UNAVAILABLE_MESSAGE });
+    };
+
+    const expected = getExpectedKey();
+    if (!expected || expected.length < 32) {
+      return reject('LOLA_ADMIN_API_KEY ausente ou curta');
     }
 
     const provided = Buffer.from(req.get('x-admin-key') || '', 'utf8');
     const expectedBuffer = Buffer.from(expected, 'utf8');
 
-    // VUL-M: o `||` original não chamava `timingSafeEqual` quando os
-    // comprimentos diferiam, então o tempo da resposta media quantos bytes a
-    // chave errada acertou. As duas checagens passam a rodar SEMPRE, sobre
-    // buffers do mesmo comprimento; o resultado final é o mesmo.
+    // As duas checagens rodam SEMPRE sobre buffers de mesmo comprimento.
     const lengthMatches = provided.length === expectedBuffer.length;
     const equal = timingSafeEqual(
       padToLength(provided, expectedBuffer.length),
@@ -68,10 +94,11 @@ export function createAdminKeyMiddleware(
     );
 
     if (!lengthMatches || !equal) {
-      auditAdminAccess(req, 'denied', 'chave ausente ou inválida');
-      return res.status(401).json({ error: ADMIN_UNAVAILABLE_MESSAGE });
+      return reject('chave ausente ou inválida');
     }
 
+    // Uma autenticação bem-sucedida limpa o contador de falhas do endereço.
+    failedAttempts.delete(ip);
     auditAdminAccess(req, 'allow');
     return next();
   });
