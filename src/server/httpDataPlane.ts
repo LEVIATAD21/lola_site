@@ -125,7 +125,7 @@ function sanitizeTracking(value: unknown): PublicTracking | null {
       title: event.title,
       description: event.description,
       occurredAt: event.occurredAt,
-      source: event.source,
+      source: event.source as 'store' | 'carrier',
       ...(typeof event.location === 'string' && event.location ? { location: event.location } : {}),
     });
   }
