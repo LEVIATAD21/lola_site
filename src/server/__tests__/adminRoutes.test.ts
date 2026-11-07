@@ -47,13 +47,9 @@ after(async () => {
 });
 
 async function call(path: string, init: RequestInit = {}) {
-  return fetch(baseUrl + path, {
-    ...init,
-    headers: {
-      ...(init.body ? { 'content-type': 'application/json' } : {}),
-      ...(init.headers || {}),
-    },
-  });
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set('content-type', 'application/json');
+  return fetch(baseUrl + path, { ...init, headers });
 }
 const product = {
   name: 'Produto via API administrativa',
