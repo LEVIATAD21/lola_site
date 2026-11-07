@@ -46,7 +46,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
   // Catálogo: somente o servidor de dados persiste alterações.
   router.get('/admin/catalog', requireAdminKey, requireTrustedOrigin, (_req, res) => {
-    return res.json({ products: plane.catalogStore.list() });
+    // Estoque é lido da autoridade InventoryStore, nunca do snapshot auxiliar
+    // gravado junto ao catálogo; assim o painel não exibe saldo desatualizado.
+    const products = plane.catalogStore.list().map((product) => ({
+      ...product,
+      disponivel: plane.inventory.get(product.id)?.disponivel ?? 0,
+    }));
+    return res.json({ products });
   });
 
   router.post('/admin/catalog', requireAdminKey, requireTrustedOrigin, (req, res) => {
