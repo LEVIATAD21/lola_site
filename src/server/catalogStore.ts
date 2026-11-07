@@ -48,7 +48,24 @@ function normalizeInput(value: unknown): CatalogInput | null {
   if (!result.name || result.name.length > 120 || !CATEGORIES.has(result.category) ||
       result.material.length > 80 || result.color.length > 80 || result.desc.length > 2000 ||
       result.image.length > 2048) return null;
-  if (result.image && !result.image.startsWith('/') && !/^https:\/\//i.test(result.image)) return null;
+  if (result.image) {
+    const localPath = result.image.startsWith('/') &&
+      !result.image.startsWith('//') &&
+      !/[\\u0000-\\u001f\\\\]/.test(result.image) &&
+      !result.image.split(/[?#]/)[0].split('/').some((segment) => segment === '..') &&
+      !/%2e/i.test(result.image);
+    let remoteHttps = false;
+    if (/^https:\/\//i.test(result.image) && !/\\s/.test(result.image)) {
+      try {
+        const imageUrl = new URL(result.image);
+        remoteHttps = imageUrl.protocol === 'https:' && Boolean(imageUrl.hostname) &&
+          !imageUrl.username && !imageUrl.password;
+      } catch {
+        remoteHttps = false;
+      }
+    }
+    if (!localPath && !remoteHttps) return null;
+  }
   return result;
 }
 
