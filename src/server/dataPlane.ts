@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { InventoryStore, type HoldLimits } from './inventory';
-import { CATALOG_INFO, type CatalogInfo } from './catalog';
+import { type CatalogInfo } from './catalog';
 import { CatalogStore } from './catalogStore';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
 import { TrackingStore } from './tracking';
@@ -74,10 +74,15 @@ export class LocalDataPlane implements DataPlane {
     this.inventory = inventory;
     this.orders = orders;
     this.tracking = tracking;
+    this.catalogStore = catalogStore;
     this.reservationTtlMs = reservationTtlMs;
   }
 
-  async catalog(): Promise<CatalogInfo[] | null> {\n    return this.catalogStore.list();\n  }\n\n  async snapshot(): Promise<Record<string, number> | null> {
+  async catalog(): Promise<CatalogInfo[] | null> {
+    return this.catalogStore.list();
+  }
+
+  async snapshot(): Promise<Record<string, number> | null> {
     // Objeto sem protótipo: um id vindo de fora nunca pode alcançar
     // `Object.prototype`, mesmo que a fonte esteja corrompida.
     const stock: Record<string, number> = Object.create(null) as Record<string, number>;
@@ -168,11 +173,15 @@ export interface LocalDataPlaneOptions {
  * essa a propriedade que separa "o site lê o estoque" de "o site tem o estoque".
  */
 export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataPlane {
-  const catalogStore = new CatalogStore(options.dataDir);\n  const inventory = new InventoryStore(
+  const catalogStore = new CatalogStore(options.dataDir);
+  const inventory = new InventoryStore(
     createInitialStock(),
     path.join(options.dataDir, 'inventory.json'),
     options.holdLimits,
   );
+  for (const product of catalogStore.list()) {
+    if (!inventory.get(product.id)) inventory.registerProduct(product.id);
+  }
   const orders = new EncryptedOrderStore(
     options.dataDir,
     options.encryptionKey,
