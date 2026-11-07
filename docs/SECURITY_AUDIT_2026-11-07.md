@@ -79,7 +79,7 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 4. **Persistência:** catálogo e estoque usam arquivos e pressupõem processo único; não há transação distribuída, locking multi-instância nem escala horizontal segura.
 5. **Imagens:** o Admin aceita URL de imagem. Upload binário, inspeção real de MIME, decodificação, antivírus, storage e limpeza de órfãos ainda não existem.
 6. **Catálogo:** estado de publicação/arquivamento ainda não é um campo de domínio; os produtos existentes são tratados como publicados.
-7. **Módulos:** pedidos, clientes, relatórios, notificações e configurações ainda não estão conectados ao Data Server.
+7. **Módulos:** listagem de pré-pedidos, busca de clientes e resumo operacional estão conectados; notificações, configurações e interface de rastreamento ainda não. Os relatórios exibem valores solicitados, não receita conciliada, pois pagamentos não estão integrados.
 8. **Auditoria:** há log de acesso administrativo, mas ainda falta trilha de auditoria por ação/operador com before/after e retenção definida.
 9. **Dependências:** o Admin ainda não tem `package-lock.json` versionado; o CI gera e arquiva um lockfile temporário, mas a instalação não é totalmente reproduzível até o lock ser incorporado.
 10. **Produção:** nenhum deploy foi realizado nesta auditoria; TLS, firewall, IP allowlist, segredos e backups precisam ser configurados no ambiente real.
@@ -101,7 +101,7 @@ LOLA Site — vitrine pública lê somente o catálogo/estoque necessário
 - Implementar publicação/arquivamento e regras de retenção de produtos.
 
 ### P2 — completar o painel
-- Integrar pedidos, clientes, relatórios, notificações e configurações.
+- Completar notificações, configurações e interface de rastreamento; evoluir relatórios somente após integração de pagamentos.
 - Testes de carga controlados e observabilidade/alertas.
 - Revisão manual de segurança antes da abertura pública.
 
