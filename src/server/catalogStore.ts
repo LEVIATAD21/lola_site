@@ -14,6 +14,7 @@ export type CatalogInput = {
   color: string;
   desc: string;
   image: string;
+  published: boolean;
 };
 
 function validProduct(value: unknown): value is CatalogInfo {
@@ -27,6 +28,7 @@ function validProduct(value: unknown): value is CatalogInfo {
     typeof p.color === 'string' && p.color.length <= 80 &&
     typeof p.desc === 'string' && p.desc.length <= 2000 &&
     typeof p.image === 'string' && p.image.length <= 2048 &&
+    typeof p.published === 'boolean' &&
     typeof p.disponivel === 'number' && Number.isSafeInteger(p.disponivel) && p.disponivel >= 0;
 }
 
@@ -35,6 +37,7 @@ function normalizeInput(value: unknown): CatalogInput | null {
   const p = value as Record<string, unknown>;
   const fields = ['name', 'category', 'material', 'color', 'desc', 'image'] as const;
   if (fields.some((field) => typeof p[field] !== 'string')) return null;
+  if (p.published !== undefined && typeof p.published !== 'boolean') return null;
   if (typeof p.price !== 'number' || !Number.isFinite(p.price) || p.price < 0 || p.price > 100000) return null;
   const result = {
     name: (p.name as string).trim(),
@@ -44,6 +47,7 @@ function normalizeInput(value: unknown): CatalogInput | null {
     color: (p.color as string).trim(),
     desc: (p.desc as string).trim(),
     image: (p.image as string).trim(),
+    published: typeof p.published === 'boolean' ? p.published : true,
   };
   if (!result.name || result.name.length > 120 || !CATEGORIES.has(result.category) ||
       result.material.length > 80 || result.color.length > 80 || result.desc.length > 2000 ||
@@ -83,15 +87,28 @@ export class CatalogStore {
 
   private load(): void {
     const parsed: unknown = JSON.parse(readFileSync(this.filePath, 'utf8'));
-    if (!Array.isArray(parsed) || parsed.length > 5000 || !parsed.every(validProduct)) {
+    if (!Array.isArray(parsed) || parsed.length > 5000) {
+      throw new Error('Arquivo persistido do catálogo inválido; inicialização recusada.');
+    }
+    const needsMigration = parsed.some((value) =>
+      Boolean(value && typeof value === 'object' && !Array.isArray(value) &&
+        typeof (value as Record<string, unknown>).published !== 'boolean')
+    );
+    const migrated = parsed.map((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const product = value as Record<string, unknown>;
+      return { ...product, published: typeof product.published === 'boolean' ? product.published : true };
+    });
+    if (!migrated.every(validProduct)) {
       throw new Error('Arquivo persistido do catálogo inválido; inicialização recusada.');
     }
     const ids = new Set<string>();
-    for (const product of parsed) {
+    for (const product of migrated as CatalogInfo[]) {
       if (ids.has(product.id)) throw new Error('Catálogo persistido contém IDs duplicados.');
       ids.add(product.id);
     }
-    this.products = parsed.map((product) => ({ ...product }));
+    this.products = (migrated as CatalogInfo[]).map((product) => ({ ...product }));
+    if (needsMigration) this.persist();
   }
 
   private persist(): void {
