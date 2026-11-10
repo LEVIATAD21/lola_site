@@ -135,7 +135,7 @@ describe('HttpDataPlane: allowlist dinâmica do catálogo', () => {
     const produto = {
       id: 'prod-real-01', name: 'Brinco', category: 'Brincos', price: 29.9,
       material: 'Aço inox', color: 'Prata', desc: 'Descrição', image: '/images/brinco.webp',
-      disponivel: 0,
+      published: true, disponivel: 0,
     };
     const client = {
       target: ALVO,
