@@ -348,7 +348,7 @@ async function startServer() {
     ]);
     if (!snapshot || !catalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
-    let list = catalog.map((item) => ({
+    let list = catalog.filter((item) => item.published).map((item) => ({
       ...item,
       disponivel: snapshot[item.id] ?? 0,
     }));
@@ -378,7 +378,7 @@ async function startServer() {
       plane.snapshot().catch(() => null),
     ]);
     if (!catalog || !snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const item = catalog.find((p) => p.id === productId);
+    const item = catalog.find((p) => p.id === productId && p.published);
     if (!item) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json({ ...item, disponivel: snapshot[productId] ?? 0 });
   });
@@ -417,7 +417,7 @@ async function startServer() {
       plane.catalog().catch(() => null),
     ]);
     if (!stockSnapshot || !currentCatalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const liveCatalog = currentCatalog.map((prod) => ({
+    const liveCatalog = currentCatalog.filter((prod) => prod.published).map((prod) => ({
       id: prod.id,
       nome: prod.name,
       categoria: prod.category,
