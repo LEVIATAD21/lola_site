@@ -85,12 +85,13 @@ function sanitizeCatalog(body: Record<string, unknown>): CatalogInfo[] | null {
         typeof p.color !== 'string' || p.color.length > 80 ||
         typeof p.desc !== 'string' || p.desc.length > 2000 ||
         typeof p.image !== 'string' || p.image.length > 2048 ||
+        typeof p.published !== 'boolean' ||
         typeof p.disponivel !== 'number' || !Number.isSafeInteger(p.disponivel) || p.disponivel < 0) return null;
     ids.add(p.id);
     result.push({
       id: p.id, name: p.name, category: p.category, price: p.price,
       material: p.material, color: p.color, desc: p.desc, image: p.image,
-      disponivel: p.disponivel,
+      published: p.published, disponivel: p.disponivel,
     });
   }
   return result;
