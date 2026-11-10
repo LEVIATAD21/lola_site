@@ -10,6 +10,7 @@ export interface CatalogInfo {
   disponivel: number;
   desc: string;
   image: string;
+  published: boolean;
 }
 
 export const CATALOG_INFO: CatalogInfo[] = ALL_PRODUCTS.map((product) => ({
@@ -23,4 +24,5 @@ export const CATALOG_INFO: CatalogInfo[] = ALL_PRODUCTS.map((product) => ({
   disponivel: 0,
   desc: product.description,
   image: product.image,
+  published: true,
 }));
