@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,11 +32,26 @@ describe('CatalogStore persistente', () => {
     expect(created).not.toBeNull();
     expect(created?.id).toMatch(/^prod-[a-f0-9]{16}$/);
     expect(created?.disponivel).toBe(0);
+    expect(created?.published).toBe(true);
 
     const restarted = new CatalogStore(dir);
     expect(restarted.find(created!.id)).toMatchObject({
       id: created!.id, name: valid.name, price: valid.price,
     });
+  });
+
+  it('migra catálogo antigo e mantém produto oculto após reinicialização', () => {
+    const dir = tempDir();
+    const legacy = { id: 'prod-legacy001', ...valid, disponivel: 2 };
+    writeFileSync(join(dir, 'catalog.json'), JSON.stringify([legacy]));
+    const store = new CatalogStore(dir);
+    expect(store.find(legacy.id)?.published).toBe(true);
+    const persisted = JSON.parse(readFileSync(join(dir, 'catalog.json'), 'utf8'));
+    expect(persisted[0].published).toBe(true);
+
+    const hidden = store.update(legacy.id, { ...valid, published: false });
+    expect(hidden?.published).toBe(false);
+    expect(new CatalogStore(dir).find(legacy.id)?.published).toBe(false);
   });
 
   it('rejeita preço inválido, categoria desconhecida e imagem ativa', () => {
