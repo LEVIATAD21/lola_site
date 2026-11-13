@@ -30,6 +30,8 @@ jobs:
           node --check 'functions/api/estoque/[productId].js'
           node --check functions/api/pedidos/rascunho.js
           node --check functions/api/ai/consulta.js
+          node --check scripts/smoke-catalog.mjs
+          node --check scripts/validate-pages-output.mjs
       - name: Run D1 storefront API contracts
         run: node --test infra/cloudflare/pages.contract.mjs
 
@@ -155,3 +157,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify Cloudflare Pages public distribution
+        run: node scripts/validate-pages-output.mjs
