@@ -25,6 +25,25 @@ afterEach(() => {
 });
 
 describe('CatalogStore persistente', () => {
+  it('inicia catálogo vazio em produção e não publica produtos fictícios', () => {
+    const dir = tempDir();
+    const first = new CatalogStore(dir, true);
+    expect(first.list()).toEqual([]);
+    const stored = JSON.parse(readFileSync(join(dir, 'catalog.json'), 'utf8'));
+    expect(stored).toEqual([]);
+    expect(new CatalogStore(dir, true).list()).toEqual([]);
+    const dev = new CatalogStore(tempDir(), false);
+    expect(dev.list().length).toBeGreaterThan(0);
+  });
+
+  it('preserva catálogo persistido existente em produção sem apagar dados', () => {
+    const dir = tempDir();
+    const legacy = new CatalogStore(dir, false);
+    const count = legacy.list().length;
+    expect(count).toBeGreaterThan(0);
+    expect(new CatalogStore(dir, true).list()).toHaveLength(count);
+  });
+
   it('cria produto com ID do servidor e persiste após reinicialização', () => {
     const dir = tempDir();
     const first = new CatalogStore(dir);
