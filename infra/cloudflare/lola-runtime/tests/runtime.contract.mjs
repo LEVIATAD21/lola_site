@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import cleanup, { purgeExpired } from '../src/maintenance.js';
 import { sendEmailVerification, confirmEmailVerification } from '../src/emailVerification.js';
-import { startPhoneVerification } from '../src/phoneVerification.js';
+import { startPhoneVerification, confirmPhoneVerification } from '../src/phoneVerification.js';
 import { requireVerifiedBuyer } from '../src/buyerEligibility.js';
 
 const fixedNow = new Date('2026-11-13T12:00:00.000Z');
@@ -134,4 +135,99 @@ test('checkout só pode avançar com e-mail e celular verificados na base autent
     await requireVerifiedBuyer(makeEnv(fixedNow.toISOString(),fixedNow.toISOString()),id),
     { userId: id },
   );
+});
+
+test('corrida na confirmação de e-mail não verifica usuário quando o desafio não é consumido', async () => {
+  const userId = 'user-' + '1'.repeat(32);
+  const challengeId = 'challenge-' + '2'.repeat(32);
+  const code = '24681357';
+  const secret = 'otp-contract-secret-' + 'a'.repeat(40);
+  const digest = createHmac('sha256', secret)
+    .update('LOLA-EMAIL-OTP-V1:' + userId + ':' + challengeId + ':' + code)
+    .digest('hex');
+  let visitedBatch = false;
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...values) {
+          return {
+            sql, values,
+            async first() {
+              return { digest_hex: digest, attempts: 0, consumed_at: null,
+                expires_at: new Date(fixedNow.getTime() + 30_000).toISOString() };
+            },
+          };
+        },
+      };
+    },
+    async batch(writes) {
+      visitedBatch = true;
+      assert.equal(writes.length, 2);
+      assert.match(writes[0].sql, /UPDATE verification_challenges SET consumed_at/);
+      assert.match(writes[1].sql, /AND EXISTS \(SELECT 1 FROM verification_challenges/);
+      assert.match(writes[1].sql, /digest_hex=\? AND consumed_at=\? AND expires_at>\?/);
+      assert.deepEqual(writes[1].values.slice(3), [
+        challengeId, userId, digest, fixedNow.toISOString(), fixedNow.toISOString(),
+      ]);
+      // Outra requisição consumiu o desafio antes de atualizar: zero alterações.
+      return [{ success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } }];
+    },
+  };
+  assert.equal(await confirmEmailVerification(
+    { USERS_DB: db, EMAIL_OTP_HMAC_KEY: secret }, userId, challengeId, code,
+    { now: fixedNow },
+  ), false);
+  assert.equal(visitedBatch, true);
+});
+
+test('corrida na confirmação telefônica não verifica usuário quando o desafio perde validade', async () => {
+  const userId = 'user-' + '1'.repeat(32);
+  const challengeId = 'phone-' + '3'.repeat(32);
+  const mobile = '+5521987654321';
+  let visitedBatch = false;
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...values) {
+          return {
+            sql, values,
+            async first() {
+              if (sql.includes('FROM phone_verification_attempts')) {
+                return { id: challengeId, phone_e164: mobile,
+                  state: 'pending', expires_at: new Date(fixedNow.getTime() + 30_000).toISOString() };
+              }
+              return { id: userId, phone_e164: mobile, disabled_at: null,
+                phone_verified_at: null, email_verified_at: fixedNow.toISOString() };
+            },
+          };
+        },
+      };
+    },
+    async batch(writes) {
+      visitedBatch = true;
+      assert.equal(writes.length, 2);
+      assert.match(writes[0].sql, /UPDATE phone_verification_attempts SET state='approved'/);
+      assert.match(writes[1].sql, /AND EXISTS \(SELECT 1 FROM phone_verification_attempts/);
+      assert.match(writes[1].sql, /state='approved' AND updated_at=\? AND expires_at>\?/);
+      assert.deepEqual(writes[1].values.slice(3), [
+        challengeId, userId, fixedNow.toISOString(), fixedNow.toISOString(),
+      ]);
+      return [{ success: true, meta: { changes: 0 } },
+        { success: true, meta: { changes: 0 } }];
+    },
+  };
+  const result = await confirmPhoneVerification({
+    USERS_DB: db, LOLA_SMS_ENABLED: 'true', LOLA_SMS_COSTS_APPROVED: 'true',
+    TWILIO_ACCOUNT_SID: 'AC' + '1'.repeat(32),
+    TWILIO_VERIFY_SERVICE_SID: 'VA' + '2'.repeat(32),
+    TWILIO_AUTH_TOKEN: 'contract-not-real-token',
+  }, userId, '123456', {
+    now: fixedNow,
+    fetchImpl: async () => new Response(JSON.stringify({ status: 'approved', valid: true }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }),
+  });
+  assert.equal(result, false);
+  assert.equal(visitedBatch, true);
 });
