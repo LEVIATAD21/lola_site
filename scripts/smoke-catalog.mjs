@@ -56,6 +56,17 @@ await check('Vitrine HTTPS e CSP', async () => {
   const text = await response.text();
   assert.match(text, /id=["']root["']/);
 });
+await check('Políticas de privacidade e cookies públicas', async () => {
+  for (const [path, heading] of [
+    ['/privacidade/', 'Política de Privacidade'],
+    ['/cookies/', 'Política de Cookies'],
+  ]) {
+    const response = await request(path);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /text\\/html/i);
+    assert.ok((await response.text()).includes(heading));
+  }
+});
 await check('Health: banco D1 realmente conectado', async () => {
   const response = await request('/api/health');
   assert.equal(response.status, 200);
