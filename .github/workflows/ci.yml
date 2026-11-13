@@ -12,6 +12,40 @@ permissions:
   contents: read
 
 jobs:
+
+  database-schema:
+    name: PostgreSQL schema and integrity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lola_ci
+          POSTGRES_USER: lola_ci
+          POSTGRES_PASSWORD: ci-only-no-real-database-secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lola_ci -d lola_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migration twice and verify business constraints
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: lola_ci
+          PGDATABASE: lola_ci
+          PGPASSWORD: ci-only-no-real-database-secret
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f db/migrations/0001_core.sql
+          psql -X -v ON_ERROR_STOP=1 -f db/migrations/0001_core.sql
+          psql -X -v ON_ERROR_STOP=1 -f db/tests/schema_invariants.sql
   build:
     runs-on: ubuntu-latest
     steps:
