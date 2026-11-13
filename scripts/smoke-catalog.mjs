@@ -85,6 +85,10 @@ await check('Catálogo seguro e somente leitura', async () => {
   const data = await response.json();
   assert.ok(Array.isArray(data.products));
   assert.ok(data.products.length <= 50);
+  // Run with LOLA_REQUIRE_EMPTY_CATALOG=true before initial launch.
+  if (process.env.LOLA_REQUIRE_EMPTY_CATALOG === 'true') {
+    assert.equal(data.products.length, 0, 'Initial release requires ZERO published products in real D1');
+  }
   for (const product of data.products) {
     assert.ok(typeof product.id === 'string' && product.id);
     assert.ok(typeof product.name === 'string' && product.name);
