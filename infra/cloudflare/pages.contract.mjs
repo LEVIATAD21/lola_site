@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { onRequest as health } from '../functions/api/health.js';
-import { onRequest as catalog } from '../functions/api/catalog.js';
-import { onRequest as stock } from '../functions/api/estoque/[productId].js';
-import { onRequest as blockedOrder } from '../functions/api/pedidos/rascunho.js';
+import { onRequest as health } from '../../functions/api/health.js';
+import { onRequest as catalog } from '../../functions/api/catalog.js';
+import { onRequest as stock } from '../../functions/api/estoque/[productId].js';
+import { onRequest as blockedOrder } from '../../functions/api/pedidos/rascunho.js';
 
 const BASE = 'https://lola.pages.dev';
 
