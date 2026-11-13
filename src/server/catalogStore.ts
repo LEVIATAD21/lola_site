@@ -78,9 +78,11 @@ export class CatalogStore {
   private products: CatalogInfo[];
   private readonly filePath: string;
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, production = false) {
     this.filePath = path.join(dataDir, 'catalog.json');
-    this.products = CATALOG_INFO.map((product) => ({ ...product }));
+    // Production must never populate a new store with demo items and prices.
+    // Existing stores are preserved for an explicit owner-led migration.
+    this.products = production ? [] : CATALOG_INFO.map((product) => ({ ...product }));
     if (existsSync(this.filePath)) this.load();
     else this.persist();
   }
