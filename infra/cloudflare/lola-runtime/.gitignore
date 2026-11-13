@@ -1,0 +1,9 @@
+# Arquivo gerado depois da criação real do segundo banco.
+wrangler.toml
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+node_modules/
+dist/
