@@ -22,7 +22,8 @@ import { fileURLToPath } from 'node:url';
  */
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const tsxCli = path.join(raiz, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+// Carrega TypeScript diretamente no processo Node, sem o socket IPC do CLI tsx.
+// Os servidores e as verificações HTTP continuam sendo executados de verdade.
 
 export interface ProcessoFilho {
   child: ChildProcess;
@@ -64,7 +65,7 @@ export function portaLivre(): Promise<number> {
  * sobrepõe o que precisa, depois do spread.
  */
 export function subirEntryPoint(script: string, env: Record<string, string>): ProcessoFilho {
-  const child = spawn(process.execPath, [tsxCli, script], {
+  const child = spawn(process.execPath, ['--import', 'tsx', script], {
     cwd: raiz,
     env: {
       ...process.env,
