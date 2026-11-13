@@ -47,6 +47,17 @@ export default function ProductionApp() {
   const [catalog, setCatalog] = useState<CatalogState>({ kind: 'loading' });
   const [category, setCategory] = useState('Todas');
 
+  // Remove legacy prototype values from previous visits to this origin.
+  // Production does not create or retain any shopper profile/cart locally.
+  useEffect(() => {
+    for (const key of [
+      'lola_cart', 'lola_favorites', 'lola_coupon', 'lola_shipping',
+      'lola_customer_profile',
+    ]) {
+      try { window.localStorage.removeItem(key); } catch { /* disabled storage */ }
+    }
+  }, []);
+
   useEffect(() => {
     const abort = new AbortController();
     const timeout = window.setTimeout(() => abort.abort(), 10000);
