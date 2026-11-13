@@ -60,12 +60,22 @@ Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook se
    no D1 **apenas após verificar o conteúdo real do banco, assegurar backup
    e confirmar que não conflita com tabelas existentes**. Não confundir
    `db/migrations/0001_core.sql` (PostgreSQL) com SQLite.
+**Condição de estreia: banco realmente vazio.** Depois da migration, abra o console SQL do D1 e execute as consultas **somente leitura**:
+
+```sql
+SELECT COUNT(*) AS produtos_cadastrados FROM products;
+SELECT COUNT(*) AS registros_estoque FROM inventory;
+SELECT COALESCE(SUM(quantity_on_hand), 0) AS unidades_totais FROM inventory;
+```
+
+Todos os resultados devem ser **zero** para publicar com catálogo e estoque completamente vazios. A migration acima não insere dados. Se já houver qualquer linha, **não apague automaticamente**: verifique se é o banco correto e faça backup antes de qualquer exclusão irreversível. Este repositório não consegue zerar um banco remoto sem autenticação na conta Cloudflare.
+
 6. Reimplante pelo painel e verifique `https://<projeto>.pages.dev/api/health`.
    Sucesso real devolve `{"status":"ok","database":"ready","mode":"catalog-read-only"}`.
    Erro 503 significa binding/migration ausente ou indisponível.
 7. Confira `/api/catalog` e `/api/estoque/<id-real>`. Nunca interpretar uma
    vitrine com produtos fictícios como confirmação de estoque/pagamento.
-8. Rode **em uma máquina com Node 22+**: `node scripts/smoke-catalog.mjs https://SEU-PROJETO.pages.dev`.
+8. Rode **em uma máquina com Node 22+**, exigindo o catálogo vazio antes de liberar: `LOLA_REQUIRE_EMPTY_CATALOG=true node scripts/smoke-catalog.mjs https://SEU-PROJETO.pages.dev`.
    O script exige HTTPS e valida CSP, D1 real, retorno do catálogo, URL interna,
    privacidade dos endpoints e bloqueio de cobranças; falha se a publicação
    estiver quebrada. Não copie a URL de exemplo como domínio confirmado.
