@@ -2,6 +2,7 @@ import React from 'react';
 import { X, MessageCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Product } from '../../data/mockData';
 import { useDialogA11y } from '../../hooks/useDialogA11y';
+import { INSTAGRAM_URL } from '../../data/siteConfig';
 
 interface WhatsAppModalProps {
   isOpen: boolean;
@@ -14,19 +15,25 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   isOpen,
   onClose,
   product,
-  selectedSize = 'P (1,5 cm)',
+  selectedSize = '',
 }) => {
   const { dialogProps, backdropProps, titleId } = useDialogA11y({ isOpen, onClose });
 
   if (!isOpen) return null;
 
   const productName = product?.name || 'Acessórios Lola';
-  const productPrice = product?.price
+  const productPrice = product?.price !== undefined && Number.isFinite(product.price)
     ? `R$ ${product.price.toFixed(2).replace('.', ',')}`
-    : 'R$ 49,90';
+    : 'valor a confirmar';
 
-  const messageText = `Olá, equipe Lola! Tenho interesse no *${productName}* (${selectedSize}) no valor de ${productPrice}. Poderiam me confirmar a disponibilidade e condições de envio?`;
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+  const sizeNote = selectedSize ? ` (${selectedSize})` : '';
+  const messageText = `Olá, equipe Lola! Tenho interesse no *${productName}*${sizeNote} no valor anunciado de ${productPrice}. Poderiam me confirmar o preço final, a disponibilidade e as condições de envio?`;
+  // Número é público e configurado por ambiente; NÃO usar wa.me sem destino.
+  const configuredNumber = (import.meta.env.VITE_LOLA_WHATSAPP_NUMBER || '').replace(/\D/g, '');
+  const hasStoreWhatsApp = /^55[1-9][0-9]{9,10}$/.test(configuredNumber);
+  const whatsappUrl = hasStoreWhatsApp
+    ? `https://wa.me/${configuredNumber}?text=${encodeURIComponent(messageText)}`
+    : INSTAGRAM_URL;
 
   return (
     <div {...dialogProps} className="fixed inset-0 z-50 overflow-y-auto">
@@ -44,7 +51,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             <div className="flex items-center gap-2.5">
               <MessageCircle className="w-5 h-5 fill-white text-[#128C7E]" />
               <h3 id={titleId} className="font-semibold text-base">
-                Comprar pelo WhatsApp
+                {hasStoreWhatsApp ? 'Conversar com a LOLA' : 'Atendimento LOLA'}
               </h3>
             </div>
             <button
@@ -74,11 +81,11 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Iniciar conversa no WhatsApp (abre em nova aba)"
+                aria-label={hasStoreWhatsApp ? 'Iniciar conversa no WhatsApp (abre em nova aba)' : 'Consultar Instagram oficial da loja (abre em nova aba)'}
                 className="w-full py-3.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-xs sm:text-sm tracking-wide transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 fill-white" />
-                <span>Iniciar conversa no WhatsApp</span>
+                <span>{hasStoreWhatsApp ? 'Iniciar conversa no WhatsApp' : 'Consultar Instagram oficial'}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -86,7 +93,9 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             <div className="p-3 bg-[#F8F4ED] rounded-xl border border-[#E7DED3] text-[11px] text-[#766D64] flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 text-[#C49A5A] shrink-0 mt-0.5" />
               <p>
-                <strong>Nota do protótipo:</strong> O número oficial de atendimento será integrado diretamente pela responsável antes da publicação definitiva.
+                {hasStoreWhatsApp
+                  ? <>Preços e disponibilidade precisam ser confirmados pela equipe antes de qualquer pagamento.</>
+                  : <>O número oficial de WhatsApp ainda não foi configurado. Para não enviar seu pedido a um destinatário errado, direcionamos ao Instagram oficial da loja.</>}
               </p>
             </div>
 
