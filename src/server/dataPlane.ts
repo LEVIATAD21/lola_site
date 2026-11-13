@@ -212,7 +212,7 @@ export interface LocalDataPlaneOptions {
  * essa a propriedade que separa "o site lê o estoque" de "o site tem o estoque".
  */
 export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataPlane {
-  const catalogStore = new CatalogStore(options.dataDir);
+  const catalogStore = new CatalogStore(options.dataDir, options.production);
   const inventory = new InventoryStore(
     createInitialStock(),
     path.join(options.dataDir, 'inventory.json'),
