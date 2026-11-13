@@ -29,6 +29,7 @@ jobs:
           node --check functions/api/catalog.js
           node --check 'functions/api/estoque/[productId].js'
           node --check functions/api/pedidos/rascunho.js
+          node --check functions/api/ai/consulta.js
       - name: Run D1 storefront API contracts
         run: node --test infra/cloudflare/pages.contract.mjs
 
