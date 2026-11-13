@@ -34,8 +34,8 @@ Não marque PROD como aprovada apenas por um deploy verde.
 
 As funções Pages são realmente implantáveis e consultam o binding `DB`.
 **Isso não significa que checkout, login ou Admin já estejam operando em D1.**
-A vitrine ainda tem catálogo estático de demonstração e o banco real precisará
-receber os produtos autorizados pela proprietária, sem inventar estoque e preços.
+A build de produção carrega `src/ProductionApp.tsx` em vez da vitrine demonstrativa; ela consulta apenas `/api/catalog` (D1). Se não houver linhas publicadas, exibe **Nenhum produto cadastrado**. O código-fonte ainda mantém os componentes de demonstração para desenvolvimento, mas o build de produção rejeita marcadores de produtos fictícios e remove a pasta de imagens fictícias do `dist`.
+O banco real só poderá receber produtos, preços e quantidades fornecidos pela proprietária.
 Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook seguros.
 
 ## Primeira publicação gratuita da vitrine (modo catálogo)
@@ -69,11 +69,9 @@ Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook se
    O script exige HTTPS e valida CSP, D1 real, retorno do catálogo, URL interna,
    privacidade dos endpoints e bloqueio de cobranças; falha se a publicação
    estiver quebrada. Não copie a URL de exemplo como domínio confirmado.
-9. Em builds de produção, a UI ativa **modo catálogo ilustrativo**: checkout,
-   edição de perfil e rastreamento ficam bloqueados para não solicitar dados
-   ou insinuar pagamentos ativos. O JSON-LD de produtos demonstrativos não é
-   anunciado como oferta real. Só remova essa trava quando conta, pedidos,
-   pagamentos, dados, frete, políticas e testes estiverem aprovados.
+9. Em builds de produção, a UI ativa **catálogo real somente leitura**. Não carrega itens de `mockData.ts`; checkout, edição de perfil e rastreamento permanecem ausentes. A loja consulta produtos publicados no D1 e mostra estado vazio ou de falha real, sem inventar estoque ou preços.
+   O build remove imagens de produtos fictícios de `dist/images`, apaga preferências locais obsoletas do protótipo na primeira visita e rejeita marcadores de catálogo demonstrativo no pacote final.
+   O JSON-LD de produtos demonstrativos não é publicado. Para operar vendas, implementar e validar o circuito financeiro e de estoque com backend transacional.
 10. Não habilite compras enquanto o status financeiro estiver bloqueado.
     Em Pages, `POST /api/pedidos/rascunho` retorna 503 de propósito.
 
@@ -110,7 +108,8 @@ Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook se
 
 - [ ] Cloudflare Pages publicado com HTTPS e binding D1 confirmado
 - [ ] Produtos, preços e estoque reais autorizados no banco
-- [ ] Nenhum dado de mock liberado para vendas
+- [x] Build de produção isolado do catálogo de demonstração e assets ilustrativos (CI verifica; **não significa banco remoto esvaziado**)
+- [ ] Banco D1 de produção inspecionado e com **0 produtos e 0 estoque**, sem excluir outros dados nem executar `DELETE` em banco desconhecido
 - [ ] Conta verificada no backend, sessão revogável, recuperação protegida
 - [ ] Admin funcional e privado no runtime aprovado
 - [ ] Asaas ligado à conta do destinatário, webhooks e estornos testados
