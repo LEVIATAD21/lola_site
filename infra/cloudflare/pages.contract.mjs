@@ -4,6 +4,7 @@ import { onRequest as health } from '../../functions/api/health.js';
 import { onRequest as catalog } from '../../functions/api/catalog.js';
 import { onRequest as stock } from '../../functions/api/estoque/[productId].js';
 import { onRequest as blockedOrder } from '../../functions/api/pedidos/rascunho.js';
+import { onRequest as assistant } from '../../functions/api/ai/consulta.js';
 
 const BASE = 'https://lola.pages.dev';
 
@@ -110,4 +111,34 @@ test('requisições de escrita do público não mudam o catálogo', async () => 
     assert.equal(response.status, 405);
   }
   assert.equal(calls.length, 0);
+});
+
+test('assistente local não usa serviço pago, não confirma cobrança nem ecoa PII', async () => {
+  const request = new Request(BASE + '/api/ai/consulta', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pergunta: 'Quero pagar com Pix, meu cartão é 4111111111111111' }),
+  });
+  const result = await assistant({ request, env: {} });
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.match(body.resposta, /pagamento.*prepara[cç][aã]o|compra.*prepara[cç][aã]o/i);
+  assert.doesNotMatch(JSON.stringify(body), /4111111111111111/);
+  assert.ok(body.referencias.every((ref) => ref.link.startsWith('/')));
+});
+
+test('assistente local rejeita payload grande, JSON inválido e método GET', async () => {
+  const oversize = new Request(BASE + '/api/ai/consulta', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pergunta: 'x'.repeat(6000) }),
+  });
+  assert.equal((await assistant({ request: oversize })).status, 413);
+  const malformed = new Request(BASE + '/api/ai/consulta', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: '{not-json',
+  });
+  assert.equal((await assistant({ request: malformed })).status, 400);
+  const get = new Request(BASE + '/api/ai/consulta', { method: 'GET' });
+  assert.equal((await assistant({ request: get })).status, 405);
 });
