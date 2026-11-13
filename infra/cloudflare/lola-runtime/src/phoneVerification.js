@@ -1,15 +1,16 @@
 // Integração opcional e REAL de telefone via Twilio Verify.
 // SMS não é gratuito ilimitado: por padrão está DESABILITADO e exige aceite
 // de custos pelo titular. Nenhuma senha/código é persistido no banco D1.
-const SID_PATTERN = /^(AC|VA)[a-fA-F0-9]{32}$/;
+const ACCOUNT_SID_PATTERN = /^AC[a-fA-F0-9]{32}$/;
+const SERVICE_SID_PATTERN = /^VA[a-fA-F0-9]{32}$/;
 const PHONE_PATTERN = /^\+55[1-9][0-9]{9,10}$/;
 
 function settings(env) {
   if (env?.LOLA_SMS_ENABLED !== 'true' || env?.LOLA_SMS_COSTS_APPROVED !== 'true') {
     throw new Error('SMS indisponível: verificação telefônica não foi habilitada pelo titular.');
   }
-  if (!SID_PATTERN.test(env.TWILIO_ACCOUNT_SID ?? '') ||
-      !SID_PATTERN.test(env.TWILIO_VERIFY_SERVICE_SID ?? '') ||
+  if (!ACCOUNT_SID_PATTERN.test(env.TWILIO_ACCOUNT_SID ?? '') ||
+      !SERVICE_SID_PATTERN.test(env.TWILIO_VERIFY_SERVICE_SID ?? '') ||
       !/^.{16,128}$/.test(env.TWILIO_AUTH_TOKEN ?? '')) {
     throw new Error('Provedor de verificação telefônica não configurado.');
   }
