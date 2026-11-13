@@ -6,8 +6,26 @@ import { onRequest as catalog } from '../../functions/api/catalog.js';
 import { onRequest as stock } from '../../functions/api/estoque/[productId].js';
 import { onRequest as blockedOrder } from '../../functions/api/pedidos/rascunho.js';
 import { onRequest as assistant } from '../../functions/api/ai/consulta.js';
+import { reply } from '../../functions/_shared/publicApi.js';
 
 const BASE = 'https://lola.pages.dev';
+
+test('Pages Functions enforce security headers independent of static _headers', async () => {
+  const response = reply({ status: 'ok' });
+  assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.equal(response.headers.get('Cross-Origin-Resource-Policy'), 'same-origin');
+  assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive');
+  assert.equal(response.headers.get('Strict-Transport-Security'), 'max-age=31536000');
+  assert.match(response.headers.get('Content-Security-Policy') ?? '', /default-src 'none'/);
+  assert.match(response.headers.get('Content-Security-Policy') ?? '', /frame-ancestors 'none'/);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+  const refused = await health(ctx('/api/health'));
+  assert.equal(refused.status, 503);
+  assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+  assert.equal(refused.headers.get('Content-Security-Policy'), response.headers.get('Content-Security-Policy'));
+});
+
 
 function stubDB({ rows = [], row = null, error = false } = {}) {
   const calls = [];
