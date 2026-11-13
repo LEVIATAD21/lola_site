@@ -140,8 +140,10 @@ export async function confirmEmailVerification(env, userId, challengeId, code, o
       "UPDATE verification_challenges SET consumed_at=? WHERE id=? AND user_id=? AND digest_hex=? AND consumed_at IS NULL AND attempts<5 AND expires_at>?",
     ).bind(now.toISOString(),challengeId,userId,digest,now.toISOString()),
     env.USERS_DB.prepare(
-      "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),updated_at=? WHERE id=? AND disabled_at IS NULL",
-    ).bind(now.toISOString(),now.toISOString(),userId),
+      "UPDATE users SET email_verified_at=COALESCE(email_verified_at,?),updated_at=? WHERE id=? AND disabled_at IS NULL " +
+      "AND EXISTS (SELECT 1 FROM verification_challenges WHERE id=? AND user_id=? AND purpose='verify_email' " +
+      "AND digest_hex=? AND consumed_at=? AND expires_at>? AND attempts<5)",
+    ).bind(now.toISOString(),now.toISOString(),userId,challengeId,userId,digest,now.toISOString(),now.toISOString()),
   ]);
   return results?.[0]?.success === true && Number(results[0].meta?.changes ?? 0) === 1 &&
     results?.[1]?.success === true && Number(results[1].meta?.changes ?? 0) === 1;
