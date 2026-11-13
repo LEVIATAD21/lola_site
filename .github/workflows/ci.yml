@@ -12,6 +12,33 @@ permissions:
   contents: read
 
 jobs:
+  d1-production-contracts:
+    name: D1 identity, financial retention and Cron contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: JavaScript syntax checks
+        run: |
+          node --check infra/cloudflare/lola-runtime/src/maintenance.js
+          node --check infra/cloudflare/lola-runtime/src/emailVerification.js
+          node --check infra/cloudflare/lola-runtime/src/phoneVerification.js
+          node --check infra/cloudflare/lola-runtime/generate-config.mjs
+      - name: Verify SQL against two real SQLite engines
+        run: python3 infra/cloudflare/lola-runtime/tests/schema_contract.py
+      - name: Verify email, phone and TTL security contracts
+        run: node --test infra/cloudflare/lola-runtime/tests/runtime.contract.mjs
+      - name: Block deployment without secondary D1 ID
+        run: |
+          if node infra/cloudflare/lola-runtime/generate-config.mjs; then
+            echo "Deployment configuration was generated without a USERS_DB UUID" >&2
+            exit 1
+          fi
+
   cloudflare-d1-preview:
     name: Cloudflare D1 preview code and SQLite
     runs-on: ubuntu-latest
