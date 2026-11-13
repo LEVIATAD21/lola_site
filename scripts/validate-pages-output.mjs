@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const root = path.resolve('dist');
 function fail(message) { throw new Error('[public-build] ' + message); }
-for (const file of ['index.html', '_headers', 'robots.txt']) {
+for (const file of ['index.html', '_headers', 'robots.txt', 'privacidade/index.html', 'cookies/index.html']) {
   if (!existsSync(path.join(root, file))) fail('missing ' + file);
 }
 const html = readFileSync(path.join(root, 'index.html'), 'utf8');
