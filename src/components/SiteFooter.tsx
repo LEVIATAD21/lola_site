@@ -133,88 +133,33 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
 
           {/* Col 4: Políticas */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#241F1B]">
-              Políticas
-            </h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#241F1B]">Políticas</h4>
             <ul className="space-y-2 text-xs text-[#766D64]">
+              <li><a href="/privacidade/" className="hover:text-[#C49A5A] transition-colors">Política de Privacidade</a></li>
               <li>
                 <button
-                  onClick={() =>
-                    onOpenInfo(
-                      'Política de Privacidade',
-                      'LOLA Aço Inox & Acessórios — Aviso de Privacidade (versão preliminar, 13/11/2026).\n\nQuando as funcionalidades estiverem habilitadas, poderemos tratar dados de cadastro e compra (nome, contato, endereço, itens e histórico de pedidos) para atendimento, execução contratual, entrega, prevenção a fraudes e cumprimento de obrigações legais, observada a base legal aplicável. Dados de pagamento deverão ser processados pelo prestador contratado, sem armazenamento de dados completos de cartão pela vitrine.\n\nA navegação pode envolver registros técnicos de segurança e serviços de infraestrutura; carrinho e favoritos usam armazenamento local no dispositivo. O assistente virtual pode transmitir o texto digitado ao provedor configurado: não envie dados sensíveis no chat. Recursos opcionais de publicidade e análise dependerão de configuração e da base legal correspondente.\n\nPrazos de guarda variam conforme a categoria de informação e obrigações legais; não há compromisso geral de exclusão automática em 90 dias. O titular pode solicitar confirmação, acesso, correção, informação sobre compartilhamento, anonimização, bloqueio, exclusão quando cabível, portabilidade e revogação de consentimento quando aplicável (art. 18 da LGPD). A solicitação exige validação de identidade para impedir acesso indevido.\n\nA identificação completa da empresa controladora, seu endereço, canal de privacidade, operadores, transferências internacionais e prazos específicos devem ser confirmados pela proprietária antes de receber dados reais. Até a publicação desses canais, procure o atendimento oficial da loja pelo Instagram @lola_acoinox. Este aviso não constitui certificação de conformidade com a LGPD.'
-                    )
-                  }
+                  onClick={() => onOpenInfo(
+                    'Termos de Uso',
+                    'Esta vitrine é um catálogo ilustrativo, sem conclusão de compras ou pagamentos online. Produtos, condições de oferta, preços e estoque precisam ser confirmados pelo atendimento oficial da LOLA. Os termos comerciais completos serão publicados antes da ativação de compras.'
+                  )}
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
-                >
-                  Privacidade
-                </button>
+                >Termos de uso</button>
               </li>
-              <li>
-                <button
-                  onClick={() =>
-                    onOpenInfo(
-                      'Termos de Uso',
-                      'O acesso e uso deste catálogo online pressupõem a aceitação dos termos de compra e política comercial da loja Lola Aço Inox & Acessórios.'
-                    )
-                  }
-                  className="hover:text-[#C49A5A] transition-colors cursor-pointer"
-                >
-                  Termos de uso
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() =>
-                    onOpenInfo(
-                      'Política de Cookies',
-                      'Carrinho, favoritos e preferências podem utilizar armazenamento local (localStorage) deste navegador. Sessões autenticadas e medidas de proteção podem depender de cookies necessários e registros técnicos do servidor. Serviços de terceiros eventualmente configurados podem adotar suas próprias tecnologias; antes de habilitar publicidade ou análise não essencial, a loja deve identificar essas tecnologias e disponibilizar controles adequados à base legal aplicável. Não declaramos ausência absoluta de cookies de terceiros sem validar a implantação efetiva.'
-                    )
-                  }
-                  className="hover:text-[#C49A5A] transition-colors cursor-pointer"
-                >
-                  Política de cookies
-                </button>
-              </li>
+              <li><a href="/cookies/" className="hover:text-[#C49A5A] transition-colors">Política de cookies</a></li>
             </ul>
           </div>
 
-          {/* Col 5: Formas de Pagamento */}
+          {/* Col 5: Pagamentos em preparação */}
           <div className="col-span-2 md:col-span-1 space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#241F1B]">
-              Formas de pagamento
-            </h4>
-            <div className="flex flex-wrap items-center gap-2.5">
-              
-              {/* PIX */}
-              <div className="h-7 px-2.5 rounded bg-[#F8F4ED] border border-[#E7DED3] flex items-center justify-center font-bold text-[#32BCAD] text-[11px] tracking-wide">
-                pix
-              </div>
-
-              {/* VISA */}
-              <div className="h-7 px-2.5 rounded bg-[#F8F4ED] border border-[#E7DED3] flex items-center justify-center font-black italic text-[#1A1F71] text-xs">
-                VISA
-              </div>
-
-              {/* MASTERCARD */}
-              <div className="h-7 px-2 rounded bg-[#F8F4ED] border border-[#E7DED3] flex items-center justify-center">
-                <div className="flex -space-x-1.5">
-                  <div className="w-3.5 h-3.5 rounded-full bg-[#EB001B]" />
-                  <div className="w-3.5 h-3.5 rounded-full bg-[#F79E1B] opacity-80" />
-                </div>
-              </div>
-
-              {/* ELO */}
-              <div className="h-7 px-2.5 rounded bg-[#F8F4ED] border border-[#E7DED3] flex items-center justify-center font-bold text-[#000000] text-[11px]">
-                <span className="text-[#00A4E4]">e</span>
-                <span className="text-[#FFCB05]">l</span>
-                <span className="text-[#ED1C24]">o</span>
-              </div>
-
-            </div>
-            <p className="text-[11px] text-[#766D64] pt-1">
-              Condições de parcelamento e Pix sob consulta no checkout
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#241F1B]">Pagamentos</h4>
+            <p className="text-xs text-[#766D64] leading-relaxed">
+              Pagamentos e pedidos pelo site ainda não estão habilitados.
+              Consulte preços, estoque e condições com a equipe oficial antes de qualquer compra.
             </p>
+            <a href="https://www.instagram.com/lola_acoinox/" target="_blank" rel="noopener noreferrer"
+              className="inline-block text-xs font-semibold text-[#8B6A3D] underline hover:text-[#C49A5A]">
+              Contato oficial da LOLA
+            </a>
           </div>
 
         </div>
