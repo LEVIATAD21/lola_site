@@ -41,5 +41,21 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Cloudflare Pages Functions syntax and API contracts
+        run: |
+          node --check functions/_shared/publicApi.js
+          node --check functions/api/health.js
+          node --check functions/api/catalog.js
+          node --check 'functions/api/estoque/[productId].js'
+          node --check functions/api/pedidos/rascunho.js
+          node --check functions/api/ai/consulta.js
+          node --check scripts/prune-demo-assets.mjs
+          node --check scripts/validate-pages-output.mjs
+          node --check scripts/smoke-catalog.mjs
+          node --test infra/cloudflare/pages.contract.mjs
+
       - name: Build
         run: npm run build
+
+      - name: Ensure production contains no demo inventory or images
+        run: node scripts/validate-pages-output.mjs
