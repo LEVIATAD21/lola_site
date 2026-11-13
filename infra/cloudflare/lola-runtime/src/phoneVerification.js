@@ -86,8 +86,11 @@ export async function confirmPhoneVerification(env, userId, code, options = {}) 
       "UPDATE phone_verification_attempts SET state='approved',updated_at=? WHERE id=? AND state='pending' AND expires_at>?",
     ).bind(now.toISOString(),challenge.id,now.toISOString()),
     env.USERS_DB.prepare(
-      "UPDATE users SET phone_verified_at=COALESCE(phone_verified_at,?),updated_at=? WHERE id=? AND email_verified_at IS NOT NULL AND disabled_at IS NULL",
-    ).bind(now.toISOString(),now.toISOString(),userId),
+      "UPDATE users SET phone_verified_at=COALESCE(phone_verified_at,?),updated_at=? WHERE id=? AND email_verified_at IS NOT NULL AND disabled_at IS NULL " +
+      "AND EXISTS (SELECT 1 FROM phone_verification_attempts WHERE id=? AND user_id=? " +
+      "AND phone_e164=users.phone_e164 AND provider='twilio-verify' AND state='approved' " +
+      "AND updated_at=? AND expires_at>?)",
+    ).bind(now.toISOString(),now.toISOString(),userId,challenge.id,userId,now.toISOString(),now.toISOString()),
   ]);
   return results?.[0]?.success === true && Number(results[0]?.meta?.changes ?? 0) === 1 &&
     results?.[1]?.success === true && Number(results[1]?.meta?.changes ?? 0) === 1;
