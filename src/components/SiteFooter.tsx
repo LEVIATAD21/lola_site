@@ -142,7 +142,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Privacidade',
-                      'Seus dados informados no checkout — nome, telefone e endereço — são usados exclusivamente para registrar e processar o seu pedido. Ficam armazenados de forma cifrada por até 90 dias e não são vendidos nem usados para publicidade. Você pode solicitar a confirmação ou a exclusão dos seus dados pelo atendimento da loja, conforme o art. 18 da LGPD.'
+                      'LOLA Aço Inox & Acessórios — Aviso de Privacidade (versão preliminar, 13/11/2026).\n\nQuando as funcionalidades estiverem habilitadas, poderemos tratar dados de cadastro e compra (nome, contato, endereço, itens e histórico de pedidos) para atendimento, execução contratual, entrega, prevenção a fraudes e cumprimento de obrigações legais, observada a base legal aplicável. Dados de pagamento deverão ser processados pelo prestador contratado, sem armazenamento de dados completos de cartão pela vitrine.\n\nA navegação pode envolver registros técnicos de segurança e serviços de infraestrutura; carrinho e favoritos usam armazenamento local no dispositivo. O assistente virtual pode transmitir o texto digitado ao provedor configurado: não envie dados sensíveis no chat. Recursos opcionais de publicidade e análise dependerão de configuração e da base legal correspondente.\n\nPrazos de guarda variam conforme a categoria de informação e obrigações legais; não há compromisso geral de exclusão automática em 90 dias. O titular pode solicitar confirmação, acesso, correção, informação sobre compartilhamento, anonimização, bloqueio, exclusão quando cabível, portabilidade e revogação de consentimento quando aplicável (art. 18 da LGPD). A solicitação exige validação de identidade para impedir acesso indevido.\n\nA identificação completa da empresa controladora, seu endereço, canal de privacidade, operadores, transferências internacionais e prazos específicos devem ser confirmados pela proprietária antes de receber dados reais. Até a publicação desses canais, procure o atendimento oficial da loja pelo Instagram @lola_acoinox. Este aviso não constitui certificação de conformidade com a LGPD.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
@@ -168,7 +168,7 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({ onOpenInfo }) => {
                   onClick={() =>
                     onOpenInfo(
                       'Política de Cookies',
-                      'Utilizamos armazenamento local (localStorage) para manter o seu carrinho de compras e seus favoritos neste navegador. Não utilizamos cookies de rastreamento ou de terceiros.'
+                      'Carrinho, favoritos e preferências podem utilizar armazenamento local (localStorage) deste navegador. Sessões autenticadas e medidas de proteção podem depender de cookies necessários e registros técnicos do servidor. Serviços de terceiros eventualmente configurados podem adotar suas próprias tecnologias; antes de habilitar publicidade ou análise não essencial, a loja deve identificar essas tecnologias e disponibilizar controles adequados à base legal aplicável. Não declaramos ausência absoluta de cookies de terceiros sem validar a implantação efetiva.'
                     )
                   }
                   className="hover:text-[#C49A5A] transition-colors cursor-pointer"
