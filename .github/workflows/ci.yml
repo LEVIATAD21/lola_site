@@ -13,6 +13,18 @@ permissions:
 
 jobs:
 
+  terraform-validation:
+    name: OCI Terraform structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Verify Terraform formatting
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 fmt -check -recursive
+      - name: Initialize provider without touching a cloud account
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 init -backend=false -input=false -no-color
+      - name: Validate OCI resources and variable definitions
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 validate -no-color
+
   database-schema:
     name: PostgreSQL schema and integrity
     runs-on: ubuntu-latest
