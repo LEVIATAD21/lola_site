@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import cleanup, { purgeExpired } from '../src/maintenance.js';
 import { sendEmailVerification, confirmEmailVerification } from '../src/emailVerification.js';
 import { startPhoneVerification } from '../src/phoneVerification.js';
+import { requireVerifiedBuyer } from '../src/buyerEligibility.js';
 
 const fixedNow = new Date('2026-11-13T12:00:00.000Z');
 
@@ -107,4 +108,30 @@ test('SMS não é enviado sem habilitação explícita e aceite de cobrança', a
     LOLA_SMS_ENABLED: 'false', LOLA_SMS_COSTS_APPROVED: 'false',
   }, 'user-' + '1'.repeat(32), '+5521987654321'), /elegível|indisponível|habilitada/);
   assert.equal(db.statements.length, 0);
+});
+
+
+test('checkout só pode avançar com e-mail e celular verificados na base autenticada', async () => {
+  const id = 'user-' + '1'.repeat(32);
+  const makeEnv = (emailVerifiedAt, phoneVerifiedAt, disabledAt = null) => ({
+    USERS_DB: {
+      prepare(sql) {
+        assert.match(sql, /email_verified_at,phone_verified_at,disabled_at/);
+        return { bind(value) {
+          assert.equal(value, id);
+          return { async first() {
+            return { id, email_verified_at: emailVerifiedAt,
+              phone_verified_at: phoneVerifiedAt, disabled_at: disabledAt };
+          } };
+        } };
+      },
+    },
+  });
+  await assert.rejects(requireVerifiedBuyer(makeEnv(null,null),id), /email_nao_verificado/);
+  await assert.rejects(requireVerifiedBuyer(makeEnv(fixedNow.toISOString(),null),id), /telefone_nao_verificado/);
+  await assert.rejects(requireVerifiedBuyer(makeEnv(fixedNow.toISOString(),fixedNow.toISOString(),fixedNow.toISOString()),id), /conta_indisponivel/);
+  assert.deepEqual(
+    await requireVerifiedBuyer(makeEnv(fixedNow.toISOString(),fixedNow.toISOString()),id),
+    { userId: id },
+  );
 });
