@@ -64,7 +64,7 @@ Com a correspondência verificada:
 
 ```bash
 node --check src/index.js
-node --test tests/worker.test.mjs
+node --test tests/worker.contract.mjs
 python3 tests/schema_test.py
 npx wrangler@latest d1 migrations apply lola_db_2026 --remote
 npx wrangler@latest deploy
