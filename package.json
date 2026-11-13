@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "dev:data": "tsx data-server.ts",
-    "build": "vite build",
+    "build": "vite build && node scripts/prune-demo-assets.mjs",
     "start": "tsx server.ts",
     "start:data": "tsx data-server.ts",
     "preview": "vite preview",
