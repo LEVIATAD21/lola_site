@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CATALOG_INFO } from '../catalog';
 import {
   diretorioTemporario, limparTemporarios, matarTodosOsFilhos, portaLivre,
   subirEntryPoint, type ProcessoFilho,
@@ -126,10 +127,16 @@ describe('server.ts — modo embutido em produção (boot real)', () => {
     chaveAdmin = 'k'.repeat(64);
     const porta = await portaLivre();
     base = `http://127.0.0.1:${porta}`;
+    // Explicit TEST fixture, not a production demo seed. Production starts
+    // empty and only loads a catalog when the operator has provisioned it.
+    const dataDir = diretorioTemporario('lola-vitrine-');
+    const fixture = CATALOG_INFO.find((product) => product.id === 'brinco-1');
+    if (!fixture) throw new Error('Produto de teste indisponível na fixture.');
+    writeFileSync(path.join(dataDir, 'catalog.json'), JSON.stringify([fixture]));
     servidor = subirEntryPoint('server.ts', {
       NODE_ENV: 'production',
       PORT: String(porta),
-      LOLA_DATA_DIR: diretorioTemporario('lola-vitrine-'),
+      LOLA_DATA_DIR: dataDir,
       LOLA_ORDERS_ENCRYPTION_KEY: 'a1'.repeat(32),
       LOLA_EMBEDDED_ADMIN: 'true',
       LOLA_ADMIN_API_KEY: chaveAdmin,
