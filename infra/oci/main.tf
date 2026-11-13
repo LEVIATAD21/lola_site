@@ -56,6 +56,20 @@ resource "oci_core_route_table" "private" {
   }
 }
 
+# Substitui a security list padrão da VCN: a lista padrão da OCI pode
+# liberar SSH (22/tcp) para o mundo, mesmo quando os NSGs são restritivos.
+# Esta baseline não permite QUALQUER entrada; só os NSGs abaixo concedem acesso.
+resource "oci_core_security_list" "baseline" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.lola.id
+  display_name   = "lola-deny-inbound-by-default"
+
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+  }
+}
+
 resource "oci_core_subnet" "site" {
   compartment_id             = var.compartment_ocid
   vcn_id                     = oci_core_vcn.lola.id
@@ -64,6 +78,7 @@ resource "oci_core_subnet" "site" {
   dns_label                  = "site"
   prohibit_public_ip_on_vnic = false
   route_table_id             = oci_core_route_table.public.id
+  security_list_ids          = [oci_core_security_list.baseline.id]
 }
 
 resource "oci_core_subnet" "admin" {
@@ -74,6 +89,7 @@ resource "oci_core_subnet" "admin" {
   dns_label                  = "admin"
   prohibit_public_ip_on_vnic = false
   route_table_id             = oci_core_route_table.public.id
+  security_list_ids          = [oci_core_security_list.baseline.id]
 }
 
 resource "oci_core_subnet" "data" {
@@ -84,6 +100,7 @@ resource "oci_core_subnet" "data" {
   dns_label                  = "data"
   prohibit_public_ip_on_vnic = true
   route_table_id             = oci_core_route_table.private.id
+  security_list_ids          = [oci_core_security_list.baseline.id]
 }
 
 resource "oci_core_network_security_group" "site" {
