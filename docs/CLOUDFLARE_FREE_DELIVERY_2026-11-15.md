@@ -46,13 +46,16 @@ Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook se
    repositório `LEVIATAD21/lola_site` (sem compartilhar senha).
 3. Projeto sugerido: `lola-site`. **Branch inicial**:
    `work/lola-integration-2026-11-07`, até passar auditoria e merge.
-   Framework **Vite**. **Build command**: `npm ci && npm run build`.
+   Framework **Vite**. **Build command**: `npm ci && npm run build && node scripts/validate-pages-output.mjs` (falha antes do upload se houver arquivo privado no `dist`).
    **Build output directory**: `dist`. Root: raiz do repositório.
-4. Crie um binding **D1 database** chamado exatamente `DB`, associado a
-   `lola_db_2026` no ambiente **Production** e também **Preview** quando
-   necessário. O ID existente é
-   `5c523efb-8580-48ae-bdb0-bd4fb2ae7fb5`.
-   Se o banco e o ID não forem exatamente estes, **não prossiga**.
+4. No painel Cloudflare, verifique a existência e a titularidade do banco D1 de catálogo.
+   Crie ou selecione o banco autorizado da LOLA e associe o binding **D1 database**
+   com nome de variável exatamente `DB` no ambiente **Production** (e **Preview**
+   quando houver teste de preview). A configuração histórica do repositório cita
+   `lola_db_2026` com UUID `5c523efb-8580-48ae-bdb0-bd4fb2ae7fb5`, porém **esse
+   identificador não foi validado contra uma sessão Cloudflare nesta execução**.
+   Não migre ou substitua banco de terceiros por coincidência de nome/UUID.
+   O binding selecionado pelo painel é a fonte de verdade.
 5. Aplique a migration SQLite `infra/cloudflare/d1-preview/migrations/0001_catalog.sql`
    no D1 **apenas após verificar o conteúdo real do banco, assegurar backup
    e confirmar que não conflita com tabelas existentes**. Não confundir
@@ -62,8 +65,17 @@ Pedidos reais são rejeitados com HTTP 503 até existir transação e webhook se
    Erro 503 significa binding/migration ausente ou indisponível.
 7. Confira `/api/catalog` e `/api/estoque/<id-real>`. Nunca interpretar uma
    vitrine com produtos fictícios como confirmação de estoque/pagamento.
-8. Não habilite compras enquanto o status de produção financeira estiver
-   bloqueado. Em Pages, `POST /api/pedidos/rascunho` retorna 503 de propósito.
+8. Rode **em uma máquina com Node 22+**: `node scripts/smoke-catalog.mjs https://SEU-PROJETO.pages.dev`.
+   O script exige HTTPS e valida CSP, D1 real, retorno do catálogo, URL interna,
+   privacidade dos endpoints e bloqueio de cobranças; falha se a publicação
+   estiver quebrada. Não copie a URL de exemplo como domínio confirmado.
+9. Em builds de produção, a UI ativa **modo catálogo ilustrativo**: checkout,
+   edição de perfil e rastreamento ficam bloqueados para não solicitar dados
+   ou insinuar pagamentos ativos. O JSON-LD de produtos demonstrativos não é
+   anunciado como oferta real. Só remova essa trava quando conta, pedidos,
+   pagamentos, dados, frete, políticas e testes estiverem aprovados.
+10. Não habilite compras enquanto o status financeiro estiver bloqueado.
+    Em Pages, `POST /api/pedidos/rascunho` retorna 503 de propósito.
 
 ## Segundo banco e manutenção
 
