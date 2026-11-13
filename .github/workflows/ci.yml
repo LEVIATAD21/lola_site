@@ -25,7 +25,7 @@ jobs:
       - name: Check Worker JavaScript syntax
         run: node --check infra/cloudflare/d1-preview/src/index.js
       - name: Exercise Worker read-only HTTP contract
-        run: node --test infra/cloudflare/d1-preview/tests/worker.test.mjs
+        run: node --test infra/cloudflare/d1-preview/tests/worker.contract.mjs
       - name: Validate D1 SQLite migration and constraints
         run: python3 infra/cloudflare/d1-preview/tests/schema_test.py
 
