@@ -462,6 +462,13 @@ export default function App() {
   };
 
   const handleOpenAccount = () => {
+    if (CATALOG_PREVIEW_ONLY) {
+      handleOpenInfo(
+        'Minha conta em preparação',
+        'O cadastro de clientes ainda não está habilitado. Para proteger seus dados pessoais, não solicitamos nem armazenamos nome, e-mail, telefone ou endereços nesta versão pública. Você pode manter seus favoritos neste navegador.'
+      );
+      return;
+    }
     setIsCartOpen(false);
     setIsFavoritesOpen(false);
     setIsAccountOpen(true);
@@ -656,7 +663,18 @@ export default function App() {
             />
           </main>
         ) : pageView === 'tracking' ? (
-          <OrderTrackingPage onBackHome={navigateToHome} />
+          CATALOG_PREVIEW_ONLY ? (
+            <main className="flex-1 max-w-xl mx-auto my-16 px-6 py-10 bg-white rounded-3xl border border-[#E7DED3] text-center space-y-5" aria-labelledby="tracking-unavailable">
+              <h1 id="tracking-unavailable" className="font-serif-brand text-2xl">Rastreamento em preparação</h1>
+              <p className="text-sm text-[#766D64]">
+                O acompanhamento online de pedidos ainda não está habilitado.
+                Não informe números de pedidos nem dados pessoais neste catálogo. Para pedidos anteriores, consulte o atendimento oficial da loja.
+              </p>
+              <button type="button" onClick={navigateToHome} className="bg-[#2A211B] text-white rounded-full px-6 py-3 text-sm font-semibold">
+                Voltar ao catálogo
+              </button>
+            </main>
+          ) : <OrderTrackingPage onBackHome={navigateToHome} />
         ) : (
           <main className="flex-1">
             {CATALOG_PREVIEW_ONLY ? (
