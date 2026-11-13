@@ -27,6 +27,7 @@ jobs:
           node --check infra/cloudflare/lola-runtime/src/maintenance.js
           node --check infra/cloudflare/lola-runtime/src/emailVerification.js
           node --check infra/cloudflare/lola-runtime/src/phoneVerification.js
+          node --check infra/cloudflare/lola-runtime/src/buyerEligibility.js
           node --check infra/cloudflare/lola-runtime/generate-config.mjs
       - name: Verify SQL against two real SQLite engines
         run: python3 infra/cloudflare/lola-runtime/tests/schema_contract.py
