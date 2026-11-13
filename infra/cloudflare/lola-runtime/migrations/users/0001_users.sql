@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_auth_rate_expiry ON auth_rate_buckets(reset_at);
 -- transação/FK cruzada. Campos de endereço/PII não são duplicados aqui.
 CREATE TABLE IF NOT EXISTS purchase_summaries (
   order_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   order_number TEXT NOT NULL UNIQUE,
   purchased_at TEXT NOT NULL,
   subtotal_cents INTEGER NOT NULL CHECK (subtotal_cents >= 0),
