@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseAIResponse, parseDraftOrderConfirmation, parseStockPayload } from '../api';
+import { describe, it, expect, vi } from 'vitest';
+import { consultAI, parseAIResponse, parseDraftOrderConfirmation, parseStockPayload } from '../api';
 
 const validPayload = { productId: 'brinco-1', disponivel: 8 };
 
@@ -129,5 +129,29 @@ describe('parseDraftOrderConfirmation', () => {
     expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, total: -1 } })).toBeNull();
     expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, paymentStatus: 'paid' } })).toBeNull();
     expect(parseDraftOrderConfirmation({ ...valid, order: { ...valid.order, paymentMethod: 'credit_card' } })).toBeNull();
+  });
+});
+
+describe('minimização de dados no assistente público', () => {
+  it('envia somente a pergunta, nunca sessão, carrinho ou contexto privado', async () => {
+    let body: unknown = null;
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ resposta: 'Atendimento local', referencias: [] }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      });
+    }));
+    try {
+      const output = await consultAI('Onde encontro brincos?', {
+        produtoId: 'brinco-1',
+        carrinho: [{ nome: 'pedido privado', quantity: 5 }],
+        sessaoCliente: 'token-sensivel-nunca-enviar',
+      });
+      expect(output.resposta).toBe('Atendimento local');
+      expect(body).toEqual({ pergunta: 'Onde encontro brincos?' });
+      expect(JSON.stringify(body)).not.toContain('token-sensivel');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
