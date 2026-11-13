@@ -9,6 +9,13 @@ export function reply(body, status = 200, extra = {}) {
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
       'X-Frame-Options': 'DENY',
+      // Pages _headers applies to static assets only, NOT Functions responses.
+      'Content-Security-Policy': "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'X-Permitted-Cross-Domain-Policies': 'none',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+      'Strict-Transport-Security': 'max-age=31536000',
+      'X-Robots-Tag': 'noindex, nofollow, noarchive',
       ...extra,
     },
   });
