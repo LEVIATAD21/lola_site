@@ -35,18 +35,34 @@
 	# renovação e de bloqueio de conta por aqui.
 	email SEU_EMAIL@aqui.exemplo
 
-	# Log de acesso em /var/log/caddy/. Mantenha por pelo menos uma semana:
-	# sem histórico não dá para investigar um ataque depois que ele aconteceu.
-	log {
-		output file /var/log/caddy/access.log {
-			roll_size 20mb
-			roll_keep 10
-			roll_keep_for 720h
-		}
-	}
 }
 
 loja.seudominio.com.br {
+
+	# LOG DE ACESSO: configurar DENTRO do site, não como logger global do Caddy.
+	# Nunca persistir token de rastreio, telefone, nome ou cookies em URL/headers.
+	# Requer Caddy >= 2.8 para log_skip; validar com caddy validate antes de subir.
+	log {
+		output file /var/log/caddy/lola-access.log {
+			roll_size 20mb
+			roll_keep 10
+			roll_keep_for 168h
+		}
+		format filter {
+			request>uri query {
+				delete token
+				delete telefone
+				delete nome
+			}
+			request>headers>Referer delete
+			request>headers>Cookie delete
+			request>headers>Authorization delete
+		}
+	}
+	# O token também aparece como segmento de path em /api/rastreio/:token.
+	@rastreamento_privado path /api/rastreio/* /rastreio
+	log_skip @rastreamento_privado
+
 	# Compressão. `zstd` é mais barato que gzip; se algum cliente antigo não
 	# entender, o Caddy cai sozinho para gzip.
 	encode zstd gzip
