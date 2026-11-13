@@ -63,7 +63,7 @@ await check('Políticas de privacidade e cookies públicas', async () => {
   ]) {
     const response = await request(path);
     assert.equal(response.status, 200);
-    assert.match(response.headers.get('content-type') ?? '', /text\\/html/i);
+    assert.match(response.headers.get('content-type') ?? '', /text\/html/i);
     assert.ok((await response.text()).includes(heading));
   }
 });
