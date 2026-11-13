@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { onRequest as health } from '../../functions/api/health.js';
 import { onRequest as catalog } from '../../functions/api/catalog.js';
@@ -141,4 +142,16 @@ test('assistente local rejeita payload grande, JSON inválido e método GET', as
   assert.equal((await assistant({ request: malformed })).status, 400);
   const get = new Request(BASE + '/api/ai/consulta', { method: 'GET' });
   assert.equal((await assistant({ request: get })).status, 405);
+});
+
+test('Pages publica CSP restritiva e não permite script inline nem envio cross-origin', () => {
+  const headers = readFileSync(new URL('../../public/_headers', import.meta.url), 'utf8');
+  assert.match(headers, /Content-Security-Policy: default-src 'self';/);
+  assert.match(headers, /script-src 'self';/);
+  assert.match(headers, /connect-src 'self';/);
+  assert.match(headers, /frame-ancestors 'none';/);
+  assert.match(headers, /base-uri 'self';/);
+  assert.match(headers, /X-Content-Type-Options: nosniff/);
+  assert.doesNotMatch(headers, /script-src[^;]*unsafe-inline/);
+  assert.doesNotMatch(headers, /Access-Control-Allow-Origin:\\s*\\*/);
 });
