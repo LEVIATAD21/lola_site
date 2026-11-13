@@ -113,13 +113,15 @@ export async function getProductStock(productId: string): Promise<StockResponse 
  */
 export async function consultAI(
   pergunta: string,
-  contexto?: { produtoId?: string; carrinho?: any[]; sessaoCliente?: string }
+  _contexto?: { produtoId?: string; carrinho?: any[]; sessaoCliente?: string }
 ): Promise<AIResponse> {
   try {
     const res = await fetch('/api/ai/consulta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta, contexto }),
+      // The local assistant only needs the question. Do not transmit cart contents,
+      // product context or client session IDs to a route that discards them.
+      body: JSON.stringify({ pergunta }),
     });
 
     if (res.ok) {
