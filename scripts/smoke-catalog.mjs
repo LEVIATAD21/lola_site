@@ -86,7 +86,7 @@ await check('Catálogo seguro e somente leitura', async () => {
   if (data.products.length === 0) console.warn('AVISO: catálogo D1 vazio; somente vitrine demonstrativa disponível.');
 });
 await check('Rota desconhecida não revela estoque', async () => {
-  const response = await request('/api/estoque/__lola_smoke_never_published_2026');
+  const response = await request('/api/estoque/lola-smoke-never-published-2026');
   assert.equal(response.status, 404);
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
