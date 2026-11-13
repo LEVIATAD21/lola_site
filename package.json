@@ -21,7 +21,7 @@
     "@google/genai": "^2.4.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^1.71.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tsx": "^4.21.0"
