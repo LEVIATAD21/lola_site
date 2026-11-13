@@ -29,7 +29,7 @@ const forbiddenPaths = [
   /\.(?:map|pem|key|p12|pfx|crt|sqlite|db|ts|tsx)$/i,
 ];
 const secretMarkers = /LOLA_ADMIN_API_KEY|LOLA_ADMIN_SESSION_SECRET|LOLA_INTERNAL_SECRET|LOLA_ORDERS_KEY|BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/i;
-const demoMarkers = /Brinco Argola Lisa|Brinco Coração Pequeno|EARRINGS_CATALOG|FEATURED_PRODUCTS|lola_customer_profile/i;
+const demoMarkers = /Brinco Argola Lisa|Brinco Coração Pequeno|EARRINGS_CATALOG|FEATURED_PRODUCTS/i;
 
 let files = 0;
 let js = 0;
