@@ -93,6 +93,10 @@ export const routePathFor = (view: PageView, activeProduct: Product): string => 
 // Enquanto a página da rota ainda não chegou, o shell permanece montado e a
 // área de conteúdo mostra o mesmo carregamento usado no rastreio: spinner
 // discreto na cor de destaque, com texto apenas para leitores de tela.
+// Fail closed in any production build until the complete payment/order flow is
+// independently accepted. Do not expose address fields for a 503-only checkout.
+const CATALOG_PREVIEW_ONLY = import.meta.env.PROD;
+
 const RouteLoading = () => (
   <main className="flex-1 flex min-h-[60vh] items-center justify-center">
     <span className="flex items-center gap-3 text-[#766D64]" role="status">
@@ -215,8 +219,10 @@ export default function App() {
       title = 'Sua Sacola de Compras | LOLA Aço Inox';
       description = 'Revise seus itens na sacola de compras com cálculo de frete.';
     } else if (pageView === 'checkout') {
-      title = 'Finalizar Compra | LOLA Aço Inox';
-      description = 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
+      title = CATALOG_PREVIEW_ONLY ? 'Compras online em preparação | LOLA' : 'Finalizar Compra | LOLA Aço Inox';
+      description = CATALOG_PREVIEW_ONLY
+        ? 'Conheça a vitrine da LOLA. Compras online ainda não estão habilitadas.'
+        : 'Informe os dados de entrega e registre um pré-pedido na Lola Aço Inox. Pagamentos ainda em integração.';
     }
 
     document.title = title;
@@ -456,6 +462,13 @@ export default function App() {
   };
 
   const handleOpenAccount = () => {
+    if (CATALOG_PREVIEW_ONLY) {
+      handleOpenInfo(
+        'Minha conta em preparação',
+        'O cadastro de clientes ainda não está habilitado. Para proteger seus dados pessoais, não solicitamos nem armazenamos nome, e-mail, telefone ou endereços nesta versão pública. Você pode manter seus favoritos neste navegador.'
+      );
+      return;
+    }
     setIsCartOpen(false);
     setIsFavoritesOpen(false);
     setIsAccountOpen(true);
@@ -529,6 +542,11 @@ export default function App() {
       
       {/* 1. Barra superior de informações comerciais */}
       <AnnouncementBar onOpenInfo={handleOpenInfo} />
+      {CATALOG_PREVIEW_ONLY && (
+        <aside role="status" className="bg-[#F1E8DC] border-b border-[#DCC7B0] px-4 py-3 text-center text-xs sm:text-sm text-[#2A211B]">
+          <strong>Catálogo em preparação.</strong> Imagens, preços e disponibilidade são ilustrativos e devem ser confirmados pelo atendimento oficial antes de comprar. Este site ainda não processa pedidos ou pagamentos.
+        </aside>
+      )}
 
       {/* 2. Cabeçalho principal compartilhado */}
       <SiteHeader
@@ -610,7 +628,7 @@ export default function App() {
         ) : pageView === 'product-detail' ? (
           <main className="flex-1">
             {/* Design 03: Página Individual de Produto */}
-            <ProductJsonLd product={activeProduct} />
+            {!CATALOG_PREVIEW_ONLY && <ProductJsonLd product={activeProduct} />}
             <ProductDetailPage
               product={activeProduct}
               onNavigateHome={navigateToHome}
@@ -645,10 +663,40 @@ export default function App() {
             />
           </main>
         ) : pageView === 'tracking' ? (
-          <OrderTrackingPage onBackHome={navigateToHome} />
+          CATALOG_PREVIEW_ONLY ? (
+            <main className="flex-1 max-w-xl mx-auto my-16 px-6 py-10 bg-white rounded-3xl border border-[#E7DED3] text-center space-y-5" aria-labelledby="tracking-unavailable">
+              <h1 id="tracking-unavailable" className="font-serif-brand text-2xl">Rastreamento em preparação</h1>
+              <p className="text-sm text-[#766D64]">
+                O acompanhamento online de pedidos ainda não está habilitado.
+                Não informe números de pedidos nem dados pessoais neste catálogo. Para pedidos anteriores, consulte o atendimento oficial da loja.
+              </p>
+              <button type="button" onClick={navigateToHome} className="bg-[#2A211B] text-white rounded-full px-6 py-3 text-sm font-semibold">
+                Voltar ao catálogo
+              </button>
+            </main>
+          ) : <OrderTrackingPage onBackHome={navigateToHome} />
         ) : (
           <main className="flex-1">
-            {/* Design 05: Finalização de Compra (Checkout) */}
+            {CATALOG_PREVIEW_ONLY ? (
+              <section className="max-w-xl mx-auto my-16 px-6 py-10 bg-white rounded-3xl border border-[#E7DED3] text-center space-y-5" aria-labelledby="checkout-unavailable">
+                <h1 id="checkout-unavailable" className="font-serif-brand text-2xl text-[#2A211B]">Compras online em preparação</h1>
+                <p className="text-sm text-[#766D64] leading-relaxed">
+                  A LOLA ainda está configurando o atendimento, o estoque e os pagamentos da loja virtual.
+                  Para proteger seus dados, não solicitamos endereço ou informações de pagamento nesta etapa.
+                  Os valores exibidos são ilustrativos e devem ser confirmados com a equipe.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button type="button" onClick={navigateToCart}
+                    className="rounded-full bg-[#2A211B] text-white px-6 py-3 text-sm font-semibold hover:bg-[#C49A5A]">
+                    Voltar à sacola
+                  </button>
+                  <a href="https://www.instagram.com/lola_acoinox/" target="_blank" rel="noopener noreferrer"
+                    className="rounded-full border border-[#DCC7B0] px-6 py-3 text-sm font-semibold text-[#2A211B] hover:bg-[#F8F4ED]">
+                    Atendimento oficial
+                  </a>
+                </div>
+              </section>
+            ) : (
             <CheckoutPage
               items={cartItems}
               onRemoveItem={handleRemoveCartItem}
@@ -665,6 +713,7 @@ export default function App() {
               shipping={appliedShipping}
               onOpenInfo={handleOpenInfo}
             />
+            )}
           </main>
         )}
       </Suspense>

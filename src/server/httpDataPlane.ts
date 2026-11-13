@@ -1,5 +1,7 @@
 import { InternalClient } from './internalClient';
 import { type DataPlane, type DataPlaneResult, PEDIDOS_INDISPONIVEL } from './dataPlane';
+import { type CatalogInfo } from './catalog';
+import { type PublicTracking, type InternalShippingStatus } from './tracking';
 import { log, loggableIp } from './logger';
 
 /**
@@ -57,14 +59,84 @@ function sanitizeStock(
   const entries = source as Record<string, unknown>;
   const stock: Record<string, number> = Object.create(null) as Record<string, number>;
   let matched = 0;
-  for (const id of allowedIds) {
+  for (const id of Object.keys(entries)) {
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(id) || !allowedIds.has(id)) continue;
     const raw = entries[id];
     if (typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 && raw <= 1_000_000_000) {
       stock[id] = raw;
       matched += 1;
     }
   }
-  return matched > 0 ? stock : null;
+  return matched > 0 || Object.keys(entries).length === 0 ? stock : null;
+}
+
+function sanitizeCatalog(body: Record<string, unknown>): CatalogInfo[] | null {
+  if (!Array.isArray(body.products) || body.products.length > 5000) return null;
+  const ids = new Set<string>();
+  const result: CatalogInfo[] = [];
+  for (const raw of body.products) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const p = raw as Record<string, unknown>;
+    if (typeof p.id !== 'string' || !/^[a-z0-9][a-z0-9_-]{1,63}$/.test(p.id) || ids.has(p.id) ||
+        typeof p.name !== 'string' || p.name.length < 1 || p.name.length > 120 ||
+        typeof p.category !== 'string' || !['Brincos', 'Colares', 'Pulseiras', 'Anéis', 'Conjuntos'].includes(p.category) ||
+        typeof p.price !== 'number' || !Number.isFinite(p.price) || p.price < 0 || p.price > 100000 ||
+        typeof p.material !== 'string' || p.material.length > 80 ||
+        typeof p.color !== 'string' || p.color.length > 80 ||
+        typeof p.desc !== 'string' || p.desc.length > 2000 ||
+        typeof p.image !== 'string' || p.image.length > 2048 ||
+        typeof p.published !== 'boolean' ||
+        typeof p.disponivel !== 'number' || !Number.isSafeInteger(p.disponivel) || p.disponivel < 0) return null;
+    ids.add(p.id);
+    result.push({
+      id: p.id, name: p.name, category: p.category, price: p.price,
+      material: p.material, color: p.color, desc: p.desc, image: p.image,
+      published: p.published, disponivel: p.disponivel,
+    });
+  }
+  return result;
+}
+
+const TRACKING_STATUSES = new Set<InternalShippingStatus>([
+  'preparing', 'posted', 'in_transit', 'out_for_delivery', 'delivered', 'exception',
+]);
+
+function sanitizeTracking(value: unknown): PublicTracking | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  if (typeof source.orderNumber !== 'string' || !/^LOLA-[0-9]{8}-[A-F0-9]{12}$/.test(source.orderNumber)) return null;
+  if (source.carrierCode !== null && (typeof source.carrierCode !== 'string' || !/^[A-Z0-9]{8,20}$/i.test(source.carrierCode))) return null;
+  if (typeof source.status !== 'string' || !TRACKING_STATUSES.has(source.status as InternalShippingStatus)) return null;
+  if (typeof source.updatedAt !== 'string' || !Number.isFinite(Date.parse(source.updatedAt))) return null;
+  if (!Array.isArray(source.events) || source.events.length > 100) return null;
+  const events = [];
+  for (const item of source.events) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const event = item as Record<string, unknown>;
+    if (typeof event.id !== 'string' || event.id.length > 64) return null;
+    if (typeof event.status !== 'string' || !TRACKING_STATUSES.has(event.status as InternalShippingStatus)) return null;
+    if (typeof event.title !== 'string' || event.title.length > 120) return null;
+    if (typeof event.description !== 'string' || event.description.length > 300) return null;
+    if (typeof event.occurredAt !== 'string' || !Number.isFinite(Date.parse(event.occurredAt))) return null;
+    if (event.source !== 'store' && event.source !== 'carrier') return null;
+    if (event.location !== undefined && (typeof event.location !== 'string' || event.location.length > 120)) return null;
+    events.push({
+      id: event.id,
+      status: event.status as InternalShippingStatus,
+      title: event.title,
+      description: event.description,
+      occurredAt: event.occurredAt,
+      source: event.source as 'store' | 'carrier',
+      ...(typeof event.location === 'string' && event.location ? { location: event.location } : {}),
+    });
+  }
+  return {
+    orderNumber: source.orderNumber,
+    carrierCode: source.carrierCode as string | null,
+    status: source.status as InternalShippingStatus,
+    events,
+    updatedAt: source.updatedAt,
+  };
 }
 
 /** Mensagem de erro passa adiante só se for texto curto e sem controle. */
@@ -107,15 +179,15 @@ function projectPublicOrder(value: unknown): Record<string, unknown> {
 export interface HttpDataPlaneOptions {
   ttlMs?: number;
   staleMs?: number;
-  /** Ids do catálogo: a única chave aceita no snapshot. */
-  allowedIds: ReadonlySet<string>;
+  /** Allowlist estática para testes/ambientes controlados; produção deriva do catálogo autenticado. */
+  allowedIds?: ReadonlySet<string>;
 }
 
 export class HttpDataPlane implements DataPlane {
   private readonly client: InternalClient;
   private readonly ttlMs: number;
   private readonly staleMs: number;
-  private readonly allowedIds: ReadonlySet<string>;
+  private readonly configuredAllowedIds?: ReadonlySet<string>;
   private cache: CacheEntry | null = null;
   private inflight: Promise<Record<string, number> | null> | null = null;
   private readonly lastFailureLogAt = new Map<string, number>();
@@ -124,7 +196,7 @@ export class HttpDataPlane implements DataPlane {
     this.client = client;
     this.ttlMs = clampInt(options.ttlMs, 0, 600_000, DEFAULT_TTL_MS);
     this.staleMs = clampInt(options.staleMs, 0, 3_600_000, DEFAULT_STALE_MS);
-    this.allowedIds = options.allowedIds;
+    this.configuredAllowedIds = options.allowedIds;
   }
 
   private throttleLog(key: string, event: string, fields: Record<string, unknown>): void {
@@ -133,6 +205,48 @@ export class HttpDataPlane implements DataPlane {
     if (now - previous < MAX_LOG_INTERVAL_MS) return;
     this.lastFailureLogAt.set(key, now);
     log('error', event, fields);
+  }
+
+  async catalog(): Promise<CatalogInfo[] | null> {
+    const result = await this.client.call('GET', '/internal/catalog');
+    if (!result.ok || !result.body) {
+      this.throttleLog('catalogo', 'plano.catalogo_falhou', {
+        alvo: this.client.target, status: result.status, motivo: result.failure ?? 'desconhecido',
+      });
+      return null;
+    }
+    const products = sanitizeCatalog(result.body);
+    if (!products) {
+      this.throttleLog('catalogo_formato', 'plano.catalogo_invalido', {
+        alvo: this.client.target, status: result.status,
+      });
+      return null;
+    }
+    return products;
+  }
+
+  async lookupTracking(token: string): Promise<DataPlaneResult> {
+    if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    const result = await this.client.call('GET', '/internal/rastreio/' + token);
+    if (result.status === 404) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    if (!result.ok || !result.body) {
+      this.throttleLog('tracking', 'plano.rastreio_falhou', {
+        alvo: this.client.target, status: result.status, motivo: result.failure ?? 'desconhecido',
+      });
+      return { status: 503, body: { error: 'Rastreamento temporariamente indisponível.' } };
+    }
+    const tracking = sanitizeTracking(result.body.tracking);
+    if (!tracking) {
+      this.throttleLog('tracking_formato', 'plano.rastreio_invalido', {
+        alvo: this.client.target, status: result.status,
+      });
+      return { status: 503, body: { error: 'Rastreamento temporariamente indisponível.' } };
+    }
+    return { status: 200, body: { tracking: tracking as unknown as Record<string, unknown> } };
   }
 
   async snapshot(): Promise<Record<string, number> | null> {
@@ -160,6 +274,15 @@ export class HttpDataPlane implements DataPlane {
   }
 
   private async fetchSnapshot(): Promise<Record<string, number> | null> {
+    // O catálogo é a autoridade dos IDs: estoque de produto fantasma não pode
+    // entrar no cache público. Em produção, a allowlist vem do canal interno
+    // assinado; testes podem injetar uma lista fixa para isolar o contrato.
+    let allowedIds = this.configuredAllowedIds;
+    if (!allowedIds) {
+      const products = await this.catalog();
+      if (!products) return this.staleSnapshot(null);
+      allowedIds = new Set(products.map((product) => product.id));
+    }
     const result = await this.client.call('GET', '/internal/estoque');
     if (!result.ok || !result.body) {
       this.throttleLog('snapshot', 'plano.snapshot_falhou', {
@@ -167,7 +290,7 @@ export class HttpDataPlane implements DataPlane {
       });
       return this.staleSnapshot(null);
     }
-    const stock = sanitizeStock(result.body, this.allowedIds);
+    const stock = sanitizeStock(result.body, allowedIds);
     if (!stock) {
       this.throttleLog('snapshot_formato', 'plano.snapshot_invalido', {
         alvo: this.client.target, status: result.status,

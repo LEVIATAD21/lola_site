@@ -242,6 +242,32 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     }
   };
 
+
+  // Publicar a vitrine na Cloudflare NÃO libera pagamento.
+  // O checkout exige ativação explícita depois de credenciais, webhook,
+  // reservas duráveis e testes de compra/reembolso concluídos.
+  // Mesmo que alguém altere o flag no browser, a API de produção precisa
+  // autorizar a criação: a rota Pages recusa pedidos por padrão.
+  if (import.meta.env.PROD && import.meta.env.VITE_LOLA_CHECKOUT_ENABLED !== 'true') {
+    return (
+      <main className="min-h-[60vh] bg-[#F8F4ED] px-5 py-20 text-center text-[#241F1B]">
+        <section className="mx-auto max-w-xl rounded-2xl border border-[#D5C5B6] bg-white p-8 shadow-sm">
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-[#956E50]">LOLA Aço Inox</p>
+          <h1 className="mb-4 text-3xl font-semibold">Pedidos online em preparação</h1>
+          <p className="mb-8 leading-relaxed text-[#66574D]">
+            O catálogo está disponível para consulta, mas ainda não estamos
+            processando pedidos nem recebendo pagamentos neste site.
+            Nenhum dado de cartão ou endereço precisa ser informado agora.
+          </p>
+          <button type="button" onClick={onBackToCart}
+            className="rounded-xl bg-[#241F1B] px-6 py-3 font-semibold text-white hover:bg-[#43352C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+            Voltar à sacola
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className="bg-[#F8F4ED] min-h-screen text-[#241F1B] pb-16">
       

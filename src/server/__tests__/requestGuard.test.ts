@@ -113,7 +113,7 @@ describe('createCrossSiteWriteGuard', () => {
   it('não barra GET, que não muta estado', async () => {
     const endpoint = await startGuardedEndpoint();
 
-    const response = await fetch(endpoint.url.replace('/pedido', '/pedido'), {
+    const response = await fetch(endpoint.url, {
       method: 'GET',
       headers: { origin: 'https://evil.example' },
     });

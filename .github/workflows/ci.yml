@@ -12,6 +12,120 @@ permissions:
   contents: read
 
 jobs:
+  cloudflare-pages-public:
+    name: Cloudflare Pages public API contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Validate serverless handlers
+        run: |
+          node --check functions/_shared/publicApi.js
+          node --check functions/api/health.js
+          node --check functions/api/catalog.js
+          node --check 'functions/api/estoque/[productId].js'
+          node --check functions/api/pedidos/rascunho.js
+          node --check functions/api/ai/consulta.js
+          node --check scripts/smoke-catalog.mjs
+          node --check scripts/validate-pages-output.mjs
+      - name: Run D1 storefront API contracts
+        run: node --test infra/cloudflare/pages.contract.mjs
+
+  d1-production-contracts:
+    name: D1 identity, financial retention and Cron contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: JavaScript syntax checks
+        run: |
+          node --check infra/cloudflare/lola-runtime/src/maintenance.js
+          node --check infra/cloudflare/lola-runtime/src/emailVerification.js
+          node --check infra/cloudflare/lola-runtime/src/phoneVerification.js
+          node --check infra/cloudflare/lola-runtime/src/buyerEligibility.js
+          node --check infra/cloudflare/lola-runtime/generate-config.mjs
+      - name: Verify SQL against two real SQLite engines
+        run: python3 infra/cloudflare/lola-runtime/tests/schema_contract.py
+      - name: Verify email, phone and TTL security contracts
+        run: node --test infra/cloudflare/lola-runtime/tests/runtime.contract.mjs
+      - name: Block deployment without secondary D1 ID
+        run: |
+          if node infra/cloudflare/lola-runtime/generate-config.mjs; then
+            echo "Deployment configuration was generated without a USERS_DB UUID" >&2
+            exit 1
+          fi
+
+  cloudflare-d1-preview:
+    name: Cloudflare D1 preview code and SQLite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Check Worker JavaScript syntax
+        run: node --check infra/cloudflare/d1-preview/src/index.js
+      - name: Exercise Worker read-only HTTP contract
+        run: node --test infra/cloudflare/d1-preview/tests/worker.contract.mjs
+      - name: Validate D1 SQLite migration and constraints
+        run: python3 infra/cloudflare/d1-preview/tests/schema_test.py
+
+
+  terraform-validation:
+    name: OCI Terraform structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Verify Terraform formatting
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 fmt -check -recursive
+      - name: Initialize provider without touching a cloud account
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 init -backend=false -input=false -no-color
+      - name: Validate OCI resources and variable definitions
+        run: docker run --rm -v "$PWD/infra/oci:/work" -w /work hashicorp/terraform:1.10.5 validate -no-color
+
+  database-schema:
+    name: PostgreSQL schema and integrity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lola_ci
+          POSTGRES_USER: lola_ci
+          POSTGRES_PASSWORD: ci-only-no-real-database-secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lola_ci -d lola_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migration twice and verify business constraints
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: lola_ci
+          PGDATABASE: lola_ci
+          PGPASSWORD: ci-only-no-real-database-secret
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f db/migrations/0001_core.sql
+          psql -X -v ON_ERROR_STOP=1 -f db/migrations/0001_core.sql
+          psql -X -v ON_ERROR_STOP=1 -f db/tests/schema_invariants.sql
   build:
     runs-on: ubuntu-latest
     steps:
@@ -43,3 +157,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify Cloudflare Pages public distribution
+        run: node scripts/validate-pages-output.mjs

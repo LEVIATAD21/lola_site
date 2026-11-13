@@ -1,0 +1,31 @@
+name: LOLA Production Catalog Health
+
+# Dormant until repository variable LOLA_PUBLIC_URL is configured and this
+# workflow reaches the default branch. No credentials or paid monitor used.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lola-production-catalog-monitor
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Verify public catalog is reachable and fail closed
+    if: ${{ vars.LOLA_PUBLIC_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Probe public HTTPS, D1, read-only contract and CSP
+        env:
+          LOLA_PUBLIC_URL: ${{ vars.LOLA_PUBLIC_URL }}
+        run: node scripts/smoke-catalog.mjs "$LOLA_PUBLIC_URL"

@@ -124,6 +124,19 @@ export class TrackingStore {
     try { this.persist(); return this.publicView(record); }
     catch { Object.assign(record, previous); return null; }
   }
+  remove(orderNumber: string): boolean {
+    if (!this.ready || !/^LOLA-[0-9]{8}-[A-F0-9]{12}$/.test(orderNumber)) return false;
+    const index = this.records.findIndex((item) => item.orderNumber === orderNumber);
+    if (index < 0) return true;
+    const [removed] = this.records.splice(index, 1);
+    try {
+      this.persist();
+      return true;
+    } catch {
+      this.records.splice(index, 0, removed);
+      return false;
+    }
+  }
   lookup(token: string): PublicTracking | null {
     if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
     const hash = createHash('sha256').update(token).digest('hex');

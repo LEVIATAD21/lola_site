@@ -275,6 +275,47 @@ export class InventoryStore {
     }
   }
 
+  registerProduct(productId: string): boolean {
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(productId) || Object.hasOwn(this.items, productId)) return false;
+    const item: StockItem = { productId, total: 0, reservado: 0, vendido: 0, disponivel: 0 };
+    this.items[productId] = item;
+    try { this.persist(); } catch { delete this.items[productId]; return false; }
+    return true;
+  }
+
+  setAvailable(productId: unknown, quantity: unknown): StockAdjustment {
+    if (typeof productId !== 'string' || !productId.trim() ||
+        typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 1_000_000) {
+      return { ok: false, status: 400, error: 'Produto e quantidade de estoque inválidos.' };
+    }
+    const current = this.lookup(productId);
+    if (!current) return { ok: false, status: 404, error: 'Produto não encontrado no catálogo.' };
+    if (quantity < this.heldQuantity(productId)) {
+      return { ok: false, status: 409, error: 'A quantidade não pode ficar abaixo das pré-reservas ativas.' };
+    }
+    const previous = { ...current };
+    current.disponivel = quantity;
+    current.total = current.reservado + current.vendido + quantity;
+    try { this.persist(); } catch {
+      this.items[productId] = previous;
+      return { ok: false, status: 500, error: 'Não foi possível salvar a atualização de estoque.' };
+    }
+    return { ok: true, stock: { ...current, disponivel: this.availableQuantity(productId) } };
+  }
+
+  removeProduct(productId: string): boolean {
+    const current = this.lookup(productId);
+    // Não descartar saldo físico ao excluir um produto: primeiro o operador deve
+    // reconciliar o estoque para zero. Isso também torna o rollback do catálogo seguro.
+    if (!current || current.total > 0 || current.vendido > 0 || current.reservado > 0 || this.heldQuantity(productId) > 0) return false;
+    delete this.items[productId];
+    try { this.persist(); } catch {
+      this.items[productId] = current;
+      return false;
+    }
+    return true;
+  }
+
   deduct(productId: unknown, quantity: unknown): StockAdjustment {
     if (typeof productId !== 'string' || !productId.trim()) {
       return { ok: false, status: 400, error: 'productId é obrigatório.' };

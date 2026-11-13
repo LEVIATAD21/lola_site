@@ -108,6 +108,13 @@ export interface RequestLoggerOptions {
  */
 const MAX_LOG_PATH = 200;
 
+/** Remove bearer tracking tokens from paths before they reach access logs. */
+export function redactSensitivePath(rawPath: string | undefined): string {
+  const value = (rawPath || '/').split('?')[0] || '/';
+  if (value.toLowerCase().startsWith('/api/rastreio/')) return '/api/rastreio/[token]';
+  return value;
+}
+
 export function truncatePath(rawPath: string | undefined): string {
   const value = rawPath || '/';
   return value.length > MAX_LOG_PATH ? value.slice(0, MAX_LOG_PATH) + '…' : value;
@@ -132,7 +139,7 @@ export function createRequestLogger(options: RequestLoggerOptions = {}): Request
     // sempre restauram (no 404 do `/api` ele ficaria `/admin/pre-pedidos`).
     // A query string fica de fora de propósito — filtros podem carregar dados
     // digitados pela cliente.
-    const requestPath = truncatePath(req.originalUrl.split('?')[0] || '/');
+    const requestPath = truncatePath(redactSensitivePath(req.originalUrl));
     if (!requestPath.startsWith('/api/')) return next();
     const startedAt = process.hrtime.bigint();
 

@@ -26,6 +26,19 @@ describe('TrackingStore', () => {
     expect(store.lookup('wrong-token')).toBeNull();
     expect(JSON.stringify(store.lookup(created!.token))).not.toContain('tokenHash');
   });
+  it('revoga token e remove o registro persistido quando o pedido é excluído', () => {
+    const store = setup();
+    const created = store.create(orderNumber);
+    expect(created).not.toBeNull();
+    expect(store.lookup(created!.token)).not.toBeNull();
+    expect(store.remove(orderNumber)).toBe(true);
+    expect(store.lookup(created!.token)).toBeNull();
+
+    const reloaded = new TrackingStore(dirs[dirs.length - 1], 'a'.repeat(64), true);
+    expect(reloaded.lookup(created!.token)).toBeNull();
+    expect(reloaded.remove(orderNumber)).toBe(true);
+    expect(reloaded.remove('invalid')).toBe(false);
+  });
   it('updates a status and validates carrier codes', () => {
     const store = setup();
     const created = store.create(orderNumber);

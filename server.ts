@@ -3,7 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { CATALOG_INFO } from './src/server/catalog';
 import {
   createLocalDataPlane, type DataPlane, type LocalDataPlane, PLANO_DE_DADOS_INDISPONIVEL,
 } from './src/server/dataPlane';
@@ -128,7 +127,6 @@ async function startServer() {
     plane = new HttpDataPlane(client, {
       ttlMs: envInt('LOLA_SNAPSHOT_TTL_MS', 5_000, 0, 600_000),
       staleMs: envInt('LOLA_SNAPSHOT_STALE_MS', 60_000, 0, 3_600_000),
-      allowedIds: new Set(CATALOG_INFO.map((product) => product.id)),
     });
     log('info', 'plano.remoto_configurado', { alvo: client.target });
   } else {
@@ -326,13 +324,14 @@ async function startServer() {
   const limitTrackingLookup = createRateLimitMiddleware({
     windowMs: 60_000, maxRequests: 20, message: 'Muitas consultas de rastreamento. Tente novamente em um minuto.',
   });
-  app.get('/api/rastreio/:token', limitTrackingLookup, (req, res) => {
-    const tracking = localPlane?.tracking;
-    if (!tracking) return res.status(404).json({ error: 'Endpoint de API não encontrado.' });
-    if (!tracking.ready) return res.status(503).json({ error: 'Rastreamento indisponível: configure a chave de criptografia.' });
-    const result = tracking.lookup(req.params.token);
-    if (!result) return res.status(404).json({ error: 'Link de rastreamento inválido ou expirado.' });
-    return res.json({ tracking: result });
+  app.get('/api/rastreio/:token', limitTrackingLookup, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      const result = await plane.lookupTracking(req.params.token);
+      return res.status(result.status).json(result.body);
+    } catch {
+      return res.status(503).json({ error: 'Rastreamento temporariamente indisponível.' });
+    }
   });
 
   // CEP (RT-R-04): a consulta sai do navegador. Em produção o CSP da vitrine só
@@ -343,12 +342,15 @@ async function startServer() {
 
   // 4. GET /api/produtos (busca ou lista por categoria)
   app.get('/api/produtos', limitRead, async (req, res) => {
-    const snapshot = await plane.snapshot().catch(() => null);
-    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const [snapshot, catalog] = await Promise.all([
+      plane.snapshot().catch(() => null),
+      plane.catalog().catch(() => null),
+    ]);
+    if (!snapshot || !catalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
     const { categoria, query } = req.query;
-    let list = CATALOG_INFO.map((item) => ({
+    let list = catalog.filter((item) => item.published).map((item) => ({
       ...item,
-      disponivel: snapshot[item.id] ?? item.disponivel,
+      disponivel: snapshot[item.id] ?? 0,
     }));
 
     if (categoria && typeof categoria === 'string') {
@@ -371,14 +373,14 @@ async function startServer() {
   // 5. GET /api/produto/:productId
   app.get('/api/produto/:productId', limitRead, async (req, res) => {
     const { productId } = req.params;
-    const item = CATALOG_INFO.find((p) => p.id === productId);
-    if (!item) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
-    }
-    const snapshot = await plane.snapshot().catch(() => null);
-    if (!snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const stock = snapshot[productId] ?? item.disponivel;
-    res.json({ ...item, disponivel: stock });
+    const [catalog, snapshot] = await Promise.all([
+      plane.catalog().catch(() => null),
+      plane.snapshot().catch(() => null),
+    ]);
+    if (!catalog || !snapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const item = catalog.find((p) => p.id === productId && p.published);
+    if (!item) return res.status(404).json({ error: 'Produto não encontrado' });
+    res.json({ ...item, disponivel: snapshot[productId] ?? 0 });
   });
 
   // 6. POST /api/ai/consulta (Assistente Virtual Lola)
@@ -410,9 +412,12 @@ async function startServer() {
     }
 
     // Prepare real-time inventory snapshot, consultado no plano de dados.
-    const stockSnapshot = await plane.snapshot().catch(() => null);
-    if (!stockSnapshot) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
-    const liveCatalog = CATALOG_INFO.map((prod) => ({
+    const [stockSnapshot, currentCatalog] = await Promise.all([
+      plane.snapshot().catch(() => null),
+      plane.catalog().catch(() => null),
+    ]);
+    if (!stockSnapshot || !currentCatalog) return res.status(503).json({ error: PLANO_DE_DADOS_INDISPONIVEL });
+    const liveCatalog = currentCatalog.filter((prod) => prod.published).map((prod) => ({
       id: prod.id,
       nome: prod.name,
       categoria: prod.category,
@@ -610,7 +615,8 @@ ${JSON.stringify(pergunta)}
   // Vite middleware in dev or static files in production
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
+    // Rate limit custom `limitRead` (300 req/min por IP); o CodeQL não infere este middleware próprio.
+    app.get('*', limitRead, (req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {

@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureIpLogging, configureIpLoggingFromEnv, createRequestLogger, loggableIp, resolveIpLogMode, truncatePath } from '../logger';
+import { configureIpLogging, configureIpLoggingFromEnv, createRequestLogger, loggableIp, resolveIpLogMode, redactSensitivePath, truncatePath } from '../logger';
 
 const servers: Server[] = [];
 const logged = () => vi.mocked(console.log).mock.calls.map((call) => String(call[0]));
@@ -42,6 +42,7 @@ function sampleApp(logger = createRequestLogger()) {
   app.use(logger);
   app.use(acompanharFim);
   app.get('/api/ok', (_req, res) => res.json({ ok: true }));
+  app.get('/api/rastreio/:token', (_req, res) => res.status(404).json({ error: 'invalid' }));
   app.get('/assets/app.css', (_req, res) => res.type('text/css').send('body{}'));
   return app;
 }
@@ -89,6 +90,19 @@ describe('createRequestLogger', () => {
     expect(lines.some((line) => line.includes('path=/api/ok'))).toBe(true);
   });
 
+  it('redige tokens bearer de rastreamento antes de gravar o caminho no log', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const base = await listen(sampleApp());
+    const token = 'a'.repeat(43);
+
+    await fetch(base + '/api/rastreio/' + token);
+    await settle();
+
+    const line = logged().find((entry) => entry.includes('http.request')) ?? '';
+    expect(line).toContain('path=/api/rastreio/[token]');
+    expect(line).not.toContain(token);
+  });
+
   it('ignora arquivos estáticos e a página da vitrine', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const base = await listen(sampleApp());
@@ -130,6 +144,15 @@ describe('createRequestLogger', () => {
     const line = logged().find((entry) => entry.includes('http.request'));
     expect(line).toContain('path=/api/rota-inexistente');
     expect(line).toContain('status=404');
+  });
+});
+
+describe('redactSensitivePath', () => {
+  it('redige token de rastreamento, mas mantém rotas administrativas sem segredo', () => {
+    const token = 'b'.repeat(43);
+    expect(redactSensitivePath('/api/rastreio/' + token)).toBe('/api/rastreio/[token]');
+    expect(redactSensitivePath('/api/admin/pre-pedidos/LOLA-20261107-ABCDEF123456'))
+      .toBe('/api/admin/pre-pedidos/LOLA-20261107-ABCDEF123456');
   });
 });
 

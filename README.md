@@ -433,3 +433,8 @@ Regras fixas do registro:
 - `GET /api/rastreio/:token` expõe somente resumo logístico e eventos, nunca nome, telefone ou endereço do cliente. As respostas não são armazenadas em cache e a consulta tem limite de frequência.
 - O armazenamento de rastreamento usa AES-256-GCM em `.data/tracking.enc.json`. Em produção, configure `LOLA_TRACKING_ENCRYPTION_KEY` (64 caracteres hexadecimais; `openssl rand -hex 32`) ou reutilize uma chave de pedidos estável. A chave precisa permanecer igual entre reinicializações.
 - **Limitação importante:** nesta etapa os eventos são atualizados pela administração. A integração automática com API/provedor dos Correios, notificações por e-mail, login/Minha Conta e recuperação de senha ainda precisam ser configurados antes de considerar o rastreamento ponta a ponta pronto para produção. Não são geradas movimentações reais automaticamente.
+
+
+## Auditoria LOLA
+
+Consulte [docs/SECURITY_AUDIT_2026-11-07.md](docs/SECURITY_AUDIT_2026-11-07.md) para evidências de CI/CodeQL, arquitetura Admin ↔ Data Server, controles implementados e bloqueios antes da produção.

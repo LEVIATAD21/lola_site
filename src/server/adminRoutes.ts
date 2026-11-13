@@ -44,6 +44,55 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     return next();
   };
 
+  // Catálogo: somente o servidor de dados persiste alterações.
+  router.get('/admin/catalog', requireAdminKey, requireTrustedOrigin, (_req, res) => {
+    // Estoque é lido da autoridade InventoryStore, nunca do snapshot auxiliar
+    // gravado junto ao catálogo; assim o painel não exibe saldo desatualizado.
+    const products = plane.catalogStore.list().map((product) => ({
+      ...product,
+      disponivel: plane.inventory.get(product.id)?.disponivel ?? 0,
+    }));
+    return res.json({ products });
+  });
+
+  router.post('/admin/catalog', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const product = plane.createProduct(req.body);
+    if (!product) return res.status(400).json({ error: 'Dados do produto inválidos ou limite do catálogo atingido.' });
+    auditAdminAccess(req, 'allow', 'produto criado');
+    return res.status(201).json({ product });
+  });
+
+  router.put('/admin/catalog/:productId', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const { productId } = req.params;
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(productId)) {
+      return res.status(400).json({ error: 'Identificador do produto inválido.' });
+    }
+    const product = plane.updateProduct(productId, req.body);
+    if (!product) return res.status(400).json({ error: 'Produto não encontrado ou dados inválidos.' });
+    auditAdminAccess(req, 'allow', 'produto atualizado');
+    return res.json({ product });
+  });
+
+  router.delete('/admin/catalog/:productId', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const { productId } = req.params;
+    if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(productId)) {
+      return res.status(400).json({ error: 'Identificador do produto inválido.' });
+    }
+    if (!plane.removeProduct(productId)) {
+      return res.status(409).json({ error: 'Produto não pode ser removido: confira vendas, reservas ou estoque.' });
+    }
+    auditAdminAccess(req, 'allow', 'produto removido');
+    return res.json({ success: true, productId });
+  });
+
+  router.post('/estoque/definir', requireAdminKey, requireTrustedOrigin, (req, res) => {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const result = plane.setProductStock(body.productId, body.quantidade);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    auditAdminAccess(req, 'allow', 'estoque ajustado');
+    return res.json({ success: true, stock: result.stock });
+  });
+
   // POST /api/estoque/atualizar — baixa estrita e persistente.
   router.post('/estoque/atualizar', requireAdminKey, requireTrustedOrigin, (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -122,14 +171,24 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
    * Elimina o registro e reescreve o arquivo com a chave vigente.
    */
   router.delete('/admin/pre-pedidos/:orderNumber', requireAdminKey, requireTrustedOrigin, (req, res) => {
-    if (!ORDER_NUMBER_PATTERN.test(req.params.orderNumber)) {
+    const { orderNumber } = req.params;
+    if (!ORDER_NUMBER_PATTERN.test(orderNumber)) {
       return res.status(400).json({ error: 'Código de pré-pedido inválido.' });
     }
-    if (!plane.orders.remove(req.params.orderNumber)) {
+    if (!plane.orders.findByOrderNumber(orderNumber)) {
       return res.status(404).json({ error: 'Pré-pedido não encontrado.' });
     }
-    log('info', 'pedido.eliminado', { numero: req.params.orderNumber, via: 'admin' });
-    return res.json({ success: true, orderNumber: req.params.orderNumber, acao: 'eliminado' });
+    // Revoga primeiro o bearer token de rastreio. Se a persistência segura falhar,
+    // não exclui o pedido e não deixa o link público ativo após uma exclusão parcial.
+    if (!plane.tracking.remove(orderNumber)) {
+      return res.status(503).json({ error: 'Não foi possível revogar o rastreamento com segurança.' });
+    }
+    if (!plane.orders.remove(orderNumber)) {
+      log('error', 'pedido.exclusao_parcial', { numero: orderNumber, via: 'admin' });
+      return res.status(500).json({ error: 'Não foi possível concluir a exclusão do pré-pedido.' });
+    }
+    log('info', 'pedido.eliminado', { numero: orderNumber, via: 'admin' });
+    return res.json({ success: true, orderNumber, acao: 'eliminado' });
   });
 
   /**

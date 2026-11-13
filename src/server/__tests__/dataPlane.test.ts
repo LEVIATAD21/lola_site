@@ -77,6 +77,45 @@ describe('LocalDataPlane.snapshot', () => {
   });
 });
 
+describe('LocalDataPlane — CRUD persistente de catálogo', () => {
+  const productInput = {
+    name: 'Produto administrativo de teste',
+    category: 'Brincos',
+    price: 37.5,
+    material: 'Aço inox',
+    color: 'Prata',
+    desc: 'Criado pelo teste de integração do plano de dados.',
+    image: '/images/teste.webp',
+  };
+
+  it('cria produto, inicializa estoque, atualiza dados e protege exclusão com saldo', async () => {
+    const plane = makePlane();
+    const created = plane.createProduct(productInput);
+    expect(created).not.toBeNull();
+    expect(created?.id).toMatch(/^prod-[a-f0-9]{16}$/);
+    expect(plane.inventory.get(created!.id)).toMatchObject({
+      productId: created!.id, total: 0, reservado: 0, vendido: 0, disponivel: 0,
+    });
+
+    expect(plane.setProductStock(created!.id, 9)).toMatchObject({ ok: true, stock: { total: 9, disponivel: 9 } });
+    const updated = plane.updateProduct(created!.id, { ...productInput, name: 'Produto atualizado', price: 49.9 });
+    expect(updated).toMatchObject({ id: created!.id, name: 'Produto atualizado', price: 49.9 });
+    expect(plane.inventory.get(created!.id)?.disponivel).toBe(9);
+
+    expect(plane.removeProduct(created!.id)).toBe(false);
+    expect(plane.setProductStock(created!.id, 0).ok).toBe(true);
+    expect(plane.removeProduct(created!.id)).toBe(true);
+    expect((await plane.catalog())?.some((product) => product.id === created!.id)).toBe(false);
+    expect(plane.inventory.get(created!.id)).toBeUndefined();
+  });
+
+  it('não cria produto com categoria ou preço inválido', () => {
+    const plane = makePlane();
+    expect(plane.createProduct({ ...productInput, category: 'Acessórios' })).toBeNull();
+    expect(plane.createProduct({ ...productInput, price: Number.POSITIVE_INFINITY })).toBeNull();
+  });
+});
+
 describe('LocalDataPlane.createDraft', () => {
   it('registra um pedido válido sem expor dado pessoal na resposta', async () => {
     const plane = makePlane();

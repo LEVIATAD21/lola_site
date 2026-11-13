@@ -221,6 +221,29 @@ describe('InventoryStore — pré-reservas', () => {
   });
 });
 
+describe('InventoryStore — exclusão segura de produto', () => {
+  it('não apaga produto com saldo físico nem produto com histórico de venda/reserva', () => {
+    const store = makeStore();
+    const before = store.get('brinco-1');
+    expect(before?.total).toBeGreaterThan(0);
+    expect(store.removeProduct('brinco-1')).toBe(false);
+    expect(store.get('brinco-1')).toEqual(before);
+    expect(store.setAvailable('brinco-1', 0).ok).toBe(true);
+    // Mesmo com disponibilidade zero, os registros de venda/reserva preservam o histórico.
+    expect(store.removeProduct('brinco-1')).toBe(false);
+
+    const clean = new InventoryStore({
+      'produto-sem-historico': {
+        productId: 'produto-sem-historico', total: 5, reservado: 0, vendido: 0, disponivel: 5,
+      },
+    });
+    expect(clean.removeProduct('produto-sem-historico')).toBe(false);
+    expect(clean.setAvailable('produto-sem-historico', 0).ok).toBe(true);
+    expect(clean.removeProduct('produto-sem-historico')).toBe(true);
+    expect(clean.get('produto-sem-historico')).toBeUndefined();
+  });
+});
+
 describe('InventoryStore — tetos de pré-reserva (VUL-C)', () => {
   const now = Date.now();
   const soon = now + 60_000;

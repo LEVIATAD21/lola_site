@@ -1,8 +1,9 @@
 import path from 'node:path';
 import { InventoryStore, type HoldLimits } from './inventory';
-import { CATALOG_INFO } from './catalog';
+import { type CatalogInfo } from './catalog';
+import { CatalogStore } from './catalogStore';
 import { buildOrderDraft, EncryptedOrderStore, toPublicOrder } from './orders';
-import { TrackingStore } from './tracking';
+import { TrackingStore, type PublicTracking } from './tracking';
 import { createInitialStock } from './stock';
 import { log, loggableIp } from './logger';
 
@@ -34,6 +35,10 @@ export interface DataPlane {
    * quando o plano de dados não pôde ser consultado.
    */
   snapshot(): Promise<Record<string, number> | null>;
+  /** Catálogo autoritativo, vindo do armazenamento privado. */
+  catalog(): Promise<CatalogInfo[] | null>;
+  /** Consulta rastreamento por token bearer; retorna somente dados logísticos públicos. */
+  lookupTracking(token: string): Promise<DataPlaneResult>;
   /** Cria um pré-pedido. Autoridade única de validação, reserva e persistência. */
   createDraft(body: unknown, meta: { ip: string }): Promise<DataPlaneResult>;
 }
@@ -65,12 +70,18 @@ export class LocalDataPlane implements DataPlane {
    */
   readonly tracking: TrackingStore;
   private readonly reservationTtlMs: number;
+  readonly catalogStore: CatalogStore;
 
-  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, tracking: TrackingStore, reservationTtlMs: number) {
+  constructor(inventory: InventoryStore, orders: EncryptedOrderStore, tracking: TrackingStore, catalogStore: CatalogStore, reservationTtlMs: number) {
     this.inventory = inventory;
     this.orders = orders;
     this.tracking = tracking;
+    this.catalogStore = catalogStore;
     this.reservationTtlMs = reservationTtlMs;
+  }
+
+  async catalog(): Promise<CatalogInfo[] | null> {
+    return this.catalogStore.list();
   }
 
   async snapshot(): Promise<Record<string, number> | null> {
@@ -79,6 +90,43 @@ export class LocalDataPlane implements DataPlane {
     const stock: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const item of this.inventory.list()) stock[item.productId] = item.disponivel;
     return stock;
+  }
+
+  async lookupTracking(token: string): Promise<DataPlaneResult> {
+    if (!this.tracking.ready) return { status: 503, body: { error: 'Rastreamento indisponível: configure a chave de criptografia.' } };
+    const result: PublicTracking | null = this.tracking.lookup(token);
+    if (!result || !this.orders.findByOrderNumber(result.orderNumber)) {
+      return { status: 404, body: { error: 'Link de rastreamento inválido ou expirado.' } };
+    }
+    return { status: 200, body: { tracking: result as unknown as Record<string, unknown> } };
+  }
+
+  createProduct(body: unknown): CatalogInfo | null {
+    const product = this.catalogStore.create(body);
+    if (!product) return null;
+    if (!this.inventory.registerProduct(product.id)) {
+      this.catalogStore.remove(product.id);
+      return null;
+    }
+    return product;
+  }
+
+  updateProduct(id: string, body: unknown): CatalogInfo | null {
+    return this.catalogStore.update(id, body);
+  }
+
+  removeProduct(id: string): boolean {
+    if (!this.catalogStore.find(id)) return false;
+    if (!this.inventory.removeProduct(id)) return false;
+    if (!this.catalogStore.remove(id)) {
+      this.inventory.registerProduct(id);
+      return false;
+    }
+    return true;
+  }
+
+  setProductStock(id: unknown, quantity: unknown) {
+    return this.inventory.setAvailable(id, quantity);
   }
 
   async createDraft(body: unknown, meta: { ip: string }): Promise<DataPlaneResult> {
@@ -91,7 +139,7 @@ export class LocalDataPlane implements DataPlane {
     }
 
     const result = buildOrderDraft(
-      body, CATALOG_INFO, this.inventory, undefined,
+      body, this.catalogStore.list(), this.inventory, undefined,
       // VUL-CUPOM: o teto de usos precisa de quem guarda os pré-pedidos. O
       // plano de dados tem o armazenamento, então a contagem vem dele.
       (code) => this.orders.couponUseCount(code),
@@ -164,11 +212,15 @@ export interface LocalDataPlaneOptions {
  * essa a propriedade que separa "o site lê o estoque" de "o site tem o estoque".
  */
 export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataPlane {
+  const catalogStore = new CatalogStore(options.dataDir, options.production);
   const inventory = new InventoryStore(
     createInitialStock(),
     path.join(options.dataDir, 'inventory.json'),
     options.holdLimits,
   );
+  for (const product of catalogStore.list()) {
+    if (!inventory.get(product.id)) inventory.registerProduct(product.id);
+  }
   const orders = new EncryptedOrderStore(
     options.dataDir,
     options.encryptionKey,
@@ -221,5 +273,5 @@ export function createLocalDataPlane(options: LocalDataPlaneOptions): LocalDataP
     options.production,
   );
 
-  return new LocalDataPlane(inventory, orders, tracking, options.reservationTtlMs);
+  return new LocalDataPlane(inventory, orders, tracking, catalogStore, options.reservationTtlMs);
 }

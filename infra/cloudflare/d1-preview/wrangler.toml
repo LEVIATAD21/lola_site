@@ -1,0 +1,13 @@
+name = "lola-d1-preview"
+main = "src/index.js"
+compatibility_date = "2026-11-13"
+workers_dev = true
+
+# Banco TEMPORÁRIO informado pelo proprietário para validar integração.
+# Trocar database_name e database_id quando o banco definitivo for criado.
+# UUID identifica o banco, mas não é uma credencial de acesso.
+[[d1_databases]]
+binding = "DB"
+database_name = "lola_db_2026"
+database_id = "5c523efb-8580-48ae-bdb0-bd4fb2ae7fb5"
+migrations_dir = "migrations"
