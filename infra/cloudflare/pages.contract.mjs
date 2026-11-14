@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { onRequest as health } from '../../functions/api/health.js';
 import { onRequest as catalog } from '../../functions/api/catalog.js';
+import { onRequest as photo } from '../../functions/api/imagens/[id].js';
 import { onRequest as stock } from '../../functions/api/estoque/[productId].js';
 import { onRequest as blockedOrder } from '../../functions/api/pedidos/rascunho.js';
 import { onRequest as assistant } from '../../functions/api/ai/consulta.js';
@@ -83,7 +84,7 @@ test('catálogo só mostra campos explicitamente permitidos, mesmo com dados pri
   const body = await response.json();
   assert.deepEqual(body.products, [{
     id: 'brinco-1', name: 'Argola', category: 'Brincos',
-    description: 'Aço inox', price: 59.9, disponivel: 3,
+    description: 'Aço inox', price: 59.9, disponivel: 3, image: null,
   }]);
   assert.doesNotMatch(JSON.stringify(body), /secret@example.invalid/);
   assert.match(calls[0].sql, /p.published = 1 AND p.archived_at IS NULL/);
@@ -172,4 +173,31 @@ test('Pages publica CSP restritiva e não permite script inline nem envio cross-
   assert.match(headers, /X-Content-Type-Options: nosniff/);
   assert.doesNotMatch(headers, /script-src[^;]*unsafe-inline/);
   assert.doesNotMatch(headers, /Access-Control-Allow-Origin:\\s*\\*/);
+});
+
+
+test('foto pública não revela imagens privadas ou dados sem publicação', async () => {
+  const {db} = stubDB({row:null});
+  const notFound = await photo(ctx('/api/imagens/brinco-1', {
+    db, params: {id:'brinco-1'},
+  }));
+  assert.equal(notFound.status,404);
+  const invalid = await photo(ctx('/api/imagens/invalid%2Fname', {
+    db, params: {id:'invalid/name'},
+  }));
+  assert.equal(invalid.status,404);
+  const noDb = await photo(ctx('/api/imagens/brinco-1', { params: {id:'brinco-1'} }));
+  assert.equal(noDb.status,503);
+});
+
+test('foto pública de produto publicado é entregue como imagem segura', async () => {
+  const {db} = stubDB({row:{mime_type:'image/webp',bytes:Array(28).fill(1)}});
+  const response = await photo(ctx('/api/imagens/brinco-1', {
+    db, params:{id:'brinco-1'},
+  }));
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get('content-type'),'image/webp');
+  assert.equal(response.headers.get('x-content-type-options'),'nosniff');
+  assert.match(response.headers.get('cache-control'),/max-age=60/);
+  assert.equal((await response.arrayBuffer()).byteLength,28);
 });
