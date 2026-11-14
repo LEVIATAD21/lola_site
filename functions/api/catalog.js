@@ -1,8 +1,10 @@
+import { publicCatalogBridge } from '../_shared/publicCatalogBridge.js';
 import { reply, requireReadOnly, unavailable } from '../_shared/publicApi.js';
 
 // Read-only public catalog. Only published items. Does not expose identities,
 // users, orders, admin settings, stock internals or payment records.
 export async function onRequest(context) {
+  if (!context.env?.DB) return publicCatalogBridge(context, '/catalog');
   const rejected = requireReadOnly(context);
   if (rejected) return rejected;
   try {

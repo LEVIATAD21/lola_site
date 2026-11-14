@@ -1,9 +1,11 @@
+import { publicCatalogBridge } from '../../_shared/publicCatalogBridge.js';
 import { reply, requireReadOnly, unavailable } from '../../_shared/publicApi.js';
 
 const PRODUCT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 
 /** Original storefront contract: GET /api/estoque/:productId */
 export async function onRequest(context) {
+  if (!context.env?.DB) return publicCatalogBridge(context, '/estoque/' + String(context.params?.productId ?? ''));
   const rejected = requireReadOnly(context);
   if (rejected) return rejected;
   const id = context.params?.productId;

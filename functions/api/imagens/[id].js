@@ -1,3 +1,4 @@
+import { publicCatalogBridge } from '../../_shared/publicCatalogBridge.js';
 import { reply, requireReadOnly, unavailable } from '../../_shared/publicApi.js';
 
 const idPattern = /^[a-z0-9][a-z0-9_-]{1,63}$/;
@@ -12,6 +13,7 @@ const headers = {
 };
 
 export async function onRequest(context) {
+  if (!context.env?.DB) return publicCatalogBridge(context, '/imagens/' + String(context.params?.id ?? ''));
   const rejected = requireReadOnly(context);
   if (rejected) return rejected;
   const id = context.params?.id;
