@@ -176,28 +176,31 @@ test('Pages publica CSP restritiva e não permite script inline nem envio cross-
 });
 
 
-test('foto pública não revela imagens privadas ou dados sem publicação', async () => {
+test('foto pública exige publicação no DB e bytes no PHOTOS_DB', async () => {
   const {db} = stubDB({row:null});
-  const notFound = await photo(ctx('/api/imagens/brinco-1', {
-    db, params: {id:'brinco-1'},
-  }));
+  const notFound = await photo({
+    ...ctx('/api/imagens/brinco-1', {db,params:{id:'brinco-1'}}),
+    env:{DB:db, PHOTOS_DB:stubDB({row:null}).db},
+  });
   assert.equal(notFound.status,404);
   const invalid = await photo(ctx('/api/imagens/invalid%2Fname', {
-    db, params: {id:'invalid/name'},
+    db,params:{id:'invalid/name'},
   }));
   assert.equal(invalid.status,404);
-  const noDb = await photo(ctx('/api/imagens/brinco-1', { params: {id:'brinco-1'} }));
+  const noDb=await photo(ctx('/api/imagens/brinco-1',{db,params:{id:'brinco-1'}}));
   assert.equal(noDb.status,503);
 });
-
-test('foto pública de produto publicado é entregue como imagem segura', async () => {
-  const {db} = stubDB({row:{mime_type:'image/webp',bytes:Array(28).fill(1)}});
-  const response = await photo(ctx('/api/imagens/brinco-1', {
-    db, params:{id:'brinco-1'},
-  }));
+test('foto publicada usa PHOTOS_DB, sem cache para apagar imediatamente', async () => {
+  const catalog=stubDB({row:{id:'brinco-1'}});
+  const photoStore=stubDB({row:{mime_type:'image/webp',bytes:Array(28).fill(1)}});
+  const response=await photo({
+    ...ctx('/api/imagens/brinco-1',{db:catalog.db,params:{id:'brinco-1'}}),
+    env:{DB:catalog.db,PHOTOS_DB:photoStore.db},
+  });
   assert.equal(response.status,200);
   assert.equal(response.headers.get('content-type'),'image/webp');
-  assert.equal(response.headers.get('x-content-type-options'),'nosniff');
-  assert.match(response.headers.get('cache-control'),/max-age=60/);
+  assert.equal(response.headers.get('cache-control'),'no-store');
   assert.equal((await response.arrayBuffer()).byteLength,28);
+  assert.match(catalog.calls[0].sql,/p.published=1/);
+  assert.match(photoStore.calls[0].sql,/FROM product_photos/);
 });
