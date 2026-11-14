@@ -14,7 +14,7 @@ export async function publicCatalogBridge(context, path) {
     return error(404,'Recurso não encontrado.');
   try {
     const result = await fetch('https://lola-admin-api.pages.dev/api/public'+path, {
-      method:'GET', redirect:'error', credentials:'omit',
+      method:'GET', redirect:'error',
       headers:{Accept:path.startsWith('/imagens/')?'image/webp,image/jpeg,image/png':'application/json'},
       signal:AbortSignal.timeout(10000)
     });

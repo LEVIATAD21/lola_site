@@ -4,13 +4,13 @@ import {publicCatalogBridge} from '../functions/_shared/publicCatalogBridge.js';
 test('public bridge forwards only GET catalog requests without browser credentials',async()=>{
  const old=globalThis.fetch;
  let sent;
- globalThis.fetch=async (url,options)=>{sent={url,options};return new Response('{"products":[]}',{headers:{'Content-Type':'application/json','Set-Cookie':'private=x'}});};
+ globalThis.fetch=async (url,options)=>{if ('credentials' in options) throw new Error('Unsupported Workers RequestInit field');sent={url,options};return new Response('{"products":[]}',{headers:{'Content-Type':'application/json','Set-Cookie':'private=x'}});};
  try {
  const context={request:new Request('https://shop.example/api/catalog',{headers:{Cookie:'admin=private',Authorization:'Bearer private'}})};
  const response=await publicCatalogBridge(context,'/catalog');
  assert.equal(response.status,200);
  assert.equal(sent.url,'https://lola-admin-api.pages.dev/api/public/catalog');
- assert.equal(sent.options.credentials,'omit');
+ assert.equal('credentials' in sent.options,false);
  assert.equal(sent.options.redirect,'error');
  assert.deepEqual(sent.options.headers,{Accept:'application/json'});
  assert.equal(response.headers.get('set-cookie'),null);

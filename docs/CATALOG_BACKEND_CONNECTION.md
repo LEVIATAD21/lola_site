@@ -1,7 +1,7 @@
 # Public catalog connection
 
-The storefront uses the server-side publicCatalogBridge when no DB binding is configured. It calls only the fixed Cloudflare backend /api/public/catalog, /api/public/estoque/:id and /api/public/imagens/:id routes. These routes expose published, non-archived product display fields and verify publication before reading photo bytes.
+When DB is absent, publicCatalogBridge calls fixed backend read-only /api/public routes for catalog, stock and published photos. Incoming cookies, authorization headers and query strings are never forwarded. No Set-Cookie is relayed. Responses use no-store. Public pages need no direct access to the main database containing administrative sessions and financial records.
 
-Incoming cookies, authorization headers and query strings are not forwarded. Responses use no-store and never relay Set-Cookie. The storefront does not need direct access to the main D1 database containing administrative sessions and financial records. Existing deployments with DB configured retain their original read-only handlers.
+Workers fetch options omit the browser-only credentials field, which is unsupported by the deployed runtime. Only explicitly constructed Accept headers are sent.
 
-Validation: node --test tests/publicCatalogBridge.test.mjs; backend tests/publicCatalogReadOnly.test.mjs checks publication filtering, explicit response fields and private photo exclusion.
+Validation: npx vitest run tests/publicCatalogBridge.test.mjs; backend node --test tests/publicCatalogReadOnly.test.mjs. Tests cover published filters, explicit fields, private photo exclusion and credential isolation.
