@@ -46,6 +46,7 @@ jobs:
           node --check functions/_shared/publicApi.js
           node --check functions/api/health.js
           node --check functions/api/catalog.js
+          node --check 'functions/api/imagens/[id].js'
           node --check 'functions/api/estoque/[productId].js'
           node --check functions/api/pedidos/rascunho.js
           node --check functions/api/ai/consulta.js
