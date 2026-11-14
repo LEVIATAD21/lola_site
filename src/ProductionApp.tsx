@@ -8,6 +8,7 @@ type Product = {
   description: string;
   price: number;
   disponivel: number;
+  image?: string | null;
 };
 type CatalogState =
   | { kind: 'loading' }
@@ -30,7 +31,8 @@ function validateProduct(input: unknown): input is Product {
     && typeof product.description === 'string' && product.description.length <= 2000
     && typeof product.price === 'number' && Number.isFinite(product.price) && product.price >= 0
     && typeof product.disponivel === 'number' && Number.isSafeInteger(product.disponivel)
-    && product.disponivel >= 0;
+    && product.disponivel >= 0
+    && (product.image == null || (typeof product.image === 'string' && /^\/api\/imagens\/[A-Za-z0-9_-]{2,64}$/.test(product.image)));
 }
 
 function parseCatalog(value: unknown): Product[] | null {
@@ -185,7 +187,11 @@ export default function ProductionApp() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-7">
                 {visible.map((item) => (
-                  <article key={item.id} className="bg-white rounded-2xl border border-[#E7DED3] p-6 shadow-sm">
+                  <article key={item.id} className="bg-white rounded-2xl border border-[#E7DED3] p-6 shadow-sm overflow-hidden">
+                    {item.image && (
+                      <img src={item.image} alt={item.name} loading="lazy"
+                        className="w-full aspect-square rounded-xl object-cover bg-[#F1E8DC] mb-5" />
+                    )}
                     <p className="text-xs text-[#8B6A3D] uppercase tracking-wide">{item.category}</p>
                     <h3 className="font-serif-brand text-2xl mt-3">{item.name}</h3>
                     {item.description && <p className="text-sm text-[#766D64] mt-3">{item.description}</p>}
