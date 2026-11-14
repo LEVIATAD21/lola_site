@@ -4,14 +4,14 @@ import {publicCatalogBridge} from '../functions/_shared/publicCatalogBridge.js';
 test('public bridge forwards only GET catalog requests without browser credentials',async()=>{
  const old=globalThis.fetch;
  let sent;
- globalThis.fetch=async (url,options)=>{if ('credentials' in options) throw new Error('Unsupported Workers RequestInit field');sent={url,options};return new Response('{"products":[]}',{headers:{'Content-Type':'application/json','Set-Cookie':'private=x'}});};
+ globalThis.fetch=async (url,options)=>{if (options.redirect === 'error') throw new Error('Unsupported Workers redirect mode');if ('credentials' in options) throw new Error('Unsupported Workers RequestInit field');sent={url,options};return new Response('{"products":[]}',{headers:{'Content-Type':'application/json','Set-Cookie':'private=x'}});};
  try {
  const context={request:new Request('https://shop.example/api/catalog',{headers:{Cookie:'admin=private',Authorization:'Bearer private'}})};
  const response=await publicCatalogBridge(context,'/catalog');
  assert.equal(response.status,200);
  assert.equal(sent.url,'https://lola-admin-api.pages.dev/api/public/catalog');
  assert.equal('credentials' in sent.options,false);
- assert.equal(sent.options.redirect,'error');
+ assert.equal(sent.options.redirect,'manual');
  assert.deepEqual(sent.options.headers,{Accept:'application/json'});
  assert.equal(response.headers.get('set-cookie'),null);
  assert.equal(response.headers.get('cache-control'),'no-store');
@@ -20,6 +20,8 @@ test('public bridge forwards only GET catalog requests without browser credentia
  assert.equal(sent,null);
  assert.equal((await publicCatalogBridge({request:new Request('https://shop.example',{method:'POST'})},'/catalog')).status,405);
  assert.equal(sent,null);
+ globalThis.fetch=async()=>new Response(null,{status:302,headers:{Location:'https://evil.example','Content-Type':'application/json'}});
+ assert.equal((await publicCatalogBridge(context,'/catalog')).status,503);
  globalThis.fetch=async()=>new Response('<html>error</html>',{headers:{'Content-Type':'text/html'}});
  assert.equal((await publicCatalogBridge(context,'/catalog')).status,503);
  globalThis.fetch=async()=>{throw new Error('offline');};
