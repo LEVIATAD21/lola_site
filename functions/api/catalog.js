@@ -8,7 +8,7 @@ export async function onRequest(context) {
   try {
     const query = `SELECT p.id, p.name, p.category, p.description, p.price_cents,
       COALESCE(i.quantity_on_hand - i.quantity_reserved, 0) AS disponivel,
-      EXISTS(SELECT 1 FROM product_photos AS ph WHERE ph.product_id=p.id) AS has_image
+      EXISTS(SELECT 1 FROM catalog_photo_index AS ph WHERE ph.product_id=p.id) AS has_image
       FROM products AS p
       LEFT JOIN inventory AS i ON i.product_id = p.id
       WHERE p.published = 1 AND p.archived_at IS NULL
@@ -20,9 +20,9 @@ export async function onRequest(context) {
     try {
       result = await context.env.DB.prepare(query).all();
     } catch (error) {
-      if (!String(error).includes('no such table: product_photos')) throw error;
+      if (!String(error).includes('no such table: catalog_photo_index')) throw error;
       const withoutPhotos = query.replace(
-        /,\s*EXISTS\(SELECT 1 FROM product_photos AS ph WHERE ph.product_id=p.id\) AS has_image/,
+        /,\s*EXISTS\(SELECT 1 FROM catalog_photo_index AS ph WHERE ph.product_id=p.id\) AS has_image/,
         ''
       );
       result = await context.env.DB.prepare(withoutPhotos).all();
