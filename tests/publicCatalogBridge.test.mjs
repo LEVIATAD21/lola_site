@@ -1,4 +1,4 @@
-import {test} from 'node:test';
+import {test} from 'vitest';
 import assert from 'node:assert/strict';
 import {publicCatalogBridge} from '../functions/_shared/publicCatalogBridge.js';
 test('public bridge forwards only GET catalog requests without browser credentials',async()=>{
